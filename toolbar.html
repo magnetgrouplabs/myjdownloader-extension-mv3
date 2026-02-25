@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+    <link rel="stylesheet" href="vendor/css/angular-csp.css">
+    <link rel="stylesheet" href="vendor/css/bootstrap.css">
+    <link rel="stylesheet" href="vendor/css/font-awesome.css">
+    <link rel="stylesheet" href="vendor/css/normalize.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body id="{{bodyClass}}" ng-csp>
+
+<div ng-view=""></div>
+
+<script src="vendor/js/angular.js"></script>
+<script src="vendor/js/jquery.js"></script>
+<script src="vendor/js/bootstrap.js"></script>
+<script src="vendor/js/angular-animate.js"></script>
+<script src="vendor/js/angular-cookies.js"></script>
+<script src="vendor/js/angular-resource.js"></script>
+<script src="vendor/js/angular-route.js"></script>
+<script src="vendor/js/angular-sanitize.js"></script>
+<script src="vendor/js/angular-touch.js"></script>
+<script src="vendor/js/rx.all.js"></script>
+<script src="vendor/js/rx.angular.js"></script>
+
+<script src="vendor/crypto-js/components/core.js"></script>
+<script src="vendor/crypto-js/rollups/aes.js"></script>
+<script src="vendor/crypto-js/rollups/hmac-sha256.js"></script>
+
+<!-- RequireJS + jdapi loading -->
+<script src="vendor/js/require.js"></script>
+
+<!-- Toolbar module definition (creates own Angular module) -->
+<script src="scripts/toolbar.js"></script>
+<script src="scripts/services/ExtensionI18nService.js"></script>
+<script src="scripts/services/ApiErrorService.js"></script>
+<script src="scripts/services/MyjdService.js"></script>
+<script src="scripts/services/MyjdDeviceService.js"></script>
+<script src="scripts/services/CnlService.js"></script>
+<script src="scripts/services/StringUtilsService.js"></script>
+<script src="scripts/services/ClipboardHistoryService.js"></script>
+<script src="scripts/services/RequestQueueEventService.js"></script>
+<script src="scripts/services/StorageService.js"></script>
+<script src="scripts/factories/myjdClientFactory.js"></script>
+<script src="scripts/factories/myjdDeviceClientFactory.js"></script>
+<script src="scripts/controllers/DeviceController.js"></script>
+<script src="scripts/directives/myDevice.js"></script>
+<script src="scripts/directives/imgErrorHide.js"></script>
+<script src="scripts/controllers/ToolbarController.js"></script>
+<script src="scripts/controllers/AddLinksController.js"></script>
+<script src="scripts/directives/myAddLinksPanel.js"></script>
+<script src="scripts/filters/translationFilter.js"></script>
+<script src="scripts/services/ExtensionMessagingService.js"></script>
+<script src="scripts/services/BackgroundScriptService.js"></script>
+<script src="partials/templateCache.js"></script>
+
+</body>
+</html>

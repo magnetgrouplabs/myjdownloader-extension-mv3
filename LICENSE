@@ -1,0 +1,31 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2025 MyJDownloader Browser Extension (Manifest V3)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+## Attribution
+
+This project is a Manifest V3 conversion of the MyJDownloader Browser Extension.
+All rights to the original extension belong to AppWork GmbH.
+
+The original MyJDownloader Browser Extension was developed by AppWork GmbH
+and is available at https://my.jdownloader.org.
+
+This conversion maintains compatibility with the MyJDownloader API and
+preserves the functionality of the original extension while adapting it
+to Chrome Extension Manifest V3 requirements.

@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MyJDownloader Settings</title>
+    <style>
+        body { background-color: #fff; margin: 0; padding: 20px; font-family: Arial, sans-serif; font-size: 14px; }
+        .settings-container { max-width: 500px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #333; font-size: 20px; }
+        h4 { margin: 15px 0 10px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .panel { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px; }
+        .panel-heading { background-color: #f5f5f5; padding: 10px 15px; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .panel-body { padding: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        label.checkbox { font-weight: normal; margin-bottom: 8px; }
+        label.checkbox input { margin-right: 8px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background-color: #337ab7; color: white; }
+        select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <h1>MyJDownloader Settings</h1>
+        
+        <div class="panel">
+            <div class="panel-heading">Account</div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="text" id="email" class="form-control" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Password">
+                </div>
+                <button id="login-btn" class="btn btn-primary">Login</button>
+                <button id="logout-btn" class="btn btn-primary" style="background:#d9534f;">Logout</button>
+                <p id="login-message" style="margin-top:10px;"></p>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-heading">General</div>
+            <div class="panel-body">
+                <label class="checkbox">
+                    <input type="checkbox" id="clicknload_active" checked>
+                    Enable Click'N'Load (CNL)
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="context_menu_simple" checked>
+                    Simple Context Menu
+                </label>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-heading">Device</div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Preferred Device</label>
+                    <select id="preferred_device">
+                        <option value="AskEveryTimeDevice">Ask every time</option>
+                    </select>
+                </div>
+                <button id="refresh-devices-btn" class="btn btn-primary" style="font-size:12px;">Refresh Devices</button>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-heading">About</div>
+            <div class="panel-body">
+                <p><strong>MyJDownloader Extension</strong></p>
+                <p>Version: 3.3.20 (MV3)</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="vendor/js/require.js"></script>
+    <script src="vendor/js/jquery.js"></script>
+    <script src="vendor/crypto-js/components/core.js"></script>
+    <script src="vendor/crypto-js/rollups/aes.js"></script>
+    <script src="vendor/crypto-js/rollups/hmac-sha256.js"></script>
+    <script src="vendor/js/jdapi.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>
