@@ -14,7 +14,7 @@ This project required a significant amount of work.
 
 The JDownloader community has been without a working Manifest V3 version of this extension for some time. Converting the original implementation, restructuring the architecture for Service Worker requirements, debugging session handling, and restoring full functionality under modern Chrome policies took substantial effort.
 
-If this extension improves your workflow or saves you time, consider supporting the continued maintenance and development of this project.
+If this extension improves your workflow or saves you time, consider showing your support so I can continue developing projects for the community.
 
 <p align="center">
 <a href="https://www.buymeacoffee.com/anthonymichael" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
@@ -119,6 +119,10 @@ myjdownloader-extension-mv3/
 - All contexts use APP_KEY `"myjd_webextension_chrome"` -- changing this breaks session token compatibility
 - The toolbar sends links directly via its local `myjdDeviceClientFactory` (no background/offscreen relay)
 - `ng-if` (not `ng-show`) is used for the connected panel to prevent premature controller instantiation
+
+## Disclaimer
+
+This is a community-maintained conversion of the original MyJDownloader extension. I offer no warranty and do not have plans for active maintenance. The JDownloader developers are welcome to adopt this codebase. I will respond to issues when possible but cannot guarantee ongoing support.
 
 ## Original Extension
 
