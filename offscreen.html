@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+ <meta charset="utf-8">
+ <title>MyJDownloader Offscreen</title>
+ <link rel="stylesheet" href="vendor/css/angular-csp.css">
+ <link rel="stylesheet" href="vendor/css/bootstrap.css">
+ <link rel="stylesheet" href="vendor/css/font-awesome.css">
+ <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+ <div id="offscreen-container" style="padding: 20px; display: none;">
+ <h4>MyJDownloader Offscreen Document</h4>
+ <p id="status">Initializing...</p>
+ </div>
+
+ <!-- Core libraries - jQuery must load first -->
+ <script src="vendor/js/jquery.js"></script>
+ <script src="vendor/js/bootstrap.js"></script>
+
+ <!-- Crypto libraries -->
+ <script src="vendor/crypto-js/components/core.js"></script>
+ <script src="vendor/crypto-js/rollups/aes.js"></script>
+ <script src="vendor/crypto-js/rollups/hmac-sha256.js"></script>
+
+ <!-- RequireJS -->
+ <script src="vendor/js/require.js"></script>
+
+ <!-- Offscreen script - handles jdapi loading via RequireJS -->
+ <script src="offscreen.js"></script>
+</body>
+</html>

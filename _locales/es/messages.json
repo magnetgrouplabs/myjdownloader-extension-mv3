@@ -1,0 +1,469 @@
+{
+   "api_error_auth_failed": {
+      "message": "¡Por favor, comprueba tu nombre de usuario y contraseña!"
+   },
+   "api_error_bad_gateway": {
+      "message": "MyJDownloader no está disponible en este momento. Vuelva a intentarlo en unos minutos! (Bad Gateway)"
+   },
+   "api_error_bad_request": {
+      "message": "Está utilizando una versión desactualizada de la extensión. Por favor, compruebe si hay alguna actualización en nuestras páginas. (Bad Request)"
+   },
+   "api_error_blocked_client": {
+      "message": "MyJDownloader está bloqueando sus peticiones. Póngase en contacto con nosotros. (Blocked client)"
+   },
+   "api_error_email_invalid": {
+      "message": "Email desconocida. Por favor, regístrese primero."
+   },
+   "api_error_email_not_confirmed": {
+      "message": "Su email aún no ha sido confirmada. Por favor, comprueba tu bandeja de entrada y la carpeta de spam!"
+   },
+   "api_error_generic": {
+      "message": "¡Algo salió mal! Por favor, inténtalo de nuevo de inmediato."
+   },
+   "api_error_outdated": {
+      "message": "Está utilizando una versión desactualizada de la extensión. Por favor, compruebe si hay alguna actualización en nuestras páginas. (Outdated)"
+   },
+   "api_error_overload": {
+      "message": "MyJDownloader está sobrecargado ahora mismo. Vuelva a intentarlo en unos minutos! (Overload)"
+   },
+   "api_error_server_maintenance": {
+      "message": "MyJDownloader está en modo de mantenimiento. Vuelva a intentarlo en unos minutos! (Maintenance)"
+   },
+   "api_error_server_offline": {
+      "message": "El servidor no está actualmente disponible. Vuelva a intentarlo en unos minutos! (Gateway timed out)"
+   },
+   "api_error_too_many_requests": {
+      "message": "Demasiadas peticiones vienen de su red a nuestros servidores. Vuelva a intentarlo en unos minutos! (Too many requests)"
+   },
+   "api_error_unknown": {
+      "message": "No puedo contactar con el servidor MyJDownloader. (Unknown)"
+   },
+   "button_i_am_no_robot": {
+      "message": "No soy un robot"
+   },
+   "context_menu_add_audio": {
+      "message": "Añadir audio"
+   },
+   "context_menu_add_image": {
+      "message": "Añadir imagen"
+   },
+   "context_menu_add_link": {
+      "message": "Añadir enlace"
+   },
+   "context_menu_add_page": {
+      "message": "Añadir página"
+   },
+   "context_menu_add_selection": {
+      "message": "Añadir selección"
+   },
+   "context_menu_add_video": {
+      "message": "Añadir vídeo"
+   },
+   "context_menu_download_with": {
+      "message": "Descargar con"
+   },
+   "context_menu_download_with_jdownloader": {
+      "message": "Descargar con JDownloader"
+   },
+   "context_menu_toggle_autograbber": {
+      "message": "Activar/desactivar Autograbber"
+   },
+   "extensionDescription": {
+      "description": "Description of the extension.",
+      "message": "Integra MyJDownloader en su browser. MyJDownloader es el servicio de control remoto para su JDownloader."
+   },
+   "extensionName": {
+      "description": "Name of the extension.",
+      "message": "MyJDownloader Browser Extension"
+   },
+   "filterset_title_archives": {
+      "message": "Archivos"
+   },
+   "filterset_title_audio": {
+      "message": "Audio"
+   },
+   "filterset_title_custom": {
+      "message": "Personalizado"
+   },
+   "filterset_title_documents": {
+      "message": "Documentos"
+   },
+   "filterset_title_images": {
+      "message": "Imágenes"
+   },
+   "filterset_title_videos": {
+      "message": "Vídeos"
+   },
+   "header_please_solve": {
+      "message": "Por favor, resuelva para continuar las descargas con:"
+   },
+   "help_need_help_description": {
+      "message": "A veces estos captchas son difíciles de resolver. Pero hay maneras de mejorar su experiencia!"
+   },
+   "help_need_help_header": {
+      "message": "¿Necesitas ayuda?"
+   },
+   "help_need_help_link": {
+      "message": "Averigua más."
+   },
+   "help_whats_happening_description": {
+      "message": "quiere que resuelvas un captcha. Sólo después de resolver esta captura, puedes continuar con tus descargas. JDownloader no es capaz de auto-solver estos captchas, por lo que necesitamos pasarle el captcha a usted."
+   },
+   "help_whats_happening_header": {
+      "message": "¿Qué está pasando?"
+   },
+   "help_whats_happening_link": {
+      "message": "Averigua más."
+   },
+   "menu_entry_saved": {
+      "message": "gespeichert"
+   },
+   "menu_entry_send_feedback": {
+      "message": "Enviar comentarios"
+   },
+   "menu_entry_settings": {
+      "message": "Configuración"
+   },
+   "menu_entry_status": {
+      "message": "status"
+   },
+   "toggle_auto_grab_links": {
+      "message": "Activar / desactivar grabber de descarga automática en esta página"
+   },
+   "toggle_clipboard_observer": {
+      "message": "Desactivar / activar el observador del portapapeles"
+   },
+   "ui_add_links_archive_password": {
+      "message": "Archivar contraseña"
+   },
+   "ui_add_links_autoextract": {
+      "message": "Desembalaje automático"
+   },
+   "ui_add_links_autofill": {
+      "message": "Autocompletar"
+   },
+   "ui_add_links_autofill_active": {
+      "message": "Si está activado, el diálogo se completará con los últimos valores utilizados."
+   },
+   "ui_add_links_autostart": {
+      "message": "Inicio automático"
+   },
+   "ui_add_links_cancel": {
+      "message": "cancelar"
+   },
+   "ui_add_links_clear_values": {
+      "message": "Reset"
+   },
+   "ui_add_links_click_here_for_help": {
+      "message": "Ayudo"
+   },
+   "ui_add_links_comment": {
+      "message": "Comentario"
+   },
+   "ui_add_links_deep_decrypt": {
+      "message": "Análisis de profundidad"
+   },
+   "ui_add_links_default_values": {
+      "message": "Valores por defecto"
+   },
+   "ui_add_links_download_password": {
+      "message": "Descargar contraseña"
+   },
+   "ui_add_links_failed_to_send": {
+      "message": "Lo siento, no envió los links. Por favor, inténtalo de nuevo!"
+   },
+   "ui_add_links_header": {
+      "message": "Añadir links..."
+   },
+   "ui_add_links_last_used_values": {
+      "message": "Últimos valores utilizados"
+   },
+   "ui_add_links_loading": {
+      "message": "Por favor espere..."
+   },
+   "ui_add_links_no_jd_connected": {
+      "message": "No hay JDownloader conectado."
+   },
+   "ui_add_links_optional": {
+      "message": "opciones adicionales"
+   },
+   "ui_add_links_overwrite_packagizer": {
+      "message": "Sobrescribir reglas del administrador de paquetes"
+   },
+   "ui_add_links_package_name": {
+      "message": "Nombre del paquete"
+   },
+   "ui_add_links_panel_please_check_logged_in": {
+      "message": "Por favor, comprueba si has iniciado sesión."
+   },
+   "ui_add_links_panel_try_again_logged_in": {
+      "message": "¡Si estás conectado, por favor inténtalo de nuevo!"
+   },
+   "ui_add_links_prio_default": {
+      "message": "Predeterminado"
+   },
+   "ui_add_links_prio_high": {
+      "message": "Alto"
+   },
+   "ui_add_links_prio_higher": {
+      "message": "Más alto"
+   },
+   "ui_add_links_prio_highest": {
+      "message": "El más alto"
+   },
+   "ui_add_links_prio_low": {
+      "message": "Bajo"
+   },
+   "ui_add_links_prio_lower": {
+      "message": "Inferior"
+   },
+   "ui_add_links_prio_lowest": {
+      "message": "Lo más bajo"
+   },
+   "ui_add_links_prio_unset": {
+      "message": "Desactivar"
+   },
+   "ui_add_links_priority": {
+      "message": "Prioridad"
+   },
+   "ui_add_links_refresh_devices": {
+      "message": "Actualizar..."
+   },
+   "ui_add_links_refresh_failed_to_get_jds": {
+      "message": "No conseguí una lista de tus JDownloaders"
+   },
+   "ui_add_links_refresh_jd_found": {
+      "message": "hallado"
+   },
+   "ui_add_links_refresh_no_jd_found": {
+      "message": "Encontrado ningún JD"
+   },
+   "ui_add_links_remove_from_saved_after_sent": {
+      "message": "Eliminar de' Salvado' después de enviar."
+   },
+   "ui_add_links_save_to": {
+      "message": "Guardar como"
+   },
+   "ui_add_links_target_ask_every_time": {
+      "message": "Pregúntame siempre"
+   },
+   "ui_add_links_target_last_used": {
+      "message": "Último usado"
+   },
+   "ui_add_links_target_save_for_later": {
+      "message": "Guardar para después"
+   },
+   "ui_add_links_to_add_links": {
+      "message": "Abre tu JDownloader y conéctalo a MyJDownloader para añadir links."
+   },
+   "ui_autograbber_button_stop": {
+      "message": "Parando"
+   },
+   "ui_autograbber_running": {
+      "message": "¡Autograbber"
+   },
+   "ui_clipboard_history_back": {
+      "message": "atrás"
+   },
+   "ui_clipboard_history_delete": {
+      "message": "Borrar"
+   },
+   "ui_clipboard_history_less": {
+      "message": "menos..."
+   },
+   "ui_clipboard_history_remove_item": {
+      "message": "Eliminar artículo"
+   },
+   "ui_clipboard_history_send": {
+      "message": "Enviar"
+   },
+   "ui_clipboard_history_still_empty": {
+      "message": "Aún vacío. Agregue algunos links para comenzar! Haz clic con el botón derecho, luego elige \"Descargar con JDownloader\"."
+   },
+   "ui_feedback_button_send": {
+      "message": "Enviar"
+   },
+   "ui_feedback_chars_left": {
+      "message": "sobrante"
+   },
+   "ui_feedback_thank_you": {
+      "message": "Muchas gracias"
+   },
+   "ui_loading_connecting": {
+      "message": "Conectar con su JDownloader"
+   },
+   "ui_loading_sending": {
+      "message": "envío..."
+   },
+   "ui_login_click_here": {
+      "message": "Haga clic aquí"
+   },
+   "ui_login_connecting": {
+      "message": "Conectando..."
+   },
+   "ui_login_email_invalid": {
+      "message": "Por favor, introduzca una dirección de correo electrónico válida"
+   },
+   "ui_login_email_label": {
+      "message": "Email"
+   },
+   "ui_login_email_required": {
+      "message": "¡Se requiere dirección de correo electrónico!"
+   },
+   "ui_login_forgot_password": {
+      "message": "¿Olvidó su contraseña?"
+   },
+   "ui_login_loading": {
+      "message": "Cargando..."
+   },
+   "ui_login_outdated_message": {
+      "message": "No has actualizado la extensión en mucho tiempo. Por favor vaya a nuestra página principal y compruebe si hay una actualización disponible!"
+   },
+   "ui_login_password_required": {
+      "message": "¡Se requiere contraseña!"
+   },
+   "ui_login_register": {
+      "message": "Registrarse"
+   },
+   "ui_login_sorry_error": {
+      "message": "¡Perdón, hubo un error!"
+   },
+   "ui_logout_close": {
+      "message": "Cerrar"
+   },
+   "ui_logout_data_loss_warning": {
+      "message": "¡Todos los links y ajustes guardados se perderán!"
+   },
+   "ui_logout_title": {
+      "message": "Salir"
+   },
+   "ui_my_device_click_here": {
+      "message": "Haga clic aquí"
+   },
+   "ui_my_device_downloaded_bytes": {
+      "message": "Bytes descargados"
+   },
+   "ui_my_device_eta": {
+      "message": "Tiempo estimado de descarga"
+   },
+   "ui_my_device_open_webinterface": {
+      "message": "Abrir Webinterface"
+   },
+   "ui_my_device_pause": {
+      "message": "Pausa"
+   },
+   "ui_my_device_start": {
+      "message": "Inicio"
+   },
+   "ui_my_device_stop": {
+      "message": "Alto"
+   },
+   "ui_my_device_total_bytes": {
+      "message": "Bytes totales"
+   },
+   "ui_settings_add_links_browser_no_cnl_support": {
+      "message": "Su navegador no soporta CnL. Si estás usando Firefox, por favor actualiza a Firefox 53 o superior."
+   },
+   "ui_settings_add_links_default_values_autoextract_title": {
+      "message": "Extracción automática"
+   },
+   "ui_settings_add_links_default_values_autostart_title": {
+      "message": "Arranque automático"
+   },
+   "ui_settings_add_links_default_values_deep_decrypt_title": {
+      "message": "Descifrado profundo"
+   },
+   "ui_settings_add_links_default_values_download_priority_title": {
+      "message": "Prioridad de descarga"
+   },
+   "ui_settings_add_links_default_values_header": {
+      "message": "Valores por defecto"
+   },
+   "ui_settings_add_links_default_values_howto_unset": {
+      "message": "Si quieres eliminar un valor de las opciones predeterminadas, elige' desajustar' o haz clic en "
+   },
+   "ui_settings_add_links_default_values_overwrite_packagizer_title": {
+      "message": "Sobrescriba las reglas del empaquetador"
+   },
+   "ui_settings_add_links_default_values_preferred_target_checkbox_autoclose": {
+      "message": "Auto-cerrar diálogo si se ha encontrado el objetivo preferido"
+   },
+   "ui_settings_add_links_default_values_preferred_target_seconds_until_autoclose": {
+      "message": "Segundos hasta que el diálogo se cierre automáticamente:"
+   },
+   "ui_settings_add_links_default_values_preferred_target_title": {
+      "message": "Objetivo Preferido"
+   },
+   "ui_settings_add_links_default_values_unset_title": {
+      "message": "Desactivar / Eliminar"
+   },
+   "ui_settings_add_links_dialog_header": {
+      "message": "Añadir Links Dialog"
+   },
+   "ui_settings_changelog_title": {
+      "message": "Changelog"
+   },
+   "ui_settings_checkbox_clipboard_observer": {
+      "message": "Use el Observador del Portapapeles"
+   },
+   "ui_settings_checkbox_simple_contextmenu": {
+      "message": "Use el menú contextual simple."
+   },
+   "ui_settings_clipboard_observer_description": {
+      "message": "Detecta links en el portapapeles. Selecciona algo, luego cópialo. Si su selección contiene un enlace, aparecerá el diálogo para añadir o guardar la selección."
+   },
+   "ui_settings_cnl_via_myjd": {
+      "message": "Click'n'Load a través de MyJDownloader"
+   },
+   "ui_settings_cnl_via_myjd_description": {
+      "message": "Intercepta Click'n'Load y las envía a través de MyJDownloader."
+   },
+   "ui_settings_enhance_captcha_dialog_description": {
+      "message": "Si está activo, la interfaz web puede mostrar captchas interactivas y fáciles de usar."
+   },
+   "ui_settings_enhance_captcha_dialog_title": {
+      "message": "Mejorar Diálogo Captcha"
+   },
+   "ui_settings_general": {
+      "message": "General"
+   },
+   "ui_settings_imprint_title": {
+      "message": "Pie de imprenta"
+   },
+   "ui_settings_keyboard_shortcut_title": {
+      "message": "Atajos de teclado"
+   },
+   "ui_settings_keyboard_shortcuts": {
+      "message": "Ctrl+Shift+X / Cmd+Shift+X"
+   },
+   "ui_settings_logged_in_as": {
+      "message": "Iniciado sesión como"
+   },
+   "ui_settings_privacy_statement_title": {
+      "message": "Declaración de privacidad"
+   },
+   "ui_settings_show_add_links_dialog": {
+      "message": "Mostrar \"Añadir links\" diálogo."
+   },
+   "ui_settings_show_add_links_dialog_description": {
+      "message": "Si está activo, se muestra un diálogo que le permite cambiar los valores antes de enviar enlaces. Si está desactivado, los links se envían usando los valores por defecto. El diálogo no puede ser desactivado si \"Preguntar cada vez\" es el dispositivo preferido."
+   },
+   "ui_settings_simple_contextmenu_description": {
+      "message": "Si utiliza el menú contextual simple, se utiliza el contexto más adecuado (página, enlace o selección) y no tiene que elegir qué añadir al usar el menú de clic derecho para agregar enlaces."
+   },
+   "ui_settings_toc_title": {
+      "message": "Términos y condiciones"
+   },
+   "ui_settings_webinterface_enhancer_description": {
+      "message": "Puedes añadir características a la interfaz web de MyJDownloader usando esta extensión."
+   },
+   "ui_settings_webinterface_enhancer_header": {
+      "message": "Web Interface Enhancer"
+   },
+   "ui_status_panel_no_device_connected": {
+      "message": "No hay JDownloader conectado. ¿Necesitas ayuda?"
+   },
+   "ui_status_panel_no_device_connected_click_here": {
+      "message": "Aprende más"
+   }
+}

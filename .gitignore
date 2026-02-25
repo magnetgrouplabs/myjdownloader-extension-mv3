@@ -1,0 +1,45 @@
+# Chrome Extension specific exclusions
+*.crx
+*.pem
+
+# Build artifacts
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Package files
+node_modules/
+package-lock.json
+yarn.lock
+
+# Development files
+.env
+.env.local
+
+# Extension specific
+_metadata/
+.crx
+
+# Documentation
+.DOCS/
+
+# Test files
+test/
+tests/
+coverage/

@@ -1,0 +1,490 @@
+{
+   "api_error_auth_failed": {
+      "message": "Bitte überprüfe deinen Nutzernamen und dein Passwort!"
+   },
+   "api_error_bad_gateway": {
+      "message": "MyJDownloader ist gerade nicht erreichbar. Bitte versuche es in ein paar Minuten nochmal! (Bad Gateway)"
+   },
+   "api_error_bad_request": {
+      "message": "Du benutzt eine veraltete Version der Erweiterung. Bitte schau nach einem Update auf unseren Seiten. (Bad Request)"
+   },
+   "api_error_blocked_client": {
+      "message": "MyJDownloader blockiert derzeit deine Anfragen. Bitte kontaktiere uns. (Blocked client)"
+   },
+   "api_error_email_invalid": {
+      "message": "Unbekannte Email Adresse. Bitte registriere dich zuerst."
+   },
+   "api_error_email_not_confirmed": {
+      "message": "Deine Email Adresse ist noch nicht bestätigt worden. Bitte sieh in deinem Posteingang und deinem Spam-Ordner nach!"
+   },
+   "api_error_generic": {
+      "message": "Da lief etwas schief! Bitte versuch es gleich nochmal."
+   },
+   "api_error_outdated": {
+      "message": "Du benutzt eine veraltete Version der Erweiterung. Bitte schau nach einem Update auf unseren Seiten. (Outdated)"
+   },
+   "api_error_overload": {
+      "message": "MyJDownloader ist gerade überlastet. Bitte versuche es in ein paar Minuten nochmal! (Overload)"
+   },
+   "api_error_server_maintenance": {
+      "message": "MyJDownloader ist im Wartungsmodus. Bitte versuche es in ein paar Minuten nochmal! (Maintenance)"
+   },
+   "api_error_server_offline": {
+      "message": "Der Server ist derzeit nicht erreichbar. Bitte versuche es in ein paar Minuten nochmal! (Gateway timed out)"
+   },
+   "api_error_too_many_requests": {
+      "message": "Aus deinem Netzwerk kommen zuviele Anfragen an unsere Server. Bitte versuche es in ein paar Minuten nochmal! (Too many requests)"
+   },
+   "api_error_unknown": {
+      "message": "Kann den MyJDownloader Server nicht erreichen. (Unknown)"
+   },
+   "button_i_am_no_robot": {
+      "message": "Ich bin kein Roboter"
+   },
+   "context_menu_add_audio": {
+      "message": "Audio hinzufügen"
+   },
+   "context_menu_add_image": {
+      "message": "Bild hinzufügen"
+   },
+   "context_menu_add_link": {
+      "message": "Link hinzufügen"
+   },
+   "context_menu_add_page": {
+      "message": "Seite hinzufügen"
+   },
+   "context_menu_add_selection": {
+      "message": "Selektion hinzufügen"
+   },
+   "context_menu_add_video": {
+      "message": "Video hinzufügen"
+   },
+   "context_menu_download_with": {
+      "message": "Herunterladen mit"
+   },
+   "context_menu_download_with_jdownloader": {
+      "message": "Herunterladen mit JDownloader"
+   },
+   "context_menu_toggle_autograbber": {
+      "message": "Autograbber ein-/ausschalten"
+   },
+   "extensionDescription": {
+      "description": "Description of the extension.",
+      "message": "Integriert MyJDownloader in deinen Browser. MyJDownloader ist der Fernsteuerungsservice für deinen JDownloader."
+   },
+   "extensionName": {
+      "description": "Name of the extension.",
+      "message": "MyJDownloader Browser Erweiterung"
+   },
+   "filterset_title_archives": {
+      "message": "Archive"
+   },
+   "filterset_title_audio": {
+      "message": "Audio"
+   },
+   "filterset_title_custom": {
+      "message": "Eigene"
+   },
+   "filterset_title_documents": {
+      "message": "Dokumente"
+   },
+   "filterset_title_images": {
+      "message": "Bilder"
+   },
+   "filterset_title_videos": {
+      "message": "Videos"
+   },
+   "header_please_solve": {
+      "message": "Lösen um fortzufahren mit:"
+   },
+   "help_need_help_description": {
+      "message": "Manchmal sind die Captchas schwer lösbar. Es gibt aber Wege, deine Erfahrung zu verbessern!"
+   },
+   "help_need_help_header": {
+      "message": "Brauchst du Hilfe?"
+   },
+   "help_need_help_link": {
+      "message": "Mehr erfahren."
+   },
+   "help_whats_happening_description": {
+      "message": "verlangt von dir, ein Captcha zu lösen. Erst nachdem du dieses Captcha gelöst hast, kannst du mit den Downloads fortfahren. JDownloader kann diese Captchas nicht automatisch lösen, deshalb muss er sie an dich weitergeben."
+   },
+   "help_whats_happening_header": {
+      "message": "Warum sehe ich das?"
+   },
+   "help_whats_happening_link": {
+      "message": "Mehr erfahren."
+   },
+   "menu_entry_saved": {
+      "message": "gespeichert"
+   },
+   "menu_entry_send_feedback": {
+      "message": "Feedback senden"
+   },
+   "menu_entry_settings": {
+      "message": "Einstellungen"
+   },
+   "menu_entry_status": {
+      "message": "status"
+   },
+   "toggle_auto_grab_links": {
+      "message": "Automatisches Grabben von Downloads auf dieser Seite aktivieren / deaktivieren"
+   },
+   "toggle_clipboard_observer": {
+      "message": "Clipboard Observer aktivieren / deaktivieren"
+   },
+   "ui_add_links_archive_password": {
+      "message": "Archiv Passwort"
+   },
+   "ui_add_links_autoextract": {
+      "message": "automatisches Entpacken"
+   },
+   "ui_add_links_autofill": {
+      "message": "automatisch befüllen"
+   },
+   "ui_add_links_autofill_active": {
+      "message": "Wenn aktiviert, wird der Dialog mit den zuletzt benutzten Werten befüllt."
+   },
+   "ui_add_links_autostart": {
+      "message": "automatischer Start"
+   },
+   "ui_add_links_cancel": {
+      "message": "abbrechen"
+   },
+   "ui_add_links_clear_values": {
+      "message": "Zurücksetzen"
+   },
+   "ui_add_links_click_here_for_help": {
+      "message": "Hilfe"
+   },
+   "ui_add_links_comment": {
+      "message": "Kommentar"
+   },
+   "ui_add_links_deep_decrypt": {
+      "message": "Tiefenanalyse"
+   },
+   "ui_add_links_default_values": {
+      "message": "Standardwerte"
+   },
+   "ui_add_links_download_password": {
+      "message": "Download Passwort"
+   },
+   "ui_add_links_failed_to_send": {
+      "message": "Sorry, konnte die Links nicht versenden. Bitte erneut versuchen!"
+   },
+   "ui_add_links_header": {
+      "message": "Links hinzufügen..."
+   },
+   "ui_add_links_last_used_values": {
+      "message": "Zuletzte benutzte Werte"
+   },
+   "ui_add_links_loading": {
+      "message": "Bitte warten..."
+   },
+   "ui_add_links_no_jd_connected": {
+      "message": "Kein JDownloader verbunden."
+   },
+   "ui_add_links_optional": {
+      "message": "zusätzliche Optionen"
+   },
+   "ui_add_links_overwrite_packagizer": {
+      "message": "Paketverwalterregeln überschreiben"
+   },
+   "ui_add_links_package_name": {
+      "message": "Paketname"
+   },
+   "ui_add_links_panel_please_check_logged_in": {
+      "message": "Bitte über das Extension-Popup einloggen!"
+   },
+   "ui_add_links_panel_try_again_logged_in": {
+      "message": "Falls du eingeloggt bist, versuche es bitte erneut."
+   },
+   "ui_add_links_prio_default": {
+      "message": "Standard"
+   },
+   "ui_add_links_prio_high": {
+      "message": "Hoch"
+   },
+   "ui_add_links_prio_higher": {
+      "message": "Höher"
+   },
+   "ui_add_links_prio_highest": {
+      "message": "Am höchsten"
+   },
+   "ui_add_links_prio_low": {
+      "message": "Niedrig"
+   },
+   "ui_add_links_prio_lower": {
+      "message": "Niedriger"
+   },
+   "ui_add_links_prio_lowest": {
+      "message": "Am niedrigsten"
+   },
+   "ui_add_links_prio_unset": {
+      "message": "Nicht gesetzt"
+   },
+   "ui_add_links_priority": {
+      "message": "Priorität"
+   },
+   "ui_add_links_refresh_devices": {
+      "message": "Aktualisieren..."
+   },
+   "ui_add_links_refresh_failed_to_get_jds": {
+      "message": "Fehler beim Laden der JDownloader Liste"
+   },
+   "ui_add_links_refresh_jd_found": {
+      "message": "gefunden"
+   },
+   "ui_add_links_refresh_no_jd_found": {
+      "message": "Kein JD gefunden"
+   },
+   "ui_add_links_remove_from_saved_after_sent": {
+      "message": "Nach dem Senden aus 'Gespeichert' entfernen."
+   },
+   "ui_add_links_save_to": {
+      "message": "Speichern unter"
+   },
+   "ui_add_links_target_ask_every_time": {
+      "message": "Jedesmal nachfragen"
+   },
+   "ui_add_links_target_last_used": {
+      "message": "Zuletzt benutzt"
+   },
+   "ui_add_links_target_save_for_later": {
+      "message": "Für später speichern"
+   },
+   "ui_add_links_to_add_links": {
+      "message": "Öffne deinen JDownloader und verbinde ihn mit MyJDownloader um Links hinzuzufügen."
+   },
+   "ui_autograbber_button_stop": {
+      "message": "Anhalten"
+   },
+   "ui_autograbber_running": {
+      "message": "Autograbber"
+   },
+   "ui_clipboard_history_back": {
+      "message": "zurück"
+   },
+   "ui_clipboard_history_delete": {
+      "message": "Löschen"
+   },
+   "ui_clipboard_history_less": {
+      "message": "weniger..."
+   },
+   "ui_clipboard_history_send": {
+      "message": "Senden"
+   },
+   "ui_clipboard_history_still_empty": {
+      "message": "Füge ein paar Links hinzu um zu beginnen! Rechts-Klick, dann \"Herunterladen mit JDownloader\" auswählen."
+   },
+   "ui_feedback_button_send": {
+      "message": "Senden"
+   },
+   "ui_feedback_chars_left": {
+      "message": "übrig"
+   },
+   "ui_feedback_clear": {
+      "message": "Leeren"
+   },
+   "ui_feedback_thank_you": {
+      "message": "Vielen Dank!"
+   },
+   "ui_loading_connecting": {
+      "message": "Verbinde mit deinem JDownloader"
+   },
+   "ui_loading_sending": {
+      "message": "Sende..."
+   },
+   "ui_login_click_here": {
+      "message": "Hier klicken"
+   },
+   "ui_login_connecting": {
+      "message": "Verbinde..."
+   },
+   "ui_login_email_invalid": {
+      "message": "Bitte eine gültige Email Adresse angeben"
+   },
+   "ui_login_email_label": {
+      "message": "Email"
+   },
+   "ui_login_email_required": {
+      "message": "Email Adresse wird benötigt!"
+   },
+   "ui_login_forgot_password": {
+      "message": "Passwort vergessen?"
+   },
+   "ui_login_loading": {
+      "message": "Lade..."
+   },
+   "ui_login_outdated_message": {
+      "message": "Du hast die Extension sehr lange nicht geupdated. Besuche unsere Homepage und sieh nach ob ein Update erhältlich ist!"
+   },
+   "ui_login_password_required": {
+      "message": "Ein Passwort wird benötigt!"
+   },
+   "ui_login_register": {
+      "message": "Registrieren"
+   },
+   "ui_login_sorry_error": {
+      "message": "Sorry, es gab ein Problem!"
+   },
+   "ui_logout_close": {
+      "message": "abbrechen"
+   },
+   "ui_logout_data_loss_warning": {
+      "message": "Alle in der Extension gespeicherten Links gehen verloren!"
+   },
+   "ui_logout_title": {
+      "message": "Logout"
+   },
+   "ui_my_device_click_here": {
+      "message": "Hier klicken"
+   },
+   "ui_my_device_downloaded_bytes": {
+      "message": "Bytes heruntergeladen"
+   },
+   "ui_my_device_eta": {
+      "message": "geschätzte Downloadzeit"
+   },
+   "ui_my_device_open_webinterface": {
+      "message": "Webinterface öffnen"
+   },
+   "ui_my_device_pause": {
+      "message": "Pause"
+   },
+   "ui_my_device_start": {
+      "message": "Start"
+   },
+   "ui_my_device_stop": {
+      "message": "Stop"
+   },
+   "ui_my_device_total_bytes": {
+      "message": "Bytes total"
+   },
+   "ui_settings_add_links_browser_no_cnl_support": {
+      "message": "Dein Browser unterstützt kein CnL. Falls du Firefox benutzt, update bitte auf Firefox 53 oder höher."
+   },
+   "ui_settings_add_links_default_values_autoextract_title": {
+      "message": "automatisches Entpacken"
+   },
+   "ui_settings_add_links_default_values_autostart_title": {
+      "message": "automatischer Start"
+   },
+   "ui_settings_add_links_default_values_deep_decrypt_title": {
+      "message": "Tiefenanalyse"
+   },
+   "ui_settings_add_links_default_values_download_priority_title": {
+      "message": "Download Priorität"
+   },
+   "ui_settings_add_links_default_values_header": {
+      "message": "Standardwerte"
+   },
+   "ui_settings_add_links_default_values_howto_unset": {
+      "message": "Wenn du einen Wert entfernen möchtest, wähle 'nicht gesetzt' oder klicke auf "
+   },
+   "ui_settings_add_links_default_values_overwrite_packagizer_title": {
+      "message": "Paketverwalterregeln überschreiben"
+   },
+   "ui_settings_add_links_default_values_preferred_target_checkbox_autoclose": {
+      "message": "Dialog automatisch schließen, falls bevorzugtes Ziel verfügbar ist."
+   },
+   "ui_settings_add_links_default_values_preferred_target_seconds_until_autoclose": {
+      "message": "Sekunden bis der Dialog automatisch geschloßen wird:"
+   },
+   "ui_settings_add_links_default_values_preferred_target_title": {
+      "message": "Bevorzugtes Ziel"
+   },
+   "ui_settings_add_links_default_values_unset_title": {
+      "message": "Nicht setzen / Entfernen"
+   },
+   "ui_settings_add_links_dialog_header": {
+      "message": "'Links hinzufügen' Dialog"
+   },
+   "ui_settings_captcha_header": {
+      "message": "Captcha Helfer"
+   },
+   "ui_settings_captcha_incognito_header": {
+      "message": "PRIVATER MODUS"
+   },
+   "ui_settings_captcha_incognito_not_allowed_chrome_note": {
+      "message": "BEACHTE: Du wirst evtl. einen Dialog sehen. Du kannst den Dialog schließen. Danach erlaube der Extension im privaten Modus ausgeführt zu werden."
+   },
+   "ui_settings_captcha_incognito_not_allowed_description": {
+      "message": "Erlaube der Extension im privaten Modus ausgeführt zu werden. Wenn du Captchas im privaten Modus erzwingen willst, wird diese Einstellung benötigt."
+   },
+   "ui_settings_captcha_incognito_open_settings_button": {
+      "message": "Extension Einstellungen"
+   },
+   "ui_settings_captcha_privacy_mode": {
+      "message": "Captchas in privaten / Inkognito Tabs öffnen"
+   },
+   "ui_settings_captcha_privacy_mode_description": {
+      "message": "Captcha Tabs im privaten Modus zu öffnen macht es schwerer, deine Lösungsversuche zu tracken. Das kann deine Erfahrung verbessern aber auch verschlechtern."
+   },
+   "ui_settings_changelog_title": {
+      "message": "Changelog"
+   },
+   "ui_settings_checkbox_clipboard_observer": {
+      "message": "Clipboard Überwachung"
+   },
+   "ui_settings_checkbox_simple_contextmenu": {
+      "message": "Benutze das vereinfachte Rechtsklick-Menü."
+   },
+   "ui_settings_clipboard_observer_description": {
+      "message": "Erkennt links in deiner Zwischenablage. Selektiere etwas, dann kopiere es. Der \"Link hinzufügen\" Dialog öffnet sich dann automatisch."
+   },
+   "ui_settings_cnl_via_myjd": {
+      "message": "Click'n'Load via MyJDownloader"
+   },
+   "ui_settings_cnl_via_myjd_description": {
+      "message": "Fängt lokale Click'n'Load Anfragen ab und sendet sie über MyJDownloader an verbundene JDownloader."
+   },
+   "ui_settings_enhance_captcha_dialog_description": {
+      "message": "Das Web Interface kann dir mit Hilfe der Extension interaktive und einfacher zu lösende Captchas anzeigen."
+   },
+   "ui_settings_enhance_captcha_dialog_title": {
+      "message": "Captcha Dialog erweitern"
+   },
+   "ui_settings_general": {
+      "message": "Allgemein"
+   },
+   "ui_settings_imprint_title": {
+      "message": "Impressum"
+   },
+   "ui_settings_keyboard_shortcut_title": {
+      "message": "Tastaturkürzel"
+   },
+   "ui_settings_keyboard_shortcuts": {
+      "message": "Strg+Shift+X / Cmd+Shift+X"
+   },
+   "ui_settings_logged_in_as": {
+      "message": "Eingeloggt als"
+   },
+   "ui_settings_privacy_statement_title": {
+      "message": "Datenschutzerklärung"
+   },
+   "ui_settings_show_add_links_dialog": {
+      "message": "\"Links hinzufügen\" Dialog anzeigen"
+   },
+   "ui_settings_show_add_links_dialog_description": {
+      "message": "Ist die Einstellung aktiv wird ein Dialog angezeigt der dir ermöglicht Einstellungen zu ändern bevor die Links versendet werden. Andernfalls werden die Standardwerte verwendet. Ist \"Jedesmal nachfragen\" als bevorzugtes Ziel ausgewählt kann der Dialog nicht deaktiviert werden."
+   },
+   "ui_settings_simple_contextmenu_description": {
+      "message": "Wenn du das vereinfachte Rechtsklick-Menü benutzt, wird automatisch der am besten passende Selektionstyp verwendet (ganze Seite, Link oder Selektion). Das spart dir einen Klick."
+   },
+   "ui_settings_toc_title": {
+      "message": "Allgemeine Geschäftsbedingungen"
+   },
+   "ui_settings_webinterface_enhancer_description": {
+      "message": "Das Web Interface kann dir durch das Nutzen der Extension mehr Features bieten."
+   },
+   "ui_settings_webinterface_enhancer_header": {
+      "message": "Web Interface Erweiterung"
+   },
+   "ui_status_panel_no_device_connected": {
+      "message": "Kein JDownloader verbunden. Brauchst du Hilfe?"
+   },
+   "ui_status_panel_no_device_connected_click_here": {
+      "message": "Mehr erfahren"
+   }
+}

@@ -1,0 +1,95 @@
+name: CI - Manifest V3 Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-manifest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate Manifest V3
+      run: |
+        # Check manifest.json exists and has required fields
+        if [ ! -f manifest.json ]; then
+          echo "❌ manifest.json not found"
+          exit 1
+        fi
+        
+        # Validate manifest version
+        if ! grep -q '"manifest_version": 3' manifest.json; then
+          echo "❌ manifest_version must be 3"
+          exit 1
+        fi
+        
+        # Validate required permissions
+        required_permissions=("tabs" "storage" "declarativeNetRequest" "contextMenus" "scripting" "alarms" "offscreen")
+        for permission in "${required_permissions[@]}"; do
+          if ! grep -q "\"$permission\"" manifest.json; then
+            echo "❌ Missing required permission: $permission"
+            exit 1
+          fi
+        done
+        
+        echo "✅ Manifest V3 validation passed"
+    
+    - name: Validate Extension Structure
+      run: |
+        # Check essential files exist
+        essential_files=(
+          "background.js"
+          "popup.html"
+          "popup.js"
+          "toolbar.html"
+          "offscreen.html"
+          "offscreen.js"
+          "manifest.json"
+        )
+        
+        for file in "${essential_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Missing essential file: $file"
+            exit 1
+          fi
+        done
+        
+        # Check directories exist
+        essential_dirs=(
+          "scripts"
+          "contentscripts"
+          "vendor"
+          "_locales"
+        )
+        
+        for dir in "${essential_dirs[@]}"; do
+          if [ ! -d "$dir" ]; then
+            echo "❌ Missing essential directory: $dir"
+            exit 1
+          fi
+        done
+        
+        echo "✅ Extension structure validation passed"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Security Scan
+      run: |
+        # Check for sensitive data
+        if grep -r "password\|secret\|key\|token" --include="*.js" --include="*.json" --include="*.html" . | grep -v "node_modules" | grep -v "vendor" | grep -v "_locales"; then
+          echo "⚠️  Potential sensitive data found"
+          # Don't fail the build, just warn
+        fi
+        
+        # Check for external scripts
+        if grep -r "http://\|https://" --include="*.js" --include="*.html" . | grep -v "localhost" | grep -v "127.0.0.1"; then
+          echo "⚠️  External URLs found"
+        fi
+        
+        echo "✅ Security scan completed"
