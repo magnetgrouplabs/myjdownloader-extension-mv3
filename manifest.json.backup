@@ -24,32 +24,42 @@
  }
  }
  },
-  "content_scripts": [ {
-  "all_frames": true,
-  "js": [ "contentscripts/cnlInterceptor.js" ],
-  "matches": [ "*://*/*" ],
-  "run_at": "document_start"
-  }, {
-  "all_frames": true,
-  "js": [ "contentscripts/onCopyContentscript.js" ],
-  "matches": [ "*://*/*" ],
-  "run_at": "document_start"
-  }, {
-  "all_frames": true,
-  "js": [ "contentscripts/toolbarContentscript.js" ],
-  "matches": [ "*://*/*" ],
-  "run_at": "document_start"
-  }, {
-  "all_frames": true,
-  "js": [ "contentscripts/selectionContentscript.js" ],
-  "matches": [ "*://*/*" ],
-  "run_at": "document_start"
-  }, {
-  "all_frames": true,
-  "js": [ "contentscripts/webinterfaceEnhancer.js" ],
-  "matches": [ "*://my.jdownloader.org/*" ],
-  "run_at": "document_end"
-  } ],
+ "content_scripts": [ {
+ "all_frames": true,
+ "js": [ "contentscripts/cnlInterceptor.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/rc2Contentscript.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/rc2LoadingIndicator.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/onCopyContentscript.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/toolbarContentscript.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/selectionContentscript.js" ],
+ "matches": [ "*://*/*" ],
+ "run_at": "document_start"
+ }, {
+ "all_frames": true,
+ "js": [ "contentscripts/webinterfaceEnhancer.js" ],
+ "matches": [ "*://my.jdownloader.org/*" ],
+ "run_at": "document_end"
+ } ],
  "default_locale": "en",
  "description": "__MSG_extensionDescription__",
  "homepage_url": "https://my.jdownloader.org",
@@ -61,13 +71,13 @@
  "manifest_version": 3,
  "name": "MyJDownloader MV3",
  "options_ui": { "page": "popup.html#!/settings", "open_in_tab": true },
- "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen", "nativeMessaging" ],
+ "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen" ],
  "host_permissions": [ "<all_urls>", "http://127.0.0.1:9666/*", "http://localhost:9666/*" ],
  "short_name": "MyJDownloader",
  "update_url": "https://clients2.google.com/service/update2/crx",
  "version": "2026.02.24",
 "web_accessible_resources": [ {
-  "resources": [ "toolbar.html", "autograbber-indicator.html", "captcha-helper/test-native-messaging.html", "captcha-helper/test-native-messaging.js" ],
+  "resources": [ "toolbar.html", "autograbber-indicator.html", "res/browser_solver_template.html", "captcha-helper/test-native-messaging.html" ],
   "matches": [ "*://*/*" ]
 } ]
 }

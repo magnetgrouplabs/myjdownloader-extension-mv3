@@ -1,0 +1,20 @@
+[package]
+name = "myjd-captcha-helper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = "2.9"
+crossbeam = "0.8"
+wry = "0.40"
+tao = "0.26"
+url = "2.5"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,8 +1,8 @@
 'use strict';
 
 angular.module('myjdWebextensionApp')
-  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'myjdClientFactory', 'myjdDeviceClientFactory', 'StorageService',
-    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, myjdClientFactory, myjdDeviceClientFactory, StorageService) {
+  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'myjdClientFactory', 'myjdDeviceClientFactory', 'StorageService', 'CaptchaNativeService',
+    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, myjdClientFactory, myjdDeviceClientFactory, StorageService, CaptchaNativeService) {
       const buildVersion = chrome.runtime.getManifest().version;
       let isForcedPrivateMode = false;
       let isAllowedIncognito = false;
@@ -38,71 +38,15 @@ angular.module('myjdWebextensionApp')
         isAllowedIncognito = false;
       }
 
-      let executeBrowserSolverScripts = function (tabId) {
-        let intervalHandle = setInterval(function () {
-          chrome.tabs.get(tabId, function (tabDetails) {
-            if (tabDetails == null) {
-              clearInterval(intervalHandle);
-            } else if (tabDetails.url.match(/http:\/\/127\.0\.0\.1:\d+\/captcha\/(recaptchav(2|3)|hcaptcha)\/.*\?id=\d+$/gm) !== null) {
-              clearInterval(intervalHandle);
-              // MV3: Use chrome.scripting.executeScript instead of deprecated chrome.tabs.executeScript
-              chrome.scripting.executeScript({
-                target: { tabId: tabId, allFrames: true },
-                files: ['/contentscripts/browserSolverEnhancer.js']
-              }).catch(function(err) {
-                console.error('Rc2Service: Failed to inject browserSolverEnhancer:', err);
-              });
-            }
-          });
-        }, 200);
-
-      };
-
       function handleRequest(request) {
         if (request.url.match(/http:\/\/127\.0\.0\.1:\d+\/captcha\/(recaptchav(2|3)|hcaptcha)\/.*\?id=\d+$/gm) !== null) {
-          // New tab opened by a JDownloader running on localhost
-          if (isAllowedIncognito && isForcedPrivateMode) {
-            // 1. checks if tab is in an incognito window
-            // 2. if not, tab is closed and reopened in
-            // existing or newly created incognito window
-            // 3. then the browser solver scripts are injected
-            chrome.tabs.get(request.tabId, function (tab) {
-              if (tab != null && tab.incognito === false) {
-                // tab is not in incognito window
-                chrome.tabs.remove(tab.id, _ => {
-                  chrome.windows.getAll(windows => {
-                    let incognitoWindow;
-                    for (let i = 0; i < windows.length; i++) {
-                      if (windows[i].incognito === true) {
-                        incognitoWindow = windows[i];
-                      }
-                    }
-                    if (incognitoWindow == null) {
-                      chrome.windows.create({ incognito: true }, window =>
-                        chrome.tabs.create({
-                          url: request.url,
-                          windowId: window.id
-                        }, createdTab => {
-                          // we need to use chrome.tabs.create as chrome.tabs.update
-                          // won't trigger our request listeners
-                          if (window.tabs[0].id !== createdTab.id) {
-                            chrome.tabs.remove(window.tabs[0].id);
-                          }
-                          executeBrowserSolverScripts(createdTab.id);
-                        }));
-                    } else {
-                      chrome.tabs.create({
-                        windowId: incognitoWindow.id,
-                        url: request.url,
-                      }, tab => executeBrowserSolverScripts(tab.id));
-                    }
-                  });
-                });
-              }
-            });
-          } else {
-            executeBrowserSolverScripts(request.tabId);
-          }
+          // Native helper handles CAPTCHA solving - close the localhost tab
+          // The native helper opens its own browser window for solving
+          chrome.tabs.remove(request.tabId, function() {
+            if (chrome.runtime.lastError) {
+              console.log('Rc2Service: Could not close tab:', chrome.runtime.lastError.message);
+            }
+          });
         }
       }
 
@@ -285,29 +229,46 @@ angular.module('myjdWebextensionApp')
       });
 
       function onNewCaptchaAvailable(tabId, callbackUrl, params) {
-        if (rc2TabUpdateCallbacks[tabId] == null) {
-          var captchaParams = {
-            callbackUrl: callbackUrl,
-            params: params
-          };
-          rc2TabUpdateCallbacks[tabId] = Object.create(null);
-          rc2TabUpdateCallbacks[tabId].captchaParams = captchaParams;
-          rc2TabUpdateCallbacks[tabId].callback = innerTabId => {
-            // MV3: Use chrome.scripting.executeScript instead of deprecated chrome.tabs.executeScript
-            chrome.scripting.executeScript({
-              target: { tabId: innerTabId, allFrames: true },
-              files: ['/contentscripts/rc2Contentscript.js']
-            }).then(function() {
-              chrome.tabs.sendMessage(innerTabId, {
-                name: "myjdrc2",
-                action: "captcha-available"
-              });
-            }).catch(function(err) {
-              console.error('Rc2Service: Failed to inject rc2Contentscript:', err);
-            });
-          };
-          chrome.tabs.update(tabId, { url: params.finalUrl + "#rc2jdt" });
-        }
+        // Use native helper for CAPTCHA solving
+        var captchaJob = {
+          siteKey: params.siteKey,
+          siteKeyType: params.siteKeyType,
+          challengeType: params.challengeType,
+          callbackUrl: callbackUrl,
+          captchaId: params.captchaId,
+          hoster: params.hoster,
+          v3action: params.v3action,
+          siteUrl: params.finalUrl
+        };
+        
+        CaptchaNativeService.sendCaptcha(captchaJob).then(function(response) {
+          console.log('Rc2Service: Native helper accepted CAPTCHA job:', response);
+          // Native helper handles the solving - close the triggering tab
+          chrome.tabs.remove(tabId, function() {
+            if (chrome.runtime.lastError) {
+              console.log('Rc2Service: Could not close tab:', chrome.runtime.lastError.message);
+            }
+          });
+        }).catch(function(error) {
+          console.error('Rc2Service: Native helper failed, falling back to web interface:', error);
+          // Fallback: notify web interface if available
+          chrome.tabs.query({
+            url: [
+              "http://my.jdownloader.org/*",
+              "https://my.jdownloader.org/*"
+            ]
+          }, function(tabs) {
+            if (tabs !== undefined && tabs.length > 0) {
+              for (let i = 0; i < tabs.length; i++) {
+                chrome.tabs.sendMessage(tabs[i].id, {
+                  name: "captcha-new",
+                  type: "myjdrc2",
+                  data: { callbackUrl: callbackUrl, params: JSON.stringify(params) }
+                });
+              }
+            }
+          });
+        });
       }
 
       ExtensionMessagingService.addListener("myjdrc2", "tabmode-skip-request", function (request, sender, sendResponse) {
