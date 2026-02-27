@@ -44,9 +44,8 @@ _metadata/
 .DOCS/
 
 # Test files
-test/
-tests/
-coverage/
+/test/
+/coverage/
 
 # Claude settings
 .claude/

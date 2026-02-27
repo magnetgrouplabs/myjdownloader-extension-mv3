@@ -13,20 +13,38 @@ myjdownloader-extension-mv3/
   README.md                        # GitHub-ready project README
   CLAUDE.md                        # This file
   LICENSE                          # GPL-3.0 license
-  .gitignore                      # Git exclusions
-  manifest.json                   # MV3 manifest
-  background.js                   # Service worker
-  popup.html / popup.js           # Login popup
-  toolbar.html                    # In-page add-links toolbar
-  offscreen.html / offscreen.js   # API operations when popup closed
-  scripts/                        # AngularJS application
-  vendor/                         # Third-party libraries
-  contentscripts/                 # Content scripts
-  captcha-helper/                 # Native messaging host (Rust)
-    src/main.rs                   # Native helper source
-    Cargo.toml                    # Rust dependencies
-    myjd-native-host.json         # Native messaging manifest
-  .github/workflows/              # CI/CD workflows
+  .gitignore                       # Git exclusions
+  manifest.json                    # MV3 manifest
+  background.js                    # Service worker
+  popup.html / popup.js            # Login popup
+  toolbar.html                     # In-page add-links toolbar
+  offscreen.html / offscreen.js    # API operations when popup closed
+  scripts/                         # AngularJS application
+    services/
+      CaptchaNativeService.js      # Native messaging integration
+      __tests__/                   # Jest unit tests
+  vendor/                          # Third-party libraries
+  contentscripts/                  # Content scripts
+  captcha-helper/                  # Native messaging host (Rust)
+    src/
+      main.rs                      # Binary entry point
+      lib.rs                       # Library exports
+      validation.rs                # URL, site key, skip type validation
+      escape.rs                    # HTML/JS escaping (XSS prevention)
+      html.rs                      # CAPTCHA HTML generation
+      http.rs                      # HTTP client for JDownloader callbacks
+      native.rs                    # Native messaging I/O
+      captcha.rs                   # Request/response handling
+      webview.rs                   # WebView2 window management (Windows)
+    tests/
+      integration_test.rs          # Integration tests with mock server
+    Cargo.toml                     # Rust dependencies
+    Cargo.lock                     # Dependency lockfile
+    myjd-native-host.json          # Native messaging manifest
+    run-tests.ps1                  # Test runner script
+  package.json                     # JavaScript dev dependencies
+  jest.config.js                   # Jest configuration
+  .github/workflows/               # CI/CD workflows
 ```
 
 ## Features Status: COMPLETE
@@ -87,10 +105,20 @@ Extension submits to JDownloader via HTTP
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Native helper | `captcha-helper/src/main.rs` | WebView2 window, CAPTCHA rendering, native messaging |
+| Native helper entry | `captcha-helper/src/main.rs` | Binary entry point, native messaging loop |
+| Library exports | `captcha-helper/src/lib.rs` | Public API re-exports |
+| Validation | `captcha-helper/src/validation.rs` | URL, site key, skip type validation |
+| HTML escaping | `captcha-helper/src/escape.rs` | XSS prevention utilities |
+| CAPTCHA HTML | `captcha-helper/src/html.rs` | reCAPTCHA/hCaptcha HTML generation |
+| HTTP client | `captcha-helper/src/http.rs` | JDownloader callback HTTP requests |
+| Native messaging | `captcha-helper/src/native.rs` | stdin/stdout message protocol |
+| Request handling | `captcha-helper/src/captcha.rs` | Request/Response types, action routing |
+| WebView | `captcha-helper/src/webview.rs` | WebView2 window management (Windows only) |
+| Integration tests | `captcha-helper/tests/integration_test.rs` | Mock server tests |
 | Native host manifest | `captcha-helper/myjd-native-host.json` | Chrome native messaging config |
 | Extension service | `scripts/services/CaptchaNativeService.js` | Sends CAPTCHA jobs to native helper |
 | Extension integration | `scripts/services/Rc2Service.js` | Routes CAPTCHA jobs, handles responses |
+| JS tests | `scripts/services/__tests__/` | Jest unit tests |
 
 ### Dependencies
 

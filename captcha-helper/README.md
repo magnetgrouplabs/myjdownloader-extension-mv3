@@ -20,7 +20,45 @@ Native Windows application for solving CAPTCHAs in the MyJDownloader Chrome exte
 
 ## Testing
 
-After installation, test the native messaging connection:
+### Automated Tests
+
+Run the complete test suite:
+
+```powershell
+.\run-tests.ps1
+```
+
+Or run tests separately:
+
+```powershell
+# Rust unit tests and integration tests
+cargo test
+
+# Rust unit tests only
+cargo test --lib
+
+# Rust integration tests only
+cargo test --test integration_test
+
+# JavaScript tests (from project root)
+npm test
+```
+
+### Test Coverage
+
+| Component | Tests | Description |
+|-----------|-------|-------------|
+| `validation.rs` | 14 | URL validation, site key validation, skip type validation |
+| `escape.rs` | 10 | HTML and JavaScript escaping (XSS prevention) |
+| `html.rs` | 11 | CAPTCHA HTML generation for all types |
+| `captcha.rs` | 9 | Request/response handling, action routing |
+| `native.rs` | 1 | Native messaging format |
+| `http.rs` | 5 | HTTP client with mock server |
+| Integration | 14 | Full request flows with mock JDownloader server |
+| JavaScript | 22 | CaptchaNativeService with Chrome API mocks |
+| **Total** | **86** | |
+
+### Manual Testing
 
 1. Open Chrome and go to:
    ```
@@ -93,9 +131,19 @@ Native Helper (myjd-captcha-helper.exe)
 
 | File | Description |
 |------|-------------|
-| `src/main.rs` | Main application source |
+| `src/lib.rs` | Library entry point, re-exports public API |
+| `src/main.rs` | Binary entry point, native messaging loop |
+| `src/validation.rs` | URL, site key, and skip type validation |
+| `src/escape.rs` | HTML and JavaScript escaping utilities |
+| `src/html.rs` | CAPTCHA HTML generation |
+| `src/http.rs` | HTTP client for JDownloader callbacks |
+| `src/native.rs` | Native messaging I/O |
+| `src/captcha.rs` | Request/response types and handlers |
+| `src/webview.rs` | WebView2 window management (Windows only) |
+| `tests/integration_test.rs` | Integration tests with mock server |
 | `Cargo.toml` | Rust dependencies |
 | `install.ps1` | Windows installer script |
+| `run-tests.ps1` | Test runner script |
 | `myjd-native-host.json` | Native messaging manifest template |
 
 ## Troubleshooting
