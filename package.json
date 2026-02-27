@@ -1,0 +1,15 @@
+{
+  "name": "myjdownloader-extension-mv3",
+  "version": "1.0.0",
+  "description": "MyJDownloader Chrome Extension MV3",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^27.5.1",
+    "jest-chrome": "^0.8.0",
+    "angular": "^1.8.3",
+    "angular-mocks": "^1.8.3"
+  }
+}

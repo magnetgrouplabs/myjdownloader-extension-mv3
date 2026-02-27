@@ -120,6 +120,62 @@ myjdownloader-extension-mv3/
 - The toolbar sends links directly via its local `myjdDeviceClientFactory` (no background/offscreen relay)
 - `ng-if` (not `ng-show`) is used for the connected panel to prevent premature controller instantiation
 
+## Testing
+
+### Rust Tests (Native Helper)
+
+```powershell
+cd captcha-helper
+
+# Run all tests
+cargo test
+
+# Run unit tests only
+cargo test --lib
+
+# Run integration tests only
+cargo test --test integration_test
+
+# Run with output
+cargo test -- --nocapture
+```
+
+**Test coverage:** 60 tests total
+- Unit tests: 46 (validation, escaping, HTML generation, request handling)
+- Integration tests: 14 (HTTP mocking, action routing)
+
+### JavaScript Tests (Extension)
+
+```powershell
+# From project root
+npm test
+
+# With coverage
+npm run test:coverage
+```
+
+**Test coverage:** 26 tests total
+- Response handling, message format validation
+- URL validation, skip type validation, site key validation
+
+### Run All Tests
+
+```powershell
+.\captcha-helper\run-tests.ps1
+```
+
+### Test Categories
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| Validation | 14 | URL localhost restriction, site key format, skip type whitelist |
+| XSS Prevention | 10 | HTML escaping, JavaScript escaping |
+| HTML Generation | 11 | Correct script URLs, CSP headers, test mode |
+| Request Handling | 9 | Action routing, error responses, serialization |
+| HTTP Client | 5 | Mock server, timeouts, size limits, headers |
+| Integration | 14 | Full request flows with mock JDownloader |
+| JavaScript | 26 | Service logic, message format, validation |
+
 ## Disclaimer
 
 This is a community-maintained conversion of the original MyJDownloader extension. I offer no warranty and do not have plans for active maintenance. The JDownloader developers are welcome to adopt this codebase. I will respond to issues when possible but cannot guarantee ongoing support.
