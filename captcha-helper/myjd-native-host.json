@@ -1,0 +1,7 @@
+{
+  "name": "org.jdownloader.captcha_helper",
+  "description": "MyJDownloader Captcha Helper",
+  "path": "C:\\Users\\anthony\\jdownloader-extension-manifestv3\\captcha-helper\\target\\release\\myjd-captcha-helper.exe",
+  "type": "stdio",
+  "allowed_origins": [ "chrome-extension://fbcohnmimjicjdomonkcbcpbpnhggkip/" ]
+}

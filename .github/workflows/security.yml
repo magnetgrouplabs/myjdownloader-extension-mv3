@@ -1,94 +1,113 @@
-name: Security - Extension Scanning
+name: Security Scanning
 
 on:
-  schedule:
-    - cron: '0 0 * * 0' # Weekly on Sunday
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - master
 
 jobs:
-  dependency-check:
+  cargo-audit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Check Third-Party Libraries
-      run: |
-        echo "📦 Checking third-party libraries..."
-        
-        # List vendor directory contents
-        if [ -d "vendor" ]; then
-          echo "Vendor libraries:"
-          find vendor -type f -name "*.js" -o -name "*.css" | head -20
-        fi
-        
-        # Check for known vulnerable patterns
-        vulnerable_patterns=(
-          "eval("
-          "Function("
-          "document.write"
-          "innerHTML"
-          "outerHTML"
-        )
-        
-        for pattern in "${vulnerable_patterns[@]}"; do
-          if grep -r "$pattern" --include="*.js" --include="*.html" . | grep -v "vendor" | grep -v "_locales"; then
-            echo "⚠️  Found potential XSS pattern: $pattern"
-          fi
-        done
-        
-        echo "✅ Dependency check completed"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  manifest-audit:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Manifest Security Audit
-      run: |
-        echo "🔍 Auditing manifest.json security..."
-        
-        # Check for overly broad permissions
-        if grep -q '"<all_urls>"' manifest.json; then
-          echo "⚠️  Using <all_urls> permission - ensure this is necessary"
-        fi
-        
-        # Check content script security
-        if grep -q '"all_frames": true' manifest.json; then
-          echo "⚠️  Content scripts running in all frames - ensure this is safe"
-        fi
-        
-        # Check web_accessible_resources
-        if grep -q '"web_accessible_resources"' manifest.json; then
-          echo "📄 Web accessible resources defined"
-        fi
-        
-        echo "✅ Manifest security audit completed"
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-  code-quality:
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: cd captcha-helper && cargo audit || true
+
+  cargo-clippy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Code Quality Check
-      run: |
-        echo "🔍 Checking code quality..."
-        
-        # Check for console.log statements
-        if grep -r "console\.log" --include="*.js" . | grep -v "vendor" | grep -v "_locales"; then
-          echo "⚠️  console.log statements found - consider removing for production"
-        fi
-        
-        # Check for debugger statements
-        if grep -r "debugger" --include="*.js" . | grep -v "vendor" | grep -v "_locales"; then
-          echo "❌ debugger statements found - remove before production"
-          exit 1
-        fi
-        
-        # Check file sizes
-        echo "📊 File sizes:"
-        find . -name "*.js" -o -name "*.html" -o -name "*.css" | grep -v "vendor" | grep -v "_locales" | xargs ls -la | head -10
-        
-        echo "✅ Code quality check completed"
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run cargo clippy
+        run: cd captcha-helper && cargo clippy --all-targets --all-features -- -D warnings
+
+  cargo-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo test
+        run: cd captcha-helper && cargo test
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || true
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  virustotal:
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build release binary
+        run: cd captcha-helper && cargo build --release
+
+      - name: VirusTotal Scan
+        uses: crazy-max/ghaction-virustotal@v4
+        with:
+          vt_api_key: ${{ secrets.VT_APIKEY }}
+          files: captcha-helper/target/release/myjd-captcha-helper.exe
+
+  trufflehog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified --fail

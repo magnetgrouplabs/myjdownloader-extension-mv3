@@ -6,6 +6,10 @@
 build/
 dist/
 
+# Rust build artifacts
+captcha-helper/target/
+*.exe.WebView2/
+
 # IDE files
 .vscode/
 .idea/
@@ -43,3 +47,6 @@ _metadata/
 test/
 tests/
 coverage/
+
+# Claude settings
+.claude/

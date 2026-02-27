@@ -1,0 +1,89 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build captcha-helper
+        run: cargo build --release
+        working-directory: captcha-helper
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: captcha-helper-windows
+          path: captcha-helper/target/release/myjd-captcha-helper.exe
+
+  package-extension:
+    runs-on: ubuntu-latest
+    needs: build-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: captcha-helper-windows
+          path: captcha-helper
+
+      - name: Create release ZIP
+        run: |
+          mkdir -p release/myjdownloader-extension
+          cp -r captcha-helper release/myjdownloader-extension/
+          cp -r scripts release/myjdownloader-extension/
+          cp -r contentscripts release/myjdownloader-extension/
+          cp -r vendor release/myjdownloader-extension/
+          cp -r images release/myjdownloader-extension/
+          cp -r _locales release/myjdownloader-extension/
+          cp -r partials release/myjdownloader-extension/
+          cp -r res release/myjdownloader-extension/
+          cp -r styles release/myjdownloader-extension/
+          cp manifest.json release/myjdownloader-extension/
+          cp background.js release/myjdownloader-extension/
+          cp popup.html release/myjdownloader-extension/
+          cp popup.js release/myjdownloader-extension/
+          cp toolbar.html release/myjdownloader-extension/
+          cp offscreen.html release/myjdownloader-extension/
+          cp offscreen.js release/myjdownloader-extension/
+          cp README.md release/myjdownloader-extension/
+          cp LICENSE release/myjdownloader-extension/
+          cd release
+          zip -r myjdownloader-extension-${{ github.ref_name }}.zip myjdownloader-extension
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: release/myjdownloader-extension-${{ github.ref_name }}.zip
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build-windows, package-extension]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/extension-zip/myjdownloader-extension-${{ github.ref_name }}.zip
+            artifacts/captcha-helper-windows/myjd-captcha-helper.exe
