@@ -27,11 +27,34 @@ let settings = {};
 let requestQueue = {};
 let requestIDCounter = 0;
 
+const QUEUE_STORAGE_KEY = 'myjd_request_queue';
+
+async function restoreRequestQueue() {
+ try {
+  const result = await chrome.storage.session.get(QUEUE_STORAGE_KEY);
+  if (result[QUEUE_STORAGE_KEY]) {
+   requestQueue = result[QUEUE_STORAGE_KEY];
+   console.log('Background: Restored request queue from session storage');
+  }
+ } catch (e) {
+  console.error('Background: Failed to restore queue:', e);
+ }
+}
+
+function persistQueue() {
+ chrome.storage.session.set({ [QUEUE_STORAGE_KEY]: requestQueue }).catch(err => {
+  console.error('Background: Failed to persist queue:', err);
+ });
+}
+
+let queueReady = restoreRequestQueue();
+
 function addLinkToRequestQueue(link, tab) {
+ let tabKey = String(tab.id);
  let time = Date.now();
  let id = "" + tab.id + time + Math.floor(Math.random() * 10000);
- if (!requestQueue[tab.id]) {
-  requestQueue[tab.id] = [];
+ if (!requestQueue[tabKey]) {
+  requestQueue[tabKey] = [];
  }
  let newLink = {
   id: id,
@@ -43,7 +66,7 @@ function addLinkToRequestQueue(link, tab) {
 
  // Check for duplicates
  let isDupe = false;
- for (let item of requestQueue[tab.id]) {
+ for (let item of requestQueue[tabKey]) {
   if (item.type === newLink.type && item.content === newLink.content) {
    isDupe = true;
    break;
@@ -51,7 +74,8 @@ function addLinkToRequestQueue(link, tab) {
  }
 
  if (!isDupe) {
-  requestQueue[tab.id].push(newLink);
+  requestQueue[tabKey].push(newLink);
+  persistQueue();
   notifyContentScript(tab.id);
  }
 }
@@ -364,18 +388,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  // Return the request queue for a specific tab
  if (action === "link-info") {
-  let tabId = request.data;
-  let queue = requestQueue[tabId] || [];
-  sendResponse({ data: queue });
+  (async () => {
+   await queueReady;
+   let tabId = String(request.data);
+   let queue = requestQueue[tabId] || [];
+   sendResponse({ data: queue });
+  })();
   return true;
  }
 
  // Remove a specific request from the queue
  if (action === "remove-request") {
   if (request.data && request.data.tabId && request.data.requestId) {
-   let tabId = request.data.tabId;
+   let tabId = String(request.data.tabId);
    if (requestQueue[tabId]) {
     requestQueue[tabId] = requestQueue[tabId].filter(r => r.id !== request.data.requestId);
+    persistQueue();
    }
   }
   sendResponse({ status: 'ok' });
@@ -385,7 +413,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // Remove all requests for a tab
  if (action === "remove-all-requests") {
   if (request.data && request.data.tabId) {
-   delete requestQueue[request.data.tabId];
+   delete requestQueue[String(request.data.tabId)];
+   persistQueue();
   }
   sendResponse({ status: 'ok' });
   return true;
@@ -396,7 +425,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.data && request.data.tabId) {
    let tabId = parseInt(request.data.tabId);
    chrome.tabs.sendMessage(tabId, { action: "close-in-page-toolbar" }).catch(() => {});
-   delete requestQueue[tabId];
+   delete requestQueue[String(tabId)];
+   persistQueue();
   }
   sendResponse({ status: 'ok' });
   return true;
@@ -585,7 +615,8 @@ async function processCnlViaOffscreen(cnlData) {
 // Clean up request queue when tabs are closed
 // ============================================================
 chrome.tabs.onRemoved.addListener((tabId) => {
- delete requestQueue[tabId];
+ delete requestQueue[String(tabId)];
+ persistQueue();
 });
 
 // ============================================================
