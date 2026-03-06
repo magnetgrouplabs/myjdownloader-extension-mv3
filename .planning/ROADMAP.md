@@ -7,7 +7,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 ## Phases
 
 - [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
-- [ ] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar
+- [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
 - [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
 - [ ] **Phase 4: Web Tab CAPTCHA** - Cross-platform CAPTCHA fallback via content script on JDownloader's localhost page
 - [ ] **Phase 5: CAPTCHA E2E Testing** - Validate both CAPTCHA modes end-to-end with real JDownloader
@@ -41,11 +41,11 @@ Plans:
   3. "Add links" sends all stacked links in one JDownloader API call
   4. Closing a tab clears its link queue
   5. Same URL right-clicked twice appears only once
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — Batch send refactor: structural tests + sendAddLinkQueries single-call implementation
-- [ ] 02-02-PLAN.md — E2E verification: automated test suite + manual browser verification of all LINK requirements
+- [x] 02-01-PLAN.md — Batch send refactor: structural tests + sendAddLinkQueries single-call implementation
+- [x] 02-02-PLAN.md — E2E verification: automated test suite + manual browser verification of all LINK requirements
 
 ### Phase 3: Directory History
 **Goal**: Users can quickly re-select previously used download directories without retyping
@@ -112,7 +112,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
-| 2. Multi-Link Stacking | 0/2 | Planned | - |
+| 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Not started | - |
 | 4. Web Tab CAPTCHA | 0/3 | Not started | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |

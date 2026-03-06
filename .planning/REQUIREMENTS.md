@@ -14,12 +14,12 @@
 
 ### Multi-Link Stacking
 
-- [ ] **LINK-01**: Right-clicking multiple links on the same page accumulates them in the toolbar sidebar
-- [ ] **LINK-02**: Toolbar UI updates in real-time when new links are added to an already-open toolbar
+- [x] **LINK-01**: Right-clicking multiple links on the same page accumulates them in the toolbar sidebar
+- [x] **LINK-02**: Toolbar UI updates in real-time when new links are added to an already-open toolbar
 - [x] **LINK-03**: All stacked links can be sent to JDownloader in a single batch operation
-- [ ] **LINK-04**: Link queue survives service worker termination (30s idle) and is restored on wake
-- [ ] **LINK-05**: Duplicate links on the same tab are deduplicated
-- [ ] **LINK-06**: Link queue for a tab is cleared when the tab is closed
+- [x] **LINK-04**: Link queue survives service worker termination (30s idle) and is restored on wake
+- [x] **LINK-05**: Duplicate links on the same tab are deduplicated
+- [x] **LINK-06**: Link queue for a tab is cleared when the tab is closed
 
 ### Directory History
 
@@ -98,12 +98,12 @@
 | BUG-02 | Phase 1 | Complete |
 | BUG-03 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
-| LINK-01 | Phase 2 | Pending |
-| LINK-02 | Phase 2 | Pending |
+| LINK-01 | Phase 2 | Complete |
+| LINK-02 | Phase 2 | Complete |
 | LINK-03 | Phase 2 | Complete |
-| LINK-04 | Phase 2 | Pending |
-| LINK-05 | Phase 2 | Pending |
-| LINK-06 | Phase 2 | Pending |
+| LINK-04 | Phase 2 | Complete |
+| LINK-05 | Phase 2 | Complete |
+| LINK-06 | Phase 2 | Complete |
 | DIR-01 | Phase 3 | Pending |
 | DIR-02 | Phase 3 | Pending |
 | DIR-03 | Phase 3 | Pending |
