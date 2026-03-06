@@ -57,6 +57,20 @@ pub struct Response {
     pub skip_type: Option<String>,
 }
 
+/// Serialize a Response to JSON bytes, with fallback error JSON if serialization fails.
+/// This replaces direct `.unwrap()` calls to prevent panics in release builds
+/// (where panic = "abort" would instantly kill the process).
+pub fn serialize_response(response: &Response) -> Vec<u8> {
+    serde_json::to_vec(response).unwrap_or_else(|e| {
+        eprintln!("Failed to serialize response: {}", e);
+        format!(
+            r#"{{"status":"error","error":"Serialization failed: {}"}}"#,
+            e.to_string().replace('"', "'")
+        )
+        .into_bytes()
+    })
+}
+
 #[derive(Debug, Clone)]
 pub enum CaptchaResult {
     Solved(String),
@@ -445,5 +459,35 @@ mod tests {
         assert_eq!(request.site_domain, Some("example.com".to_string()));
         assert_eq!(request.skip_type, Some("hoster".to_string()));
         assert_eq!(request.test, Some(true));
+    }
+
+    #[test]
+    fn test_serialize_response_success() {
+        let response = Response {
+            status: "solved".to_string(),
+            token: Some("test-token".to_string()),
+            version: None,
+            error: None,
+            skip_type: None,
+        };
+        let bytes = serialize_response(&response);
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["status"], "solved");
+        assert_eq!(json["token"], "test-token");
+    }
+
+    #[test]
+    fn test_serialize_response_produces_valid_json() {
+        let response = Response {
+            status: "error".to_string(),
+            token: None,
+            version: None,
+            error: Some("Something went wrong".to_string()),
+            skip_type: None,
+        };
+        let bytes = serialize_response(&response);
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["status"], "error");
+        assert_eq!(json["error"], "Something went wrong");
     }
 }

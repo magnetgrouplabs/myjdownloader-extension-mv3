@@ -8,7 +8,7 @@ use tao::event_loop::{ControlFlow, EventLoop};
 use tao::window::WindowBuilder;
 use wry::WebViewBuilder;
 
-use crate::captcha::{CaptchaJob, CaptchaResult, Response};
+use crate::captcha::{serialize_response, CaptchaJob, CaptchaResult, Response};
 use crate::html::generate_captcha_html;
 use crate::http::http_get;
 use crate::native::write_message;
@@ -104,7 +104,7 @@ pub fn run_webview_window(job: CaptchaJob, result_tx: Sender<CaptchaResult>) -> 
                         },
                     };
 
-                    let response_json = serde_json::to_vec(&response).unwrap();
+                    let response_json = serialize_response(&response);
                     let _ = write_message(&response_json);
                     *control_flow = ControlFlow::Exit;
                     return;
@@ -126,7 +126,7 @@ pub fn run_webview_window(job: CaptchaJob, result_tx: Sender<CaptchaResult>) -> 
                         error: None,
                         skip_type: Some("hoster".to_string()),
                     };
-                    let response_json = serde_json::to_vec(&response).unwrap();
+                    let response_json = serialize_response(&response);
                     let _ = write_message(&response_json);
                 }
                 *control_flow = ControlFlow::Exit;
