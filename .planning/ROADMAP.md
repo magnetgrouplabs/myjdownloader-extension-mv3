@@ -6,7 +6,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 
 ## Phases
 
-- [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
+- [x] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
 - [ ] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar
 - [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
 - [ ] **Phase 4: Web Tab CAPTCHA** - Cross-platform CAPTCHA fallback via content script on JDownloader's localhost page
@@ -27,8 +27,8 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: Service worker queue persistence (chrome.storage.session migration)
-- [ ] 01-02: Rc2Service and native helper bug fixes
+- [x] 01-01: Service worker queue persistence (chrome.storage.session migration)
+- [x] 01-02: Rc2Service and native helper bug fixes
 
 ### Phase 2: Multi-Link Stacking
 **Goal**: Restore the MV2 experience where right-clicking multiple links stacks them in the toolbar for batch sending
@@ -110,7 +110,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Bug Fixes & Queue Persistence | 0/2 | Not started | - |
+| 1. Bug Fixes & Queue Persistence | 2/2 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 0/2 | Not started | - |
 | 3. Directory History | 0/1 | Not started | - |
 | 4. Web Tab CAPTCHA | 0/3 | Not started | - |

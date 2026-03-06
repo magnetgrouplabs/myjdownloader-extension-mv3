@@ -7,9 +7,9 @@
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Duplicate URL pattern in Rc2Service tab query is removed (only one `*://127.0.0.1*` match)
-- [ ] **BUG-02**: Double CAPTCHA job send is prevented — `captchaInProgress` guard ensures only one solving context per CAPTCHA ID
-- [ ] **BUG-03**: Native helper `.unwrap()` panics replaced with error handling that returns structured `{"status":"error"}` responses
+- [x] **BUG-01**: Duplicate URL pattern in Rc2Service tab query is removed (only one `*://127.0.0.1*` match)
+- [x] **BUG-02**: Double CAPTCHA job send is prevented — `captchaInProgress` guard ensures only one solving context per CAPTCHA ID
+- [x] **BUG-03**: Native helper `.unwrap()` panics replaced with error handling that returns structured `{"status":"error"}` responses
 - [x] **BUG-04**: Service worker `requestQueue` persists to `chrome.storage.session` and survives termination/restart cycles
 
 ### Multi-Link Stacking
@@ -94,9 +94,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 1 | Pending |
-| BUG-02 | Phase 1 | Pending |
-| BUG-03 | Phase 1 | Pending |
+| BUG-01 | Phase 1 | Complete |
+| BUG-02 | Phase 1 | Complete |
+| BUG-03 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
 | LINK-01 | Phase 2 | Pending |
 | LINK-02 | Phase 2 | Pending |

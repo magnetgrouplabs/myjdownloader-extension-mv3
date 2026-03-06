@@ -3,16 +3,16 @@
 ## Current Position
 
 **Milestone:** v1.0
-**Active Phase:** 01-bug-fixes-queue-persistence
-**Current Plan:** 2 of 2
-**Status:** Plan 01 complete, ready for Plan 02
-**Progress:** [=====-----] 50% (1/2 plans complete)
+**Active Phase:** 01-bug-fixes-queue-persistence (COMPLETE)
+**Current Plan:** 2 of 2 (done)
+**Status:** Phase 1 complete, ready for Phase 2
+**Progress:** [==========] 100% (2/2 plans complete)
 
 ## Phase Status
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1. Bug Fixes & Queue Persistence | In progress (1/2 plans) | Plan 01 complete: queue persistence |
+| 1. Bug Fixes & Queue Persistence | Complete (2/2 plans) | Queue persistence + bug fixes done |
 | 2. Multi-Link Stacking | Not started | Depends on Phase 1 |
 | 3. Directory History | Not started | Independent — can parallel with Phase 2 |
 | 4. Web Tab CAPTCHA | Not started | Depends on Phase 1 (BUG-02) |
@@ -31,6 +31,9 @@
 | String-normalized tab ID keys | 2026-03-06 | Prevents JSON roundtrip key mismatch in requestQueue |
 | IIFE async wrapper for onMessage handlers | 2026-03-06 | chrome.runtime.onMessage does not support async return |
 | Fire-and-forget persistQueue() | 2026-03-06 | Non-blocking to avoid slowing mutation paths |
+| Source-level structural tests for AngularJS services | 2026-03-06 | Read file + regex validation avoids full DI wiring in Jest |
+| captchaInProgress dedup key: captchaId or callbackUrl | 2026-03-06 | Covers both MyJD API and local callback CAPTCHA flows |
+| serialize_response with fallback error JSON | 2026-03-06 | Prevents native helper panics on serialization failure |
 
 ## Blockers
 
@@ -41,11 +44,12 @@ None currently.
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 01 | 01 | 4min | 2 | 3 |
+| 01 | 02 | 6min | 2 | 6 |
 
 ## Context for Next Session
 
-Plan 01-01 (queue persistence) complete. Continue with Plan 01-02 (bug fixes).
-Last session stopped at: Completed 01-01-PLAN.md
+Phase 1 complete (both plans). Ready to start Phase 2 (Multi-Link Stacking) or Phase 3 (Directory History).
+Last session stopped at: Completed 01-02-PLAN.md
 
 ---
 *State initialized: 2026-03-06*
