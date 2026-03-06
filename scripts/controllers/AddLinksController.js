@@ -604,34 +604,68 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
     }
 
     function sendAddLinkQueries(addLinksQueries, callback) {
-      if (addLinksQueries.length > 0) {
-        var deviceClient = myjdDeviceClientFactory.get($scope.selection.device);
-        var result = deviceClient.sendRequest("/linkgrabberv2/addLinks", JSON.stringify(addLinksQueries[0]));
-        if (!result || typeof result.done !== 'function') {
+      if (addLinksQueries.length === 0) {
+        if (callback) {
+          callback();
+        }
+        return;
+      }
+
+      // Combine all link URLs into a single newline-separated string
+      var combinedLinks = addLinksQueries.map(function (q) {
+        return q.links;
+      }).join("\r\n");
+
+      // Build batch query using first query as base for shared options
+      var batchQuery = {};
+      var base = addLinksQueries[0];
+
+      if (base.destinationFolder !== undefined) { batchQuery.destinationFolder = base.destinationFolder; }
+      if (base.comment !== undefined) { batchQuery.comment = base.comment; }
+      if (base.extractPassword !== undefined) { batchQuery.extractPassword = base.extractPassword; }
+      if (base.downloadPassword !== undefined) { batchQuery.downloadPassword = base.downloadPassword; }
+      if (base.deepDecrypt !== undefined) { batchQuery.deepDecrypt = base.deepDecrypt; }
+      if (base.autoExtract !== undefined) { batchQuery.autoExtract = base.autoExtract; }
+      if (base.autostart !== undefined) { batchQuery.autostart = base.autostart; }
+      if (base.priority !== undefined) { batchQuery.priority = base.priority; }
+      if (base.packageName !== undefined) { batchQuery.packageName = base.packageName; }
+      if (base.overwritePackagizerRules !== undefined) { batchQuery.overwritePackagizerRules = base.overwritePackagizerRules; }
+
+      batchQuery.links = combinedLinks;
+
+      // Collect sourceUrl from first query that has one
+      for (var i = 0; i < addLinksQueries.length; i++) {
+        if (addLinksQueries[i].sourceUrl !== undefined) {
+          batchQuery.sourceUrl = addLinksQueries[i].sourceUrl;
+          break;
+        }
+      }
+
+      var deviceClient = myjdDeviceClientFactory.get($scope.selection.device);
+      var result = deviceClient.sendRequest("/linkgrabberv2/addLinks", JSON.stringify(batchQuery));
+      if (!result || typeof result.done !== 'function') {
+        $timeout(function () {
+          $scope.state.sending.state = $scope.requestStates.ERROR;
+          $scope.state.errorMessage = "API not connected. Please log in again.";
+          $scope.state.sending.log = "API not connected";
+        }, 0);
+        return;
+      }
+      result
+        .done(function () {
+          if (callback) {
+            callback();
+          }
+        })
+        .fail(function (e) {
           $timeout(function () {
             $scope.state.sending.state = $scope.requestStates.ERROR;
-            $scope.state.errorMessage = "API not connected. Please log in again.";
-            $scope.state.sending.log = "API not connected";
+            if (e !== undefined) {
+              $scope.state.errorMessage = JSON.stringify(e);
+              $scope.state.sending.log = JSON.stringify(e);
+            }
           }, 0);
-          return;
-        }
-        result
-          .done(function () {
-            addLinksQueries.splice(0, 1);
-            sendAddLinkQueries(addLinksQueries, callback);
-          })
-          .fail(function (e) {
-            $timeout(function () {
-              $scope.state.sending.state = $scope.requestStates.ERROR;
-              if (e !== undefined) {
-                $scope.state.errorMessage = JSON.stringify(e);
-                $scope.state.sending.log = JSON.stringify(e);
-              }
-            }, 0);
-          });
-      } else if (callback) {
-        callback();
-      }
+        });
     }
 
     function sendCnlQueries(cnlQueries, callback) {
