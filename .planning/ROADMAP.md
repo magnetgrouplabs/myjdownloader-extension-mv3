@@ -29,7 +29,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 Plans:
 - [x] 01-01: Service worker queue persistence (chrome.storage.session migration)
 - [x] 01-02: Rc2Service and native helper bug fixes
-- [ ] 01-03: Gap closure — fix message routing and async duplicate check (UAT)
+- [x] 01-03: Gap closure — fix message routing and async duplicate check (UAT)
 
 ### Phase 2: Multi-Link Stacking
 **Goal**: Restore the MV2 experience where right-clicking multiple links stacks them in the toolbar for batch sending
@@ -41,11 +41,11 @@ Plans:
   3. "Add links" sends all stacked links in one JDownloader API call
   4. Closing a tab clears its link queue
   5. Same URL right-clicked twice appears only once
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: Queue accumulation logic and toolbar update messaging
-- [ ] 02-02: Toolbar UI for multi-link display and batch operations
+- [ ] 02-01-PLAN.md — Batch send refactor: structural tests + sendAddLinkQueries single-call implementation
+- [ ] 02-02-PLAN.md — E2E verification: automated test suite + manual browser verification of all LINK requirements
 
 ### Phase 3: Directory History
 **Goal**: Users can quickly re-select previously used download directories without retyping
@@ -111,8 +111,8 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Bug Fixes & Queue Persistence | 2/3 | Gap closure in progress | - |
-| 2. Multi-Link Stacking | 0/2 | Not started | - |
+| 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
+| 2. Multi-Link Stacking | 0/2 | Planned | - |
 | 3. Directory History | 0/1 | Not started | - |
 | 4. Web Tab CAPTCHA | 0/3 | Not started | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
