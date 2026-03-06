@@ -24,7 +24,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
   2. Only one CAPTCHA solving window opens per CAPTCHA challenge (no duplicates)
   3. Malformed native messaging request produces structured error JSON (no crash)
   4. Rc2Service tab query uses a single URL pattern for localhost
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
 - [ ] 01-01: Service worker queue persistence (chrome.storage.session migration)
