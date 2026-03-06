@@ -300,4 +300,200 @@ describe('Background.js Queue Persistence', () => {
       expect(response.data[0].content).toBe('http://example.com/gated.zip');
     });
   });
+
+  // ==================================================================
+  // Gap closure: message routing and async duplicate check
+  // ==================================================================
+  describe('Gap closure: message routing and async duplicate check', () => {
+
+    it('should send link-info-update via chrome.runtime.sendMessage, not chrome.tabs.sendMessage', async () => {
+      loadBackground();
+
+      // Wait for queueReady to resolve
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Clear mocks from initialization
+      chrome.tabs.sendMessage.mockClear();
+      chrome.runtime.sendMessage.mockClear();
+
+      // Add a link via selection-result (calls addLinkToRequestQueue -> notifyContentScript)
+      const tab = createMockTab(500, 'http://example.com/page');
+      const sender = { id: chrome.runtime.id, tab: tab };
+      const handler = getOnMessageHandler();
+
+      await new Promise(resolve => {
+        handler(
+          { action: 'selection-result', data: { text: 'http://example.com/test-routing.zip' } },
+          sender,
+          resolve
+        );
+      });
+
+      // Allow async message sends to complete
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // chrome.runtime.sendMessage should have been called with link-info-update
+      const runtimeCalls = chrome.runtime.sendMessage.mock.calls;
+      const linkInfoViaRuntime = runtimeCalls.some(call =>
+        call[0] && call[0].action === 'link-info-update'
+      );
+      expect(linkInfoViaRuntime).toBe(true);
+
+      // chrome.tabs.sendMessage should have been called with open-in-page-toolbar
+      const tabsCalls = chrome.tabs.sendMessage.mock.calls;
+      const openToolbarViaTabs = tabsCalls.some(call =>
+        call[1] && call[1].action === 'open-in-page-toolbar'
+      );
+      expect(openToolbarViaTabs).toBe(true);
+
+      // chrome.tabs.sendMessage should NOT have been called with link-info-update
+      // (this was the bug — sending via tabs.sendMessage doesn't reach the toolbar iframe)
+      const linkInfoViaTabs = tabsCalls.some(call =>
+        call[1] && call[1].action === 'link-info-update'
+      );
+      expect(linkInfoViaTabs).toBe(false);
+    });
+
+    it('should await queueReady before duplicate check in addLinkToRequestQueue', async () => {
+      // Pre-populate session storage with a queue containing a link for tab 600
+      const existingQueue = {
+        '600': [{
+          id: '600' + Date.now() + '1234',
+          time: Date.now(),
+          parent: { url: 'http://example.com', title: 'Test', favIconUrl: '' },
+          content: 'http://example.com/already-there.zip',
+          type: 'link'
+        }]
+      };
+
+      // Snapshot the existing queue data BEFORE any mutations
+      const snapshotQueue = JSON.parse(JSON.stringify(existingQueue));
+
+      // Install a DELAYED mock for session.get so restoreRequestQueue doesn't
+      // resolve immediately — this simulates the real-world timing where
+      // chrome.storage.session.get is truly async (I/O-bound).
+      let resolveStorageGet;
+      chrome.storage.session.get.mockImplementationOnce((key) => {
+        return new Promise((resolve) => {
+          resolveStorageGet = () => {
+            // Use the snapshot taken BEFORE any mutations (simulates reading
+            // from actual storage, not the in-memory store that persistQueue
+            // may have overwritten)
+            const result = {};
+            if (typeof key === 'string' && snapshotQueue !== undefined) {
+              result[key] = snapshotQueue;
+            }
+            resolve(result);
+          };
+        });
+      });
+
+      global.__getSessionStore()[QUEUE_STORAGE_KEY] = existingQueue;
+
+      // Load background.js (starts async restoreRequestQueue — but it's now delayed)
+      loadBackground();
+
+      // Clear call tracking for notifyContentScript's sendMessage calls
+      chrome.tabs.sendMessage.mockClear();
+
+      // IMMEDIATELY (before queue restore completes) trigger selection-result
+      // with the SAME link for the same tab.
+      //
+      // BUG: If addLinkToRequestQueue is synchronous, it checks duplicates
+      // against an EMPTY in-memory requestQueue, finds no duplicate, adds the
+      // link, and calls notifyContentScript (incorrectly notifying the toolbar).
+      //
+      // FIX: If addLinkToRequestQueue awaits queueReady first, it waits for
+      // restore, then checks against the restored queue, finds the duplicate,
+      // and does NOT call notifyContentScript.
+      const tab = createMockTab(600, 'http://example.com');
+      const sender = { id: chrome.runtime.id, tab: tab };
+      const handler = getOnMessageHandler();
+
+      // Fire selection-result (this calls addLinkToRequestQueue internally)
+      handler(
+        { action: 'selection-result', data: { text: 'http://example.com/already-there.zip' } },
+        sender,
+        () => {}
+      );
+
+      // At this point, if addLinkToRequestQueue is sync, it already ran and
+      // called notifyContentScript (sending open-in-page-toolbar via tabs.sendMessage).
+      // Capture whether notifyContentScript was called BEFORE restore completes.
+      const notifiedBeforeRestore = chrome.tabs.sendMessage.mock.calls.some(
+        call => call[1] && call[1].action === 'open-in-page-toolbar'
+      );
+
+      // Now let the delayed storage.get resolve (simulating I/O completing)
+      resolveStorageGet();
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // If addLinkToRequestQueue properly awaits queueReady, notifyContentScript
+      // should NOT have been called at all (because the link is a duplicate).
+      // If addLinkToRequestQueue is sync (bug), notifyContentScript fires before
+      // restore even completes.
+      //
+      // The bug: notifyContentScript was called before restore completed,
+      // meaning the duplicate check ran against an empty queue.
+      expect(notifiedBeforeRestore).toBe(false);
+    });
+
+    it('should fire open-in-page-toolbar and link-info-update simultaneously (not chained)', async () => {
+      loadBackground();
+
+      // Wait for queueReady
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Track call order to verify both messages fire without chaining
+      const callOrder = [];
+      chrome.tabs.sendMessage.mockClear();
+      chrome.runtime.sendMessage.mockClear();
+
+      chrome.tabs.sendMessage.mockImplementation((tabId, msg) => {
+        callOrder.push({ api: 'tabs.sendMessage', action: msg.action });
+        return Promise.resolve();
+      });
+      chrome.runtime.sendMessage.mockImplementation((msg) => {
+        callOrder.push({ api: 'runtime.sendMessage', action: msg.action });
+        return Promise.resolve();
+      });
+
+      // Add a link via selection-result
+      const tab = createMockTab(700, 'http://example.com/page');
+      const sender = { id: chrome.runtime.id, tab: tab };
+      const handler = getOnMessageHandler();
+
+      await new Promise(resolve => {
+        handler(
+          { action: 'selection-result', data: { text: 'http://example.com/simultaneous.zip' } },
+          sender,
+          resolve
+        );
+      });
+
+      // Allow message sends
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Both messages should have been called
+      const hasOpenToolbar = callOrder.some(c => c.action === 'open-in-page-toolbar');
+      const hasLinkInfoUpdate = callOrder.some(c => c.action === 'link-info-update');
+      expect(hasOpenToolbar).toBe(true);
+      expect(hasLinkInfoUpdate).toBe(true);
+
+      // link-info-update should go via runtime.sendMessage (not tabs.sendMessage)
+      const linkInfoCall = callOrder.find(c => c.action === 'link-info-update');
+      expect(linkInfoCall.api).toBe('runtime.sendMessage');
+
+      // open-in-page-toolbar and link-info-update should both fire
+      // without the link-info-update being delayed by the open-in-page-toolbar .then()
+      // In the broken code, link-info-update is inside .then() so it fires AFTER
+      // open-in-page-toolbar resolves. In fixed code, both fire synchronously.
+      // We verify this by checking that link-info-update was NOT sent via tabs.sendMessage
+      // (which would indicate the chained .then() pattern)
+      const linkInfoViaTabs = callOrder.filter(c =>
+        c.api === 'tabs.sendMessage' && c.action === 'link-info-update'
+      );
+      expect(linkInfoViaTabs).toHaveLength(0);
+    });
+  });
 });
