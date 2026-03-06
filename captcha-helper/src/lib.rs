@@ -8,7 +8,7 @@ mod validation;
 #[cfg(windows)]
 mod webview;
 
-pub use captcha::{handle_request, handle_skip, CaptchaJob, CaptchaResult, Request, Response, VERSION};
+pub use captcha::{handle_request, handle_skip, serialize_response, CaptchaJob, CaptchaResult, Request, Response, VERSION};
 pub use escape::{escape_html, escape_js};
 pub use http::http_get;
 pub use html::{generate_captcha_html, generate_test_captcha_html};

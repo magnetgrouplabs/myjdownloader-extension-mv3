@@ -1,4 +1,4 @@
-use myjd_captcha_helper::{handle_request, read_message, write_message, Request, Response};
+use myjd_captcha_helper::{handle_request, read_message, serialize_response, write_message, Request, Response};
 
 fn main() {
     loop {
@@ -6,7 +6,7 @@ fn main() {
             Ok(message) => match serde_json::from_slice::<Request>(&message) {
                 Ok(request) => {
                     let response = handle_request(request);
-                    let response_json = serde_json::to_vec(&response).unwrap();
+                    let response_json = serialize_response(&response);
                     let _ = write_message(&response_json);
                 }
                 Err(e) => {
@@ -17,7 +17,7 @@ fn main() {
                         error: Some(format!("Invalid request: {}", e)),
                         skip_type: None,
                     };
-                    let _ = write_message(&serde_json::to_vec(&response).unwrap());
+                    let _ = write_message(&serialize_response(&response));
                 }
             },
             Err(_) => {
