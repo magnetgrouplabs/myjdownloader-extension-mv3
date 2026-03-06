@@ -9,6 +9,7 @@ angular.module('myjdWebextensionApp')
 
       let rc2TabUpdateCallbacks = {};
       let rc2CanCloseIntervalHandles = {};
+      let captchaInProgress = {};
 
       StorageService.get(StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key, result => {
         isForcedPrivateMode = false //result[StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key] ||
@@ -91,8 +92,7 @@ angular.module('myjdWebextensionApp')
           chrome.tabs.query({
             url: [
               "http://my.jdownloader.org/*",
-              "https://my.jdownloader.org/*",
-              "http://my.jdownloader.org/*"
+              "https://my.jdownloader.org/*"
             ]
           }, function (tabs) {
             if (tabs !== undefined && tabs.length > 0) {
@@ -194,8 +194,7 @@ angular.module('myjdWebextensionApp')
             chrome.tabs.query({
               url: [
                 "http://my.jdownloader.org/*",
-                "https://my.jdownloader.org/*",
-                "http://my.jdownloader.org/*"
+                "https://my.jdownloader.org/*"
               ]
             }, function (tabs) {
               if (tabs !== undefined && tabs.length > 0) {
@@ -229,6 +228,16 @@ angular.module('myjdWebextensionApp')
       });
 
       function onNewCaptchaAvailable(tabId, callbackUrl, params) {
+        // BUG-02: Dedup guard - prevent duplicate CAPTCHA jobs for the same challenge
+        var dedupKey = params.captchaId || callbackUrl;
+
+        if (captchaInProgress[dedupKey]) {
+          console.log('Rc2Service: Ignoring duplicate CAPTCHA job for:', dedupKey);
+          return;
+        }
+
+        captchaInProgress[dedupKey] = true;
+
         // Use native helper for CAPTCHA solving
         var captchaJob = {
           siteKey: params.siteKey,
@@ -240,8 +249,9 @@ angular.module('myjdWebextensionApp')
           v3action: params.v3action,
           siteUrl: params.finalUrl
         };
-        
+
         CaptchaNativeService.sendCaptcha(captchaJob).then(function(response) {
+          delete captchaInProgress[dedupKey];
           console.log('Rc2Service: Native helper accepted CAPTCHA job:', response);
           // Native helper handles the solving - close the triggering tab
           chrome.tabs.remove(tabId, function() {
@@ -250,6 +260,7 @@ angular.module('myjdWebextensionApp')
             }
           });
         }).catch(function(error) {
+          delete captchaInProgress[dedupKey];
           console.error('Rc2Service: Native helper failed, falling back to web interface:', error);
           // Fallback: notify web interface if available
           chrome.tabs.query({
