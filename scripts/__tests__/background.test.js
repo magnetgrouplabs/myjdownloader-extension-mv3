@@ -81,6 +81,10 @@ describe('Background.js Queue Persistence', () => {
         );
       });
 
+      // addLinkToRequestQueue is async (fire-and-forget from the handler),
+      // so give it time to complete before checking storage writes
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       // Verify chrome.storage.session.set was called with queue data
       expect(chrome.storage.session.set).toHaveBeenCalled();
       const lastCall = chrome.storage.session.set.mock.calls[

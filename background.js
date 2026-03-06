@@ -49,7 +49,8 @@ function persistQueue() {
 
 let queueReady = restoreRequestQueue();
 
-function addLinkToRequestQueue(link, tab) {
+async function addLinkToRequestQueue(link, tab) {
+ await queueReady;
  let tabKey = String(tab.id);
  let time = Date.now();
  let id = "" + tab.id + time + Math.floor(Math.random() * 10000);
@@ -82,10 +83,8 @@ function addLinkToRequestQueue(link, tab) {
 
 // Send toolbar messages to content script, injecting it first if needed
 function notifyContentScript(tabId) {
+ // open-in-page-toolbar -> content script (shows/creates iframe)
  chrome.tabs.sendMessage(tabId, { action: "open-in-page-toolbar", tabId: tabId })
-  .then(() => {
-   chrome.tabs.sendMessage(tabId, { action: "link-info-update", tabId: tabId }).catch(() => {});
-  })
   .catch(() => {
    // Content script not loaded — inject it, then retry
    console.log("Background: Injecting toolbar content script into tab", tabId);
@@ -93,17 +92,22 @@ function notifyContentScript(tabId) {
     target: { tabId: tabId },
     files: ['contentscripts/toolbarContentscript.js']
    }).then(() => {
-    // Give content script a moment to initialize, then send messages
     setTimeout(() => {
      chrome.tabs.sendMessage(tabId, { action: "open-in-page-toolbar", tabId: tabId }).catch(e => {
       console.error("Background: Failed to notify content script after injection:", e);
      });
-     chrome.tabs.sendMessage(tabId, { action: "link-info-update", tabId: tabId }).catch(() => {});
     }, 100);
+    // Delayed link-info-update for freshly created iframe (Angular bootstrap time)
+    setTimeout(() => {
+     chrome.runtime.sendMessage({ action: "link-info-update", tabId: tabId }).catch(() => {});
+    }, 500);
    }).catch(e => {
     console.error("Background: Failed to inject toolbar content script:", e);
    });
   });
+
+ // link-info-update -> all extension contexts (toolbar iframe's ToolbarController listens via chrome.runtime.onMessage)
+ chrome.runtime.sendMessage({ action: "link-info-update", tabId: tabId }).catch(() => {});
 }
 
 function addPageToRequestQueue(tab) {
