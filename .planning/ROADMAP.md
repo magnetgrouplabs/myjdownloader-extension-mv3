@@ -76,9 +76,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Flow A enhancement: JD protocol callbacks (canClose polling, loaded event, mouse-move) in captchaSolverContentscript.js
-- [ ] 04-02-PLAN.md — Flow B foundation: myjdCaptchaSolver.js content script, loginNeeded.html, manifest registration, background.js MYJD handlers (CSP rules, session storage, MAIN world execution)
-- [ ] 04-03-PLAN.md — Flow B orchestration: Rc2Service wiring to new flow, structural tests for myjdCaptchaSolver + background MYJD handlers
+- [x] 04-01-PLAN.md — Flow A enhancement: localhost CAPTCHA content script with token polling, skip buttons, countdown timer
+- [x] 04-02-PLAN.md — Service worker CAPTCHA message handlers (captcha-tab-detected, captcha-solved, captcha-skip, tab lifecycle)
+- [x] 04-03-PLAN.md — Flow B orchestration: Rc2Service MYJD wiring, myjdCaptchaSolver.js, background MYJD handlers, structural tests
 
 ### Phase 5: CAPTCHA E2E Testing
 **Goal**: Validated confidence that both CAPTCHA flows work end-to-end with a real JDownloader instance
@@ -116,10 +116,10 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 0/3 | Replanned (dual-flow) | - |
+| 4. Web Tab CAPTCHA | 3/3 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-07 (Phase 4 complete)*
