@@ -66,17 +66,16 @@ Plans:
 **Depends on**: Phase 1 (BUG-02 double-send fix needed before adding another CAPTCHA path)
 **Requirements**: CAP-01, CAP-02, CAP-03, CAP-04, CAP-05, CAP-06, CAP-07, CAP-08, CAP-09, CAP-10
 **Success Criteria** (what must be TRUE):
-  1. With native helper NOT installed: JDownloader CAPTCHA page stays open, skip buttons appear, solving submits token
-  2. With native helper installed: existing native messaging flow still works (no regression)
-  3. Closing CAPTCHA tab sends skip(hoster) to JDownloader
+  1. JDownloader CAPTCHA page stays open with skip buttons and countdown timer
+  2. Solving CAPTCHA submits token to JDownloader and auto-closes tab
+  3. Closing CAPTCHA tab sends skip to JDownloader
   4. 5-minute countdown visible on CAPTCHA page; auto-skips on expiry
   5. reCAPTCHA v2, v3, and hCaptcha all function in web tab mode
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 04-01: Validate JDownloader localhost page and build content script
-- [ ] 04-02: Service worker CAPTCHA routing and dual-mode integration
-- [ ] 04-03: Skip buttons, timeout, and tab lifecycle management
+- [ ] 04-01-PLAN.md — Content script creation (URL detection, token polling, skip buttons, countdown) + manifest registration + structural tests
+- [ ] 04-02-PLAN.md — Service worker CAPTCHA message handlers, Rc2Service modifications (remove native routing + tab closing), tests
 
 ### Phase 5: CAPTCHA E2E Testing
 **Goal**: Validated confidence that both CAPTCHA modes work end-to-end with a real JDownloader instance
@@ -114,7 +113,7 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 0/3 | Not started | - |
+| 4. Web Tab CAPTCHA | 0/2 | Planning complete | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
