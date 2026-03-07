@@ -9,8 +9,8 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 - [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
 - [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
 - [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
-- [x] **Phase 4: Web Tab CAPTCHA** - Cross-platform CAPTCHA fallback via content script on JDownloader's localhost page (completed 2026-03-07)
-- [ ] **Phase 5: CAPTCHA E2E Testing** - Validate both CAPTCHA modes end-to-end with real JDownloader
+- [ ] **Phase 4: Web Tab CAPTCHA** - Dual-flow CAPTCHA solving: localhost enhancement (Flow A) + MYJD remote rendering (Flow B)
+- [ ] **Phase 5: CAPTCHA E2E Testing** - Validate both CAPTCHA flows end-to-end with real JDownloader
 - [ ] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep
 
 ## Phase Details
@@ -62,7 +62,7 @@ Plans:
 - [ ] 03-01-PLAN.md — StorageService setting key, AddLinksController history logic (normalization, cap, clear), templateCache UI (conditional datalist, clear button), options page toggle
 
 ### Phase 4: Web Tab CAPTCHA
-**Goal**: CAPTCHA solving works cross-platform without native binary installation, using JDownloader's own localhost CAPTCHA page enhanced by a content script
+**Goal**: CAPTCHA solving works cross-platform via two flows: Flow A enhances JD's localhost page with protocol callbacks, Flow B renders CAPTCHAs remotely for NAS/server users via MYJD cloud API
 **Depends on**: Phase 1 (BUG-02 double-send fix needed before adding another CAPTCHA path)
 **Requirements**: CAP-01, CAP-02, CAP-03, CAP-04, CAP-05, CAP-06, CAP-07, CAP-08, CAP-09, CAP-10
 **Success Criteria** (what must be TRUE):
@@ -71,14 +71,17 @@ Plans:
   3. Closing CAPTCHA tab sends skip to JDownloader
   4. 5-minute countdown visible on CAPTCHA page; auto-skips on expiry
   5. reCAPTCHA v2, v3, and hCaptcha all function in web tab mode
-**Plans:** 2/2 plans complete
+  6. MYJD remote flow: CAPTCHA triggered from my.jdownloader.org renders on target domain and submits via cloud API
+  7. JD protocol callbacks (canClose, loaded, mouse-move) implemented for localhost flow
+**Plans:** 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Content script creation (URL detection, token polling, skip buttons, countdown) + manifest registration + structural tests
-- [ ] 04-02-PLAN.md — Service worker CAPTCHA message handlers, Rc2Service modifications (remove native routing + tab closing), tests
+- [ ] 04-01-PLAN.md — Flow A enhancement: JD protocol callbacks (canClose polling, loaded event, mouse-move) in captchaSolverContentscript.js
+- [ ] 04-02-PLAN.md — Flow B foundation: myjdCaptchaSolver.js content script, loginNeeded.html, manifest registration, background.js MYJD handlers (CSP rules, session storage, MAIN world execution)
+- [ ] 04-03-PLAN.md — Flow B orchestration: Rc2Service wiring to new flow, structural tests for myjdCaptchaSolver + background MYJD handlers
 
 ### Phase 5: CAPTCHA E2E Testing
-**Goal**: Validated confidence that both CAPTCHA modes work end-to-end with a real JDownloader instance
+**Goal**: Validated confidence that both CAPTCHA flows work end-to-end with a real JDownloader instance
 **Depends on**: Phase 4 (web tab CAPTCHA must be built first)
 **Requirements**: TEST-01, TEST-02, TEST-03
 **Success Criteria** (what must be TRUE):
@@ -113,7 +116,7 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 2/2 | Complete   | 2026-03-07 |
+| 4. Web Tab CAPTCHA | 0/3 | Replanned (dual-flow) | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
