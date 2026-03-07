@@ -73,12 +73,13 @@ Plans:
   5. reCAPTCHA v2, v3, and hCaptcha all function in web tab mode
   6. MYJD remote flow: CAPTCHA triggered from my.jdownloader.org renders on target domain and submits via cloud API
   7. JD protocol callbacks (canClose, loaded, mouse-move) implemented for localhost flow
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 04-01-PLAN.md — Flow A enhancement: localhost CAPTCHA content script with token polling, skip buttons, countdown timer
 - [x] 04-02-PLAN.md — Service worker CAPTCHA message handlers (captcha-tab-detected, captcha-solved, captcha-skip, tab lifecycle)
 - [x] 04-03-PLAN.md — Flow B orchestration: Rc2Service MYJD wiring, myjdCaptchaSolver.js, background MYJD handlers, structural tests
+- [ ] 04-04-PLAN.md — Gap closure: JD protocol callbacks (canClose, loaded, mouse-move) + loginNeeded.html
 
 ### Phase 5: CAPTCHA E2E Testing
 **Goal**: Validated confidence that both CAPTCHA flows work end-to-end with a real JDownloader instance
@@ -116,10 +117,10 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 3/3 | Complete | 2026-03-07 |
+| 4. Web Tab CAPTCHA | 3/4 | Gap closure pending | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-07 (Phase 4 complete)*
+*Last updated: 2026-03-07 (Phase 4 gap closure plan added)*
