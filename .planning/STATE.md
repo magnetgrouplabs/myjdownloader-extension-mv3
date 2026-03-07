@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: Not started
-status: planning
-last_updated: "2026-03-07T18:10:33.337Z"
+current_plan: "04-03 (MV2 parity: canClose, loaded, mouse-move)"
+status: executing
+last_updated: "2026-03-07T20:10:22.021Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 8
   completed_plans: 8
-  percent: 100
+  percent: 80
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -19,9 +19,9 @@ progress:
 
 **Milestone:** v1.0
 **Active Phase:** 04-web-tab-captcha
-**Current Plan:** Not started
-**Status:** Ready to plan
-**Progress:** [██████████] 100%
+**Current Plan:** 04-03 (MV2 parity: canClose, loaded, mouse-move)
+**Status:** In progress — MV2 comparison revealed 3 missing features
+**Progress:** [████████░░] 80%
 
 ## Phase Status
 
@@ -30,7 +30,7 @@ progress:
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
-| 4. Web Tab CAPTCHA | Complete (2/2 plans) | Content script, service worker handlers, Rc2Service modifications done |
+| 4. Web Tab CAPTCHA | In progress (2/3 plans) | MV2 comparison found 3 missing features: canClose, loaded, mouse-move |
 | 5. CAPTCHA E2E Testing | Not started | Depends on Phase 4 |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
 
@@ -67,6 +67,8 @@ progress:
 | Delete activeCaptchaTabs before HTTP send | 2026-03-07 | Prevents race condition with simultaneous captcha-skip message |
 | Keep CaptchaNativeService.js file on disk | 2026-03-07 | Deferred deletion per CONTEXT.md; removed from DI but file stays |
 | Remove captchaInProgress dedup guard | 2026-03-07 | Only needed for native helper double-sends; web tab flow uses content script |
+| Let JD page render CAPTCHA (no domain redirect) | 2026-03-07 | Old MV2 redirected to hoster domain + injected scripts (CSP violation); JD's own page works on localhost |
+| 3 missing MV2 features: canClose, loaded, mouse-move | 2026-03-07 | All are HTTP GETs to callbackUrl — fully MV3 compliant; needed for full parity |
 
 ## Blockers
 
@@ -88,9 +90,9 @@ None currently.
 
 ## Context for Next Session
 
-Phase 4 complete (2/2 plans). Content script + service worker CAPTCHA handlers + Rc2Service modifications all done. 132 tests pass across 9 suites. Phase 5 (CAPTCHA E2E Testing) ready to begin.
-Last session stopped at: Completed 04-02-PLAN.md
-Resume file: None
+Phase 4 reopened (2/3 plans). MV2 comparison with old Edge extension (v3.3.20) revealed 3 missing features: canClose polling, loaded event, mouse-move reporting. All are simple HTTP GETs — MV3 compliant. Plan 04-03 needed.
+Last session stopped at: MV2 comparison analysis complete, ready for Plan 04-03
+Resume file: .planning/phases/04-web-tab-captcha/04-CONTEXT.md
 
 ---
 *State initialized: 2026-03-06*
