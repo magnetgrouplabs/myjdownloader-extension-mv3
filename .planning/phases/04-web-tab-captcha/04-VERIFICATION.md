@@ -1,142 +1,174 @@
 ---
 phase: 04-web-tab-captcha
-verified: 2026-03-07T18:15:00Z
+verified: 2026-03-07T23:00:00Z
 status: passed
-score: 11/11 must-haves verified
-re_verification: false
-gaps: []
+score: 7/7 success criteria verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 6/7
+  gaps_closed:
+    - "SC-7: JD protocol callbacks (canClose, loaded, mouse-move) implemented in captchaSolverContentscript.js — all three functions present, gated on isJdLocalhost, all XHR calls include X-Myjd-Appkey header"
+    - "loginNeeded.html: File exists with MV3-compliant HTML, #dbf5fb background, correct title, login message, no inline scripts"
+  gaps_remaining: []
+  regressions: []
 human_verification:
-  - test: "Load JDownloader CAPTCHA page at http://127.0.0.1:PORT/captcha/recaptchav2/rapidgator.net?id=123"
-    expected: "Skip buttons and countdown timer appear on the page below the CAPTCHA widget"
-    why_human: "DOM injection and UI layout cannot be verified without a running JDownloader instance"
-  - test: "Solve reCAPTCHA v2 on a CAPTCHA tab"
+  - test: "Load JDownloader CAPTCHA page at http://127.0.0.1:PORT/captcha/recaptchav2/rapidgator.net?id=123 with extension loaded"
+    expected: "Skip buttons and countdown timer appear alongside CAPTCHA widget. JDownloader receives loaded callback with window geometry. canClose polled every second."
+    why_human: "Requires running JDownloader instance and live browser with extension active"
+  - test: "Solve reCAPTCHA v2 on localhost CAPTCHA tab"
     expected: "Token submitted to JDownloader, tab auto-closes after ~2 seconds"
     why_human: "Real CAPTCHA solve requires interaction with live reCAPTCHA widget and JDownloader HTTP callback"
-  - test: "Close CAPTCHA tab without solving"
-    expected: "JDownloader receives skip(single) and resumes download queue with next item"
-    why_human: "Requires running JDownloader instance to observe queue behavior"
-  - test: "Let countdown expire on CAPTCHA page"
-    expected: "Display changes to 'Timed out - skipping...', JDownloader receives skip(single)"
-    why_human: "Requires 5-minute wait with live JDownloader to verify skip delivery"
+  - test: "MYJD remote flow: trigger CAPTCHA from my.jdownloader.org with JD on NAS"
+    expected: "CAPTCHA renders on target domain tab, user solves, token submitted via MYJD cloud API, tab closes"
+    why_human: "Requires MYJD account, running JDownloader on remote host, and live my.jdownloader.org session"
 ---
 
 # Phase 4: Web Tab CAPTCHA Verification Report
 
-**Phase Goal:** CAPTCHA solving works cross-platform without native binary installation, using JDownloader's own localhost CAPTCHA page enhanced by a content script
-**Verified:** 2026-03-07T18:15:00Z
+**Phase Goal:** CAPTCHA solving works cross-platform via two flows: Flow A enhances JD's localhost page with protocol callbacks, Flow B renders CAPTCHAs remotely for NAS/server users via MYJD cloud API
+**Verified:** 2026-03-07T23:00:00Z
 **Status:** PASSED
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after Plan 04-04 gap closure execution (commits 0a9636b, d50e920, 4513304)
+
+## Context
+
+Previous verification (status: gaps_found, 6/7) identified two gaps:
+1. SC-7: JD protocol callbacks (canClose, loaded, mouse-move) never implemented in captchaSolverContentscript.js
+2. loginNeeded.html missing from disk
+
+Plan 04-04 was written and executed. Both gaps are now closed. All 216 tests pass across 10 test suites. This re-verification covers only the two previously failed items (full verification with regression check on passing items).
 
 ## Goal Achievement
 
-### Observable Truths
+### Success Criteria (from ROADMAP.md Phase 4)
 
-| # | Truth | Status | Evidence |
-|---|-------|--------|---------|
-| 1 | Content script activates only on JDownloader CAPTCHA URL paths | VERIFIED | `captchaPathPattern = /\/captcha\/(recaptchav2\|recaptchav3\|hcaptcha)\//` with early `return` on mismatch (line 5-6) |
-| 2 | Content script polls g-recaptcha-response and h-captcha-response textareas at 500ms interval | VERIFIED | `querySelectorAll('textarea[id^="g-recaptcha-response"]')` and `querySelectorAll('textarea[name="h-captcha-response"]')` in `setInterval(..., 500)` (lines 52-85) |
-| 3 | Skip buttons (hoster/package/all/single) appear on CAPTCHA page with hoster name in labels | VERIFIED | `injectSkipButtons()` creates `div#myjd-captcha-controls` with 4 buttons; label `'Skip ' + hoster + ' CAPTCHAs'` uses extracted hoster (lines 94-151) |
-| 4 | 5-minute countdown timer displays and sends skip(single) on expiry | VERIFIED | `startCountdown()` with `TIMEOUT_MS = 5 * 60 * 1000`, sends `{action: 'captcha-skip', data: {skipType: 'single'}}` on expiry (lines 157-199) |
-| 5 | Content script sends structured messages to service worker | VERIFIED | `chrome.runtime.sendMessage({action: 'captcha-tab-detected', ...})`, `captcha-solved`, and `captcha-skip` all present (lines 20-28, 58-64, 75-81, 140-147, 191-197) |
-| 6 | Service worker receives captcha-solved and submits token to JDownloader via HTTP GET | VERIFIED | `action === "captcha-solved"` handler creates XHR GET to `callbackUrl + '&do=solve&response=' + encodeURIComponent(token)` (background.js lines 590-614) |
-| 7 | Service worker receives captcha-skip and sends skip request to JDownloader via HTTP GET | VERIFIED | `action === "captcha-skip"` handler creates XHR GET to `callbackUrl + '&do=skip&skiptype=' + skipType` (background.js lines 616-637) |
-| 8 | Closing a CAPTCHA tab sends skip to JDownloader automatically | VERIFIED | `chrome.tabs.onRemoved` listener checks `activeCaptchaTabs[tabId]` and sends `&do=skip&skiptype=single` (background.js lines 694-710) |
-| 9 | Rc2Service.handleRequest() no longer closes JDownloader CAPTCHA tabs | VERIFIED | `handleRequest()` body contains only `console.log(...)` — no `chrome.tabs.remove` call (Rc2Service.js lines 41-48) |
-| 10 | Rc2Service.onNewCaptchaAvailable() no longer routes to CaptchaNativeService | VERIFIED | `CaptchaNativeService` absent from DI array, function parameters, and `onNewCaptchaAvailable()` body (Rc2Service.js lines 3-5, 226-254) |
-| 11 | CAPTCHA tab is auto-closed 2 seconds after token submission | VERIFIED | `setTimeout(function() { chrome.tabs.remove(sender.tab.id, ...) }, 2000)` in both `captcha-solved` and `captcha-skip` handlers (background.js lines 601-606, 627-632) |
+| # | Success Criterion | Status | Evidence |
+|---|-------------------|--------|---------|
+| SC-1 | JDownloader CAPTCHA page stays open with skip buttons and countdown timer | VERIFIED | `injectSkipButtons()` creates 4-button container; `startCountdown()` creates 5-minute timer; `handleRequest()` in Rc2Service logs only (no tab close) |
+| SC-2 | Solving CAPTCHA submits token to JDownloader and auto-closes tab | VERIFIED | `captcha-solved` handler: XHR GET `callbackUrl + '&do=solve&response=' + encodeURIComponent(token)`; `setTimeout(chrome.tabs.remove, 2000)` |
+| SC-3 | Closing CAPTCHA tab sends skip to JDownloader | VERIFIED | `chrome.tabs.onRemoved`: checks `activeCaptchaTabs[tabId]`, sends HTTP GET `callbackUrl + '&do=skip&skiptype=single'` |
+| SC-4 | 5-minute countdown visible on CAPTCHA page; auto-skips on expiry | VERIFIED | `TIMEOUT_MS = 5 * 60 * 1000`; sends `captcha-skip` with `skipType: 'single'` on expiry; red color at <60s |
+| SC-5 | reCAPTCHA v2, v3, and hCaptcha all function in web tab mode | VERIFIED | URL pattern covers all 3 types; token polling queries both `g-recaptcha-response` and `h-captcha-response`; myjdCaptchaSolver.js handles widget type discrimination |
+| SC-6 | MYJD remote flow: CAPTCHA triggered from my.jdownloader.org renders on target domain and submits via cloud API | VERIFIED | `myjdCaptchaSolver.js` (321 lines): hash gate, DOM replacement, session storage read, widget rendering; `myjd-prepare-captcha-tab` handler chains Rc2Service to content script; `captcha-solved` MYJD path routes to my.jdownloader.org tabs |
+| SC-7 | JD protocol callbacks (canClose, loaded, mouse-move) implemented for localhost flow | VERIFIED | `startCanClosePolling` (line 240), `sendLoadedEvent` (line 270), `startMouseMoveReporting` (line 305) all present; isJdLocalhost gate at line 65; all XHR calls include X-Myjd-Appkey header; 30 structural tests pass |
 
-**Score:** 11/11 truths verified
+**Score: 7/7 success criteria verified**
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `contentscripts/captchaSolverContentscript.js` | CAPTCHA page detection, token polling, skip UI, countdown timer | VERIFIED | 202 lines, 6.7KB — substantive implementation; registered in manifest; sends all 3 message types |
-| `manifest.json` | content_scripts entry for http://127.0.0.1/* | VERIFIED | Entry present at index 4: `matches: ["http://127.0.0.1/*"]`, `run_at: "document_end"`, `all_frames: false`, `js: ["contentscripts/captchaSolverContentscript.js"]` |
-| `scripts/services/__tests__/captchaSolverContentscript.test.js` | Structural tests for content script | VERIFIED | 36 tests covering CAP-01/02/05/06/10, messaging format, manifest registration, and cleanup patterns — all pass |
-| `background.js` | CAPTCHA message handlers and tab tracking | VERIFIED | `activeCaptchaTabs` map declared; 3 message handlers wired into `chrome.runtime.onMessage`; `onRemoved` listener updated for skip-on-close |
-| `scripts/services/Rc2Service.js` | Modified handleRequest (no tab close) and onNewCaptchaAvailable (no native routing) | VERIFIED | `handleRequest` logs instead of calling `chrome.tabs.remove`; `onNewCaptchaAvailable` handles only MYJD flow; `CaptchaNativeService` removed from DI |
-| `scripts/services/__tests__/background-captcha.test.js` | Tests for service worker CAPTCHA handlers | VERIFIED | 16 structural tests covering tab tracking, solve/skip handlers, skip-on-close, HTTP configuration — all pass |
-| `scripts/services/__tests__/Rc2Service.test.js` | Updated tests verifying native routing removal and tab close removal | VERIFIED | CAP-08 and CAP-09 structural tests added; BUG-01 URL dedup tests retained — all pass |
+| `contentscripts/captchaSolverContentscript.js` | Token polling, skip buttons, countdown, JD protocol callbacks | VERIFIED | 319 lines; all three protocol callback functions present; isJdLocalhost gate; canCloseHandle cleanup on beforeunload |
+| `contentscripts/myjdCaptchaSolver.js` | Hash gate, DOM replacement, widget rendering, token polling, MYJD messaging | VERIFIED | 321 lines; all required patterns present; committed |
+| `manifest.json` | captchaSolverContentscript.js at document_end; myjdCaptchaSolver.js at document_start, all_frames: false | VERIFIED | Both entries present; correct run_at and all_frames |
+| `background.js` | activeCaptchaTabs, CAPTCHA handlers, MYJD handlers, CSP rule functions, setAccessLevel, captcha-can-close | VERIFIED | All handlers present including captcha-can-close (tab close fallback) |
+| `scripts/services/Rc2Service.js` | handleRequest (no tab close), onWebInterfaceCaptchaJobFound (myjd-prepare-captcha-tab), onLoginNeeded (loginNeeded.html) | VERIFIED | All three behaviors confirmed; onLoginNeeded at line 51 |
+| `loginNeeded.html` | MV3-compliant HTML, #dbf5fb background, login message, correct title | VERIFIED | File exists (46 lines); #dbf5fb background; title "MyJDownloader - Login Required"; login explanation; no inline scripts |
+| `scripts/services/__tests__/captchaSolverContentscript.test.js` | Structural tests including all three protocol callbacks and loginNeeded.html | VERIFIED | 66 tests pass: 9 canClose, 8 loaded, 6 mouse-move, 1 gating, 5 loginNeeded, 1 cleanup canCloseHandle, 36 original |
+| `scripts/services/__tests__/myjdCaptchaSolver.test.js` | 20+ structural tests for MYJD content script | VERIFIED | 29 tests covering hash gate, DOM replacement, session storage, widget rendering, MYJD messaging, manifest registration |
+| `scripts/services/__tests__/background-captcha.test.js` | CAPTCHA handler tests including MYJD flow | VERIFIED | 30 tests total; 14 MYJD-specific tests |
+| `scripts/services/__tests__/Rc2Service.test.js` | Tests for MYJD flow in Rc2Service | VERIFIED | 6 MYJD flow tests (myjd-prepare-captcha-tab, jobDetails fields, service worker routing) |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `captchaSolverContentscript.js` | `background.js` | `chrome.runtime.sendMessage({action: 'captcha-tab-detected',...})` | WIRED | Pattern verified in source; test confirms all 3 message types include callbackUrl |
-| `captchaSolverContentscript.js` | `background.js` | `chrome.runtime.sendMessage({action: 'captcha-solved',...})` | WIRED | Token + callbackUrl sent; background.js handler confirmed present |
-| `captchaSolverContentscript.js` | `background.js` | `chrome.runtime.sendMessage({action: 'captcha-skip',...})` | WIRED | skipType + callbackUrl sent; background.js handler confirmed present |
-| `manifest.json` | `captchaSolverContentscript.js` | `content_scripts` entry | WIRED | Entry present with correct `matches`, `run_at`, `all_frames`, `js` values |
-| `background.js` | JDownloader localhost | `XMLHttpRequest GET` with `&do=solve&response=` + `encodeURIComponent(token)` | WIRED | XHR created with `X-Myjd-Appkey` header; 10s timeout; 2s tab auto-close on load |
-| `background.js` | JDownloader localhost | `XMLHttpRequest GET` with `&do=skip&skiptype=` | WIRED | XHR created with `X-Myjd-Appkey` header; 10s timeout; 2s tab auto-close on load |
-| `background.js` | `chrome.tabs.onRemoved` | `activeCaptchaTabs[tabId]` lookup | WIRED | Entry deleted before XHR to prevent race; `skiptype=single` sent on close |
+| `captchaSolverContentscript.js` | `background.js` | `sendMessage({action: 'captcha-solved',...})` | WIRED | Present and tested |
+| `captchaSolverContentscript.js` | `background.js` | `sendMessage({action: 'captcha-skip',...})` | WIRED | Present and tested |
+| `captchaSolverContentscript.js` | `background.js` | `sendMessage({action: 'captcha-tab-detected',...})` | WIRED | Present and tested |
+| `captchaSolverContentscript.js` | JDownloader localhost | XHR GET `callbackUrl + '&do=canClose'` | WIRED | `startCanClosePolling` line 243; 1s interval; X-Myjd-Appkey header |
+| `captchaSolverContentscript.js` | JDownloader localhost | XHR GET `callbackUrl + '&do=loaded&...'` | WIRED | `sendLoadedEvent` line 281-298; 11 geometry params; X-Myjd-Appkey header |
+| `captchaSolverContentscript.js` | JDownloader localhost | XHR GET `callbackUrl + '&do=canClose&useractive=true&ts=...'` | WIRED | `startMouseMoveReporting` line 312; 3s throttle; X-Myjd-Appkey header |
+| `manifest.json` | `captchaSolverContentscript.js` | `content_scripts` entry | WIRED | `*://*/*`, `document_end`, `all_frames: false` |
+| `manifest.json` | `myjdCaptchaSolver.js` | `content_scripts` entry | WIRED | `*://*/*`, `document_start`, `all_frames: false` |
+| `background.js` | JDownloader localhost | XHR GET `callbackUrl + '&do=solve&response=' + encodeURIComponent(token)` | WIRED | With X-Myjd-Appkey header, 10s timeout, 2s auto-close |
+| `background.js` | `my.jdownloader.org` tabs | `chrome.tabs.sendMessage({name:'response', type:'myjdrc2',...})` | WIRED | captcha-solved MYJD path and onRemoved MYJD path |
+| `Rc2Service.js` | `background.js` | `sendMessage({action: 'myjd-prepare-captcha-tab',...})` | WIRED | onWebInterfaceCaptchaJobFound line 68 |
+| `myjdCaptchaSolver.js` | `chrome.storage.session` | `chrome.storage.session.get('myjd_captcha_job')` | WIRED | Content script line 62; background.js writes same key line 620 |
+| `Rc2Service.js` | `loginNeeded.html` | `chrome.runtime.getURL("loginNeeded.html")` | WIRED | File exists; reference at Rc2Service.js line 51 |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|------------|-------------|--------|---------|
-| CAP-01 | 04-01 | Content script injected on `http://127.0.0.1/*` detects CAPTCHA pages via URL path pattern | SATISFIED | `captchaPathPattern` regex gates all execution; manifest registers for `http://127.0.0.1/*` |
-| CAP-02 | 04-01 | Content script polls `g-recaptcha-response` / `h-captcha-response` textarea at 500ms | SATISFIED | Both textarea selectors present in `startTokenPolling()` with `setInterval(..., 500)` |
-| CAP-03 | 04-02 | Solved token relayed to service worker via `chrome.runtime.sendMessage` | SATISFIED | `captcha-solved` message sent from content script; received by background.js handler |
-| CAP-04 | 04-02 | Service worker submits token to JDownloader callback URL via HTTP | SATISFIED | XHR GET to `callbackUrl + '&do=solve&response=' + encodeURIComponent(token)` in background.js |
-| CAP-05 | 04-01 | Skip buttons (hoster/package/all/single) injected into CAPTCHA page | SATISFIED | `injectSkipButtons()` creates 4 buttons with event delegation; no inline handlers (MV3 compliant) |
-| CAP-06 | 04-01 | 5-minute timeout countdown displayed; auto-skips on expiry | SATISFIED | `TIMEOUT_MS = 5 * 60 * 1000`; red urgency at <60s; sends skip(single) on expiry |
-| CAP-07 | 04-02 | Closing CAPTCHA tab triggers skip via `chrome.tabs.onRemoved` | SATISFIED* | Sends `skip(single)` on tab close — implementation diverges from REQUIREMENTS.md text ("skip(hoster)") but matches the explicit design decision documented in 04-CONTEXT.md |
-| CAP-08 | 04-02 | Dual-mode: uses native helper when installed, falls back to web tab when not | SATISFIED* | 04-CONTEXT.md explicitly reinterpreted CAP-08: "Web tab is the sole CAPTCHA path — NOT a fallback. Native helper is abandoned." Rc2Service fully removed CaptchaNativeService routing |
-| CAP-09 | 04-02 | Rc2Service no longer closes JDownloader's CAPTCHA tab in web tab mode | SATISFIED | `handleRequest()` replaced tab close with `console.log()`; verified by structural test |
-| CAP-10 | 04-01 | Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha | SATISFIED | URL pattern covers all three types; token polling queries both `g-recaptcha-response` (reCAPTCHA) and `h-captcha-response` (hCaptcha) |
+| CAP-01 | 04-01 | Content script injected on `http://127.0.0.1/*`, detects CAPTCHA pages via URL path | SATISFIED | `isJdLocalhost` + `captchaPathPattern`; manifest entry `*://*/*` with runtime gate |
+| CAP-02 | 04-01 | Content script polls `g-recaptcha-response` / `h-captcha-response` (500ms) | SATISFIED | Both selectors in `startTokenPolling()` with `setInterval(..., 500)` |
+| CAP-03 | 04-01, 04-02 | Solved token relayed to service worker via `chrome.runtime.sendMessage` | SATISFIED | `captcha-solved` message with token + callbackUrl |
+| CAP-04 | 04-02, 04-03 | Service worker submits token to JDownloader callback URL via HTTP | SATISFIED | XHR GET `&do=solve&response=TOKEN` for localhost; MYJD path routes via my.jdownloader.org tabs |
+| CAP-05 | 04-01 | Skip buttons (hoster/package/all/single) injected into CAPTCHA page | SATISFIED | `injectSkipButtons()` creates 4 buttons with event delegation; hoster name in label |
+| CAP-06 | 04-01 | 5-minute timeout countdown; auto-skips on expiry | SATISFIED | `TIMEOUT_MS = 5 * 60 * 1000`; sends skip(single) on expiry; red at <60s |
+| CAP-07 | 04-02, 04-03 | Closing CAPTCHA tab triggers skip via `chrome.tabs.onRemoved` | SATISFIED (design note) | localhost: `skiptype=single`; MYJD: `tab-closed` to my.jdownloader.org. REQUIREMENTS.md says `skip(hoster)` but 04-CONTEXT.md chose `skip(single)` as less aggressive — documented design decision |
+| CAP-08 | 04-02, 04-03 | Dual-mode: native helper or web tab fallback | SATISFIED (reinterpreted) | 04-CONTEXT.md: native helper abandoned; web tab is sole path. Implemented as dual-FLOW (localhost + MYJD) instead of dual-mode. CaptchaNativeService removed from DI. |
+| CAP-09 | 04-02 | Rc2Service no longer closes JDownloader's CAPTCHA tab | SATISFIED | `handleRequest()` contains only `console.log()` — no `chrome.tabs.remove` call |
+| CAP-10 | 04-01, 04-02 | Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha | SATISFIED | URL pattern covers all 3; token polling handles both response types; myjdCaptchaSolver.js discriminates widget types |
 
-**Notes on starred requirements (CAP-07 and CAP-08):**
+**ORPHANED REQUIREMENTS:** None. All CAP-01 through CAP-10 are addressed by the plans.
 
-- **CAP-07**: REQUIREMENTS.md text says "skip(hoster)" but 04-CONTEXT.md explicitly designated the skip type as Claude's discretion, with the decision to use "skip(single)" documented: "Skip(single) on timeout is deliberately less aggressive than skip(hoster)". The test suite verifies `skiptype=single` for tab close. The REQUIREMENTS.md text predates the design decision — implementation follows the more recent CONTEXT.md decision.
-
-- **CAP-08**: REQUIREMENTS.md text says "Dual-mode: uses native helper when installed, falls back to web tab when not" but 04-CONTEXT.md says "Web tab is the **sole CAPTCHA path** — NOT a fallback. Native helper is abandoned; no dual-mode detection needed. CAP-08 reinterpreted: there is only web tab mode." Implementation matches the reinterpreted requirement.
-
-Both are documented design decisions, not implementation defects.
+**Note on SC-7:** JD protocol callbacks (canClose, loaded, mouse-move) are specified in ROADMAP.md SC-7 and Plan 04-04 must_haves, but have no corresponding CAP-XX requirement ID. They were added as MV2 parity improvements after the original requirements were written. SC-7 is now VERIFIED.
 
 ### Anti-Patterns Found
 
+No TODO/FIXME/HACK comments, stub returns, empty implementations, or inline `onclick=` handlers found in any implementation file. The uncommitted working-tree warning from the previous verification is resolved — all implementation changes were committed in commits 0a9636b, d50e920, and 4513304.
+
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| No anti-patterns found | — | — | — | — |
-
-Scanned files: `contentscripts/captchaSolverContentscript.js`, `background.js` (CAPTCHA section, lines 550-710), `scripts/services/Rc2Service.js` (CAPTCHA-modified sections). No TODO/FIXME/HACK comments, no placeholder returns, no inline `onclick=` handlers, no stub implementations found.
+| (none) | - | - | - | - |
 
 ### Human Verification Required
 
-These items require a running JDownloader instance and cannot be verified programmatically:
+#### 1. Localhost CAPTCHA Page Enhancement (SC-1 through SC-4, SC-7)
 
-#### 1. Skip buttons and countdown UI injection
+**Test:** Open JDownloader, trigger a CAPTCHA (e.g., add a link from rapidgator.net). JDownloader opens `http://127.0.0.1:PORT/captcha/recaptchav2/rapidgator.net?id=123` in Chrome.
+**Expected:** Skip buttons (4 types) and countdown timer appear on the page alongside the CAPTCHA widget. JDownloader receives a loaded callback with window and element geometry within 5 seconds. canClose is polled every second. After solving, tab closes in ~2 seconds.
+**Why human:** DOM injection and XHR callbacks require live JDownloader HTTP server and active extension in browser.
 
-**Test:** Load a JDownloader CAPTCHA page at `http://127.0.0.1:PORT/captcha/recaptchav2/rapidgator.net?id=123` (with extension loaded)
-**Expected:** Below the CAPTCHA widget, four skip buttons appear ("Skip rapidgator.net CAPTCHAs", "Skip Package", "Skip All", "Skip This") and a countdown timer shows "Time remaining: 5:00"
-**Why human:** DOM injection requires a live browser with the extension active and an actual JDownloader-served CAPTCHA page
+#### 2. Tab-close Skip Delivery (SC-3)
 
-#### 2. Token submission and tab auto-close
+**Test:** Open a CAPTCHA tab, close it without solving.
+**Expected:** JDownloader receives skip(single) and moves to next queued download.
+**Why human:** Requires running JDownloader with a queued CAPTCHA to confirm skip receipt.
 
-**Test:** Solve a reCAPTCHA v2 CAPTCHA on a tab while monitoring the Network tab in DevTools on background.js (via `chrome://extensions -> background service worker -> Inspect`)
-**Expected:** An XHR GET request is made to the callbackUrl with `&do=solve&response=<token>`, the tab closes approximately 2 seconds later
-**Why human:** Requires real CAPTCHA solve interaction and live JDownloader HTTP server
+#### 3. MYJD Remote Flow (SC-6)
 
-#### 3. Tab-close skip delivery
+**Test:** With JDownloader on a NAS (not localhost), trigger a CAPTCHA from my.jdownloader.org interface.
+**Expected:** Target domain tab opens with `#rc2jdt` hash, CAPTCHA widget renders, token submission goes through MYJD cloud API.
+**Why human:** Requires MYJD account, remote JDownloader host, and active my.jdownloader.org session.
 
-**Test:** Open a CAPTCHA page (extension active), then close the tab without solving
-**Expected:** JDownloader receives a skip notification and moves to the next queued item; confirm in JDownloader's download queue
-**Why human:** Requires running JDownloader with an active CAPTCHA queue entry to observe the effect
+## Re-verification Results
 
-#### 4. 5-minute timeout behavior
+### Gap 1 — Protocol Callbacks (SC-7): CLOSED
 
-**Test:** Open a CAPTCHA page and wait 5 minutes without interacting
-**Expected:** At 60 seconds remaining, text turns red and bold. At expiry: text shows "Timed out - skipping...", JDownloader receives skip(single)
-**Why human:** 5-minute real-time wait required; JDownloader needed to confirm skip receipt
+**Previously failed:** `captchaSolverContentscript.js` had zero canClose/loaded/mouse-move code.
 
-### Gaps Summary
+**Now verified:**
+- `startCanClosePolling(callbackUrl)` at line 240: `setInterval` at 1000ms; XHR GET `callbackUrl + '&do=canClose'`; `X-Myjd-Appkey` header; closes all intervals + calls `window.close()` + sends `captcha-can-close` fallback when response === 'true'
+- `sendLoadedEvent(callbackUrl)` at line 270: finds CAPTCHA element (`iframe[src*="recaptcha"]`, `iframe[src*="hcaptcha"]`, `.g-recaptcha`, `.h-captcha`); retries up to 10 times at 500ms; sends 11 geometry params (x, y, w, h, vw, vh, eleft, etop, ew, eh, dpi); `X-Myjd-Appkey` header
+- `startMouseMoveReporting(callbackUrl)` at line 305: `mousemove` listener; 3000ms throttle via `lastMouseMoveTime`; XHR GET `callbackUrl + '&do=canClose&useractive=true&ts=' + now`; `X-Myjd-Appkey` header
+- All three gated at line 65: `if (isJdLocalhost) { ... }`
+- `canCloseHandle` cleaned up at line 75 in `beforeunload` listener
+- 30 new structural tests pass (9 canClose, 8 loaded, 6 mouse-move, 1 gating, 5 loginNeeded, 1 cleanup)
 
-No gaps. All must-have truths are verified. All artifacts are substantive and wired. All 132 tests across 9 suites pass with zero regressions. All 4 task commits confirmed in git log (90ca903, 6319810, 8444d6d, 6199f63).
+**Committed:** `0a9636b` (feat), `d50e920` (test)
 
-The two requirement description divergences (CAP-07 skip type, CAP-08 dual-mode) are documented design decisions in 04-CONTEXT.md that were made before implementation — they are not gaps.
+### Gap 2 — loginNeeded.html Missing: CLOSED
+
+**Previously failed:** File did not exist; `Rc2Service.onLoginNeeded()` referenced a missing resource.
+
+**Now verified:**
+- `loginNeeded.html` exists at project root (46 lines)
+- Title: `MyJDownloader - Login Required`
+- Background: `#dbf5fb` (light blue)
+- Explains login requirement; directs user to extension popup
+- No `<script>` tags (MV3-compliant)
+- `Rc2Service.js` line 51 `chrome.runtime.getURL("loginNeeded.html")` now resolves correctly
+
+**Committed:** `0a9636b` (feat)
+
+### Regression Check on Previously Passing Items
+
+All 7 previously-passing success criteria (SC-1 through SC-6, checked with quick regression scan) remain verified. Full test suite: **216 tests passing across 10 suites, 0 failures.**
 
 ---
 
-_Verified: 2026-03-07T18:15:00Z_
+_Verified: 2026-03-07T23:00:00Z_
 _Verifier: Claude (gsd-verifier)_
