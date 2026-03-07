@@ -1,15 +1,14 @@
 'use strict';
 
 angular.module('myjdWebextensionApp')
-  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'myjdClientFactory', 'myjdDeviceClientFactory', 'StorageService', 'CaptchaNativeService',
-    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, myjdClientFactory, myjdDeviceClientFactory, StorageService, CaptchaNativeService) {
+  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'myjdClientFactory', 'myjdDeviceClientFactory', 'StorageService',
+    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, myjdClientFactory, myjdDeviceClientFactory, StorageService) {
       const buildVersion = chrome.runtime.getManifest().version;
       let isForcedPrivateMode = false;
       let isAllowedIncognito = false;
 
       let rc2TabUpdateCallbacks = {};
       let rc2CanCloseIntervalHandles = {};
-      let captchaInProgress = {};
 
       StorageService.get(StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key, result => {
         isForcedPrivateMode = false //result[StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key] ||
@@ -41,13 +40,10 @@ angular.module('myjdWebextensionApp')
 
       function handleRequest(request) {
         if (request.url.match(/http:\/\/127\.0\.0\.1:\d+\/captcha\/(recaptchav(2|3)|hcaptcha)\/.*\?id=\d+$/gm) !== null) {
-          // Native helper handles CAPTCHA solving - close the localhost tab
-          // The native helper opens its own browser window for solving
-          chrome.tabs.remove(request.tabId, function() {
-            if (chrome.runtime.lastError) {
-              console.log('Rc2Service: Could not close tab:', chrome.runtime.lastError.message);
-            }
-          });
+          // Web tab mode: let the CAPTCHA page stay open
+          // Content script (captchaSolverContentscript.js) handles token detection,
+          // skip buttons, countdown timer, and tab lifecycle
+          console.log('Rc2Service: CAPTCHA tab detected, content script will handle:', request.url);
         }
       }
 
@@ -228,41 +224,14 @@ angular.module('myjdWebextensionApp')
       });
 
       function onNewCaptchaAvailable(tabId, callbackUrl, params) {
-        // BUG-02: Dedup guard - prevent duplicate CAPTCHA jobs for the same challenge
-        var dedupKey = params.captchaId || callbackUrl;
+        // Web tab mode: content script on the CAPTCHA page handles solving.
+        // This function is only called from the MyJD web interface flow
+        // (webinterfaceEnhancer.js -> captcha-new message), not from localhost tabs.
+        // For localhost CAPTCHA pages, the content script auto-activates via manifest.
+        console.log('Rc2Service: onNewCaptchaAvailable called for', callbackUrl);
 
-        if (captchaInProgress[dedupKey]) {
-          console.log('Rc2Service: Ignoring duplicate CAPTCHA job for:', dedupKey);
-          return;
-        }
-
-        captchaInProgress[dedupKey] = true;
-
-        // Use native helper for CAPTCHA solving
-        var captchaJob = {
-          siteKey: params.siteKey,
-          siteKeyType: params.siteKeyType,
-          challengeType: params.challengeType,
-          callbackUrl: callbackUrl,
-          captchaId: params.captchaId,
-          hoster: params.hoster,
-          v3action: params.v3action,
-          siteUrl: params.finalUrl
-        };
-
-        CaptchaNativeService.sendCaptcha(captchaJob).then(function(response) {
-          delete captchaInProgress[dedupKey];
-          console.log('Rc2Service: Native helper accepted CAPTCHA job:', response);
-          // Native helper handles the solving - close the triggering tab
-          chrome.tabs.remove(tabId, function() {
-            if (chrome.runtime.lastError) {
-              console.log('Rc2Service: Could not close tab:', chrome.runtime.lastError.message);
-            }
-          });
-        }).catch(function(error) {
-          delete captchaInProgress[dedupKey];
-          console.error('Rc2Service: Native helper failed, falling back to web interface:', error);
-          // Fallback: notify web interface if available
+        if (callbackUrl === 'MYJD') {
+          // MyJD web interface flow: forward to web interface tabs
           chrome.tabs.query({
             url: [
               "http://my.jdownloader.org/*",
@@ -270,7 +239,7 @@ angular.module('myjdWebextensionApp')
             ]
           }, function(tabs) {
             if (tabs !== undefined && tabs.length > 0) {
-              for (let i = 0; i < tabs.length; i++) {
+              for (var i = 0; i < tabs.length; i++) {
                 chrome.tabs.sendMessage(tabs[i].id, {
                   name: "captcha-new",
                   type: "myjdrc2",
@@ -279,7 +248,9 @@ angular.module('myjdWebextensionApp')
               }
             }
           });
-        });
+        }
+        // For localhost callback URLs, the content script on the CAPTCHA tab
+        // handles everything -- no action needed here.
       }
 
       ExtensionMessagingService.addListener("myjdrc2", "tabmode-skip-request", function (request, sender, sendResponse) {
