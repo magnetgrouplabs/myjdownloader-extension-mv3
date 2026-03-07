@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: Not started
-status: planning
-last_updated: "2026-03-06T22:34:49.136Z"
+current_plan: Complete (1/1 plans)
+status: executing
+last_updated: "2026-03-07T17:08:12Z"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -19,8 +19,8 @@ progress:
 
 **Milestone:** v1.0
 **Active Phase:** 03-directory-history
-**Current Plan:** Not started
-**Status:** Ready to plan
+**Current Plan:** Complete (1/1 plans)
+**Status:** Phase 03 complete
 **Progress:** [██████████] 100%
 
 ## Phase Status
@@ -29,7 +29,7 @@ progress:
 |-------|--------|-------|
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
-| 3. Directory History | Not started | Independent — can parallel with Phase 2 |
+| 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
 | 4. Web Tab CAPTCHA | Not started | Depends on Phase 1 (BUG-02) |
 | 5. CAPTCHA E2E Testing | Not started | Depends on Phase 4 |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
@@ -55,6 +55,9 @@ progress:
 | First query object as base for shared options in batch send | 2026-03-06 | All queries share same $scope.selection options; first query is representative |
 | First available sourceUrl used for batch context | 2026-03-06 | JDownloader uses first sourceUrl for referrer context |
 | Toolbar sidebar persistence is UI polish, not blocker | 2026-03-06 | Links send successfully; sidebar stays visible after batch send; deferred to Phase 6 |
+| DIRECTORY_HISTORY_ENABLED raw key (not settings_ prefix) | 2026-03-07 | Must match StorageService constant exactly; existing keys use inconsistent prefix |
+| Clear button wipes ALL devices' saveto history | 2026-03-07 | Per DIR-04: clear is global, not per-device |
+| Trailing slash/backslash normalization before dedup | 2026-03-07 | Handles both Unix and Windows path formats |
 
 ## Blockers
 
@@ -69,13 +72,14 @@ None currently.
 | 01 | 03 | 4min | 2 | 2 |
 | 02 | 01 | 2min | 2 | 2 |
 | 02 | 02 | 5min | 2 | 0 |
+| 03 | 01 | 4min | 2 | 10 |
 
 ## Context for Next Session
 
-Phase 3 context gathered. Decisions captured: inline clear button, per-device history, case-insensitive dedup with normalization, MRU ordering, max 10 entries, settings toggle to disable. Ready to plan.
-Last session stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-directory-history/03-CONTEXT.md
+Phase 3 complete. All DIR requirements (DIR-01 through DIR-05) implemented and verified with 77 passing tests. Ready for Phase 4.
+Last session stopped at: Completed 03-01-PLAN.md
+Resume file: .planning/phases/03-directory-history/03-01-SUMMARY.md
 
 ---
 *State initialized: 2026-03-06*
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-07T17:08:12Z*

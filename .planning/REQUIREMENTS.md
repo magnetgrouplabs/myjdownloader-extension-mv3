@@ -23,11 +23,11 @@
 
 ### Directory History
 
-- [ ] **DIR-01**: "Save to" field shows a dropdown of the last 10 used directories
-- [ ] **DIR-02**: Directory history is persisted to `chrome.storage.local` and survives browser restarts
-- [ ] **DIR-03**: Directory entries are deduplicated case-insensitively (Windows paths)
-- [ ] **DIR-04**: Clear history button removes all saved directories
-- [ ] **DIR-05**: Most recently used directory appears first in the dropdown
+- [x] **DIR-01**: "Save to" field shows a dropdown of the last 10 used directories
+- [x] **DIR-02**: Directory history is persisted to `chrome.storage.local` and survives browser restarts
+- [x] **DIR-03**: Directory entries are deduplicated case-insensitively (Windows paths)
+- [x] **DIR-04**: Clear history button removes all saved directories
+- [x] **DIR-05**: Most recently used directory appears first in the dropdown
 
 ### Web Tab CAPTCHA (Cross-Platform Fallback)
 
@@ -104,11 +104,11 @@
 | LINK-04 | Phase 2 | Complete |
 | LINK-05 | Phase 2 | Complete |
 | LINK-06 | Phase 2 | Complete |
-| DIR-01 | Phase 3 | Pending |
-| DIR-02 | Phase 3 | Pending |
-| DIR-03 | Phase 3 | Pending |
-| DIR-04 | Phase 3 | Pending |
-| DIR-05 | Phase 3 | Pending |
+| DIR-01 | Phase 3 | Complete |
+| DIR-02 | Phase 3 | Complete |
+| DIR-03 | Phase 3 | Complete |
+| DIR-04 | Phase 3 | Complete |
+| DIR-05 | Phase 3 | Complete |
 | CAP-01 | Phase 4 | Pending |
 | CAP-02 | Phase 4 | Pending |
 | CAP-03 | Phase 4 | Pending |
