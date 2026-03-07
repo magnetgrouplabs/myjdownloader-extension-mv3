@@ -20,9 +20,12 @@ describe('CAPTCHA Solver Content Script', function() {
       expect(csSource).toMatch(/recaptchav2\|recaptchav3\|hcaptcha/);
     });
 
-    it('should have early return when pathname does not match', function() {
-      // Pattern: if (!captchaPathPattern.test(...)) return;
-      expect(csSource).toMatch(/if\s*\(\s*!captchaPathPattern\.test\(/);
+    it('should have early return when no CAPTCHA detected', function() {
+      // Localhost: checks URL path pattern
+      expect(csSource).toMatch(/isJdLocalhost/);
+      // External: checks for widget elements, returns if none found
+      expect(csSource).toMatch(/\.g-recaptcha/);
+      expect(csSource).toMatch(/\.h-captcha/);
     });
 
     it('should extract captchaType from URL path', function() {
@@ -162,11 +165,16 @@ describe('CAPTCHA Solver Content Script', function() {
       expect(csSource).toMatch(/captcha-skip/);
     });
 
-    it('should include callbackUrl in all message types', function() {
-      // callbackUrl should appear in data objects for all three message types
+    it('should include callbackUrl in data-carrying message types', function() {
+      // callbackUrl should appear in data objects for the three main message types
+      // (captcha-can-close is a tab-close signal with no data payload)
       var sendMessageBlocks = csSource.match(/chrome\.runtime\.sendMessage\(\{[\s\S]*?\}\)/g) || [];
       expect(sendMessageBlocks.length).toBeGreaterThanOrEqual(3);
-      sendMessageBlocks.forEach(function(block) {
+      var dataMessages = sendMessageBlocks.filter(function(block) {
+        return block.indexOf('data:') !== -1;
+      });
+      expect(dataMessages.length).toBeGreaterThanOrEqual(3);
+      dataMessages.forEach(function(block) {
         expect(block).toMatch(/callbackUrl/);
       });
     });
@@ -177,12 +185,13 @@ describe('CAPTCHA Solver Content Script', function() {
 
     beforeAll(function() {
       captchaEntry = manifest.content_scripts.find(function(entry) {
-        return entry.matches && entry.matches.includes('http://127.0.0.1/*');
+        return entry.js && entry.js.includes('contentscripts/captchaSolverContentscript.js');
       });
     });
 
-    it('should have content_scripts entry matching http://127.0.0.1/*', function() {
+    it('should have content_scripts entry matching all URLs', function() {
       expect(captchaEntry).toBeDefined();
+      expect(captchaEntry.matches).toContain('*://*/*');
     });
 
     it('should include captchaSolverContentscript.js in js array', function() {
@@ -220,6 +229,157 @@ describe('CAPTCHA Solver Content Script', function() {
         return /^\s*(let|const)\s+/.test(line);
       });
       expect(usesLetConst).toBe(false);
+    });
+
+    it('should clean up canCloseHandle on beforeunload', function() {
+      expect(csSource).toMatch(/canCloseHandle/);
+      // beforeunload handler should clear canCloseHandle
+      expect(csSource).toMatch(/clearInterval\(canCloseHandle\)/);
+    });
+  });
+
+  describe('JD Protocol: canClose polling', function() {
+    it('should have startCanClosePolling function', function() {
+      expect(csSource).toMatch(/function startCanClosePolling/);
+    });
+
+    it('should declare canCloseHandle variable', function() {
+      expect(csSource).toMatch(/var canCloseHandle/);
+    });
+
+    it('should poll at 1-second interval', function() {
+      // canClose uses setInterval with 1000ms
+      expect(csSource).toMatch(/setInterval.*1000|1000.*setInterval/s);
+    });
+
+    it('should XHR GET callbackUrl with do=canClose', function() {
+      expect(csSource).toMatch(/do=canClose/);
+    });
+
+    it('should use XMLHttpRequest', function() {
+      expect(csSource).toMatch(/new XMLHttpRequest/);
+    });
+
+    it('should set X-Myjd-Appkey header', function() {
+      expect(csSource).toMatch(/X-Myjd-Appkey/);
+    });
+
+    it('should check response for true string', function() {
+      expect(csSource).toMatch(/responseText\s*===?\s*['"]true['"]/);
+    });
+
+    it('should clear all intervals on canClose true', function() {
+      expect(csSource).toMatch(/clearInterval\(canCloseHandle\)/);
+      expect(csSource).toMatch(/clearInterval\(pollingHandle\)/);
+      expect(csSource).toMatch(/clearInterval\(countdownHandle\)/);
+    });
+
+    it('should send captcha-can-close as fallback for window.close', function() {
+      expect(csSource).toMatch(/captcha-can-close/);
+    });
+  });
+
+  describe('JD Protocol: loaded event', function() {
+    it('should have sendLoadedEvent function', function() {
+      expect(csSource).toMatch(/function sendLoadedEvent/);
+    });
+
+    it('should find CAPTCHA element by iframe or widget selectors', function() {
+      expect(csSource).toMatch(/iframe\[src\*=/);
+    });
+
+    it('should include do=loaded in URL', function() {
+      expect(csSource).toMatch(/do=loaded/);
+    });
+
+    it('should send window geometry parameters', function() {
+      expect(csSource).toMatch(/screenX|screenLeft/);
+      expect(csSource).toMatch(/outerWidth/);
+      expect(csSource).toMatch(/innerWidth/);
+      expect(csSource).toMatch(/devicePixelRatio/);
+    });
+
+    it('should use getBoundingClientRect for element dimensions', function() {
+      expect(csSource).toMatch(/getBoundingClientRect/);
+    });
+
+    it('should include element position params (eleft, etop, ew, eh)', function() {
+      expect(csSource).toMatch(/eleft=/);
+      expect(csSource).toMatch(/etop=/);
+      expect(csSource).toMatch(/ew=/);
+      expect(csSource).toMatch(/eh=/);
+    });
+
+    it('should include dpi parameter', function() {
+      expect(csSource).toMatch(/dpi=/);
+    });
+
+    it('should retry if CAPTCHA element not found', function() {
+      expect(csSource).toMatch(/setTimeout.*sendLoadedEvent|loadedRetries/);
+    });
+  });
+
+  describe('JD Protocol: mouse-move reporting', function() {
+    it('should have startMouseMoveReporting function', function() {
+      expect(csSource).toMatch(/function startMouseMoveReporting/);
+    });
+
+    it('should add mousemove event listener on document', function() {
+      expect(csSource).toMatch(/addEventListener.*mousemove|mousemove.*addEventListener/s);
+    });
+
+    it('should throttle to 3 seconds (3000ms)', function() {
+      expect(csSource).toMatch(/3000/);
+    });
+
+    it('should include useractive=true in URL', function() {
+      expect(csSource).toMatch(/useractive=true/);
+    });
+
+    it('should include timestamp in URL', function() {
+      expect(csSource).toMatch(/ts=/);
+    });
+
+    it('should set X-Myjd-Appkey header on mouse-move XHR', function() {
+      // Already covered by global X-Myjd-Appkey check, but verify pattern exists near mousemove
+      expect(csSource).toMatch(/X-Myjd-Appkey/);
+    });
+  });
+
+  describe('Protocol callbacks gating', function() {
+    it('should gate protocol callbacks on isJdLocalhost', function() {
+      // The protocol callback calls should be inside an isJdLocalhost check
+      expect(csSource).toMatch(/if\s*\(isJdLocalhost\)\s*\{[\s\S]*?startCanClosePolling/);
+    });
+  });
+
+  describe('loginNeeded.html', function() {
+    var loginSource;
+
+    beforeAll(function() {
+      loginSource = fs.readFileSync(
+        path.join(__dirname, '..', '..', '..', 'loginNeeded.html'), 'utf8'
+      );
+    });
+
+    it('should exist and be non-empty', function() {
+      expect(loginSource.length).toBeGreaterThan(0);
+    });
+
+    it('should have correct title', function() {
+      expect(loginSource).toMatch(/MyJDownloader - Login Required/);
+    });
+
+    it('should have light blue background (#dbf5fb)', function() {
+      expect(loginSource).toMatch(/#dbf5fb/);
+    });
+
+    it('should explain login requirement', function() {
+      expect(loginSource).toMatch(/log.?in/i);
+    });
+
+    it('should not contain inline scripts (MV3 compliance)', function() {
+      expect(loginSource).not.toMatch(/<script/);
     });
   });
 });
