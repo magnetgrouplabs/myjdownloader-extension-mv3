@@ -56,10 +56,10 @@ Plans:
   2. Directory history survives browser restart
   3. Clear button empties the history; dropdown shows no entries afterward
   4. Duplicate paths (case-insensitive) are collapsed to one entry
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 03-01: StorageService history helpers and "Save to" dropdown UI
+- [ ] 03-01-PLAN.md — StorageService setting key, AddLinksController history logic (normalization, cap, clear), templateCache UI (conditional datalist, clear button), options page toggle
 
 ### Phase 4: Web Tab CAPTCHA
 **Goal**: CAPTCHA solving works cross-platform without native binary installation, using JDownloader's own localhost CAPTCHA page enhanced by a content script
@@ -113,11 +113,11 @@ Plans:
 |-------|---------------|--------|-----------|
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
-| 3. Directory History | 0/1 | Not started | - |
+| 3. Directory History | 0/1 | Planning complete | - |
 | 4. Web Tab CAPTCHA | 0/3 | Not started | - |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-07*
