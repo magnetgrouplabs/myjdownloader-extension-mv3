@@ -78,7 +78,10 @@ global.chrome = {
     lastError: null
   },
   storage: {
-    session: createStorageArea(sessionStore),
+    session: {
+      ...createStorageArea(sessionStore),
+      setAccessLevel: jest.fn(() => Promise.resolve())
+    },
     local: createStorageArea(localStore),
     onChanged: createEvent()
   },
