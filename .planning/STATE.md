@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: Plan 1 of 2 complete
-status: executing
-last_updated: "2026-03-07T17:58:21.126Z"
+current_plan: Plan 2 of 2 complete
+status: completed
+last_updated: "2026-03-07T18:05:52.902Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 87
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -19,9 +19,9 @@ progress:
 
 **Milestone:** v1.0
 **Active Phase:** 04-web-tab-captcha
-**Current Plan:** Plan 1 of 2 complete
-**Status:** Executing
-**Progress:** [████████░░] 87%
+**Current Plan:** Plan 2 of 2 complete
+**Status:** Phase Complete
+**Progress:** [██████████] 100%
 
 ## Phase Status
 
@@ -30,7 +30,7 @@ progress:
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
-| 4. Web Tab CAPTCHA | In progress (1/2 plans) | Content script + manifest + tests done; service worker handlers next |
+| 4. Web Tab CAPTCHA | Complete (2/2 plans) | Content script, service worker handlers, Rc2Service modifications done |
 | 5. CAPTCHA E2E Testing | Not started | Depends on Phase 4 |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
 
@@ -62,6 +62,11 @@ progress:
 | Event delegation for skip buttons | 2026-03-07 | Single click listener on container, reads dataset.skipType; MV3 CSP compliant |
 | 500ms token polling interval | 2026-03-07 | Balances responsiveness and CPU usage for CAPTCHA token detection |
 | beforeunload cleanup for both intervals | 2026-03-07 | Prevents memory leaks from polling and countdown on tab close |
+| encodeURIComponent on CAPTCHA token | 2026-03-07 | Prevents URL injection via special characters in token string |
+| skiptype=single for tab close | 2026-03-07 | Less aggressive than hoster; consistent with timeout behavior |
+| Delete activeCaptchaTabs before HTTP send | 2026-03-07 | Prevents race condition with simultaneous captcha-skip message |
+| Keep CaptchaNativeService.js file on disk | 2026-03-07 | Deferred deletion per CONTEXT.md; removed from DI but file stays |
+| Remove captchaInProgress dedup guard | 2026-03-07 | Only needed for native helper double-sends; web tab flow uses content script |
 
 ## Blockers
 
@@ -78,11 +83,13 @@ None currently.
 | 02 | 02 | 5min | 2 | 0 |
 | 03 | 01 | 4min | 2 | 10 |
 | 04 | 01 | 3min | 2 | 3 |
+| 04 | 02 | 4min | 2 | 4 |
+| Phase 04 P02 | 4min | 2 tasks | 4 files |
 
 ## Context for Next Session
 
-Phase 4 plan 1 complete. Content script, manifest registration, and 36 structural tests done. Plan 04-02 next (service worker handlers, Rc2Service modifications).
-Last session stopped at: Completed 04-01-PLAN.md
+Phase 4 complete (2/2 plans). Content script + service worker CAPTCHA handlers + Rc2Service modifications all done. 132 tests pass across 9 suites. Phase 5 (CAPTCHA E2E Testing) ready to begin.
+Last session stopped at: Completed 04-02-PLAN.md
 Resume file: None
 
 ---

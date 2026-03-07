@@ -9,7 +9,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 - [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
 - [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
 - [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
-- [ ] **Phase 4: Web Tab CAPTCHA** - Cross-platform CAPTCHA fallback via content script on JDownloader's localhost page
+- [x] **Phase 4: Web Tab CAPTCHA** - Cross-platform CAPTCHA fallback via content script on JDownloader's localhost page (completed 2026-03-07)
 - [ ] **Phase 5: CAPTCHA E2E Testing** - Validate both CAPTCHA modes end-to-end with real JDownloader
 - [ ] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep
 
@@ -71,7 +71,7 @@ Plans:
   3. Closing CAPTCHA tab sends skip to JDownloader
   4. 5-minute countdown visible on CAPTCHA page; auto-skips on expiry
   5. reCAPTCHA v2, v3, and hCaptcha all function in web tab mode
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 04-01-PLAN.md — Content script creation (URL detection, token polling, skip buttons, countdown) + manifest registration + structural tests
@@ -113,7 +113,7 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 0/2 | Planning complete | - |
+| 4. Web Tab CAPTCHA | 2/2 | Complete   | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
