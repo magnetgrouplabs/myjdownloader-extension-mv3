@@ -46,8 +46,13 @@
   "run_at": "document_start"
   }, {
   "all_frames": false,
+  "js": [ "contentscripts/myjdCaptchaSolver.js" ],
+  "matches": [ "*://*/*" ],
+  "run_at": "document_start"
+  }, {
+  "all_frames": false,
   "js": [ "contentscripts/captchaSolverContentscript.js" ],
-  "matches": [ "http://127.0.0.1/*" ],
+  "matches": [ "*://*/*" ],
   "run_at": "document_end"
   }, {
   "all_frames": true,

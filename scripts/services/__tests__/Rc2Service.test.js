@@ -123,4 +123,55 @@ describe('Rc2Service Bug Fixes', () => {
       expect(rc2Source).not.toMatch(/var\s+captchaInProgress\s*=/);
     });
   });
+
+  // ============================================================
+  // MYJD CAPTCHA flow (Plan 03)
+  // ============================================================
+
+  describe('MYJD CAPTCHA flow via service worker', () => {
+    it('Rc2Service source should contain myjd-prepare-captcha-tab', () => {
+      expect(rc2Source).toMatch(/myjd-prepare-captcha-tab/);
+    });
+
+    it('onWebInterfaceCaptchaJobFound should build jobDetails with required fields', () => {
+      const funcMatch = rc2Source.match(/function\s+onWebInterfaceCaptchaJobFound[\s\S]*?\n\s{6}\}/);
+      expect(funcMatch).not.toBeNull();
+      const funcBody = funcMatch[0];
+      expect(funcBody).toMatch(/captchaId/);
+      expect(funcBody).toMatch(/captchaType/);
+      expect(funcBody).toMatch(/siteKey/);
+      expect(funcBody).toMatch(/targetUrl/);
+      expect(funcBody).toMatch(/callbackUrl:\s*['"]MYJD['"]/);
+    });
+
+    it('onWebInterfaceCaptchaJobFound should send myjd-prepare-captcha-tab via chrome.runtime.sendMessage', () => {
+      const funcMatch = rc2Source.match(/function\s+onWebInterfaceCaptchaJobFound[\s\S]*?\n\s{6}\}/);
+      expect(funcMatch).not.toBeNull();
+      const funcBody = funcMatch[0];
+      expect(funcBody).toMatch(/chrome\.runtime\.sendMessage/);
+      expect(funcBody).toMatch(/myjd-prepare-captcha-tab/);
+      expect(funcBody).toMatch(/jobDetails/);
+    });
+
+    it('onWebInterfaceCaptchaJobFound should NOT call onNewCaptchaAvailable', () => {
+      const funcMatch = rc2Source.match(/function\s+onWebInterfaceCaptchaJobFound[\s\S]*?\n\s{6}\}/);
+      expect(funcMatch).not.toBeNull();
+      expect(funcMatch[0]).not.toMatch(/onNewCaptchaAvailable/);
+    });
+
+    it('onWebInterfaceCaptchaJobFound should include hoster and siteKeyType in jobDetails', () => {
+      const funcMatch = rc2Source.match(/function\s+onWebInterfaceCaptchaJobFound[\s\S]*?\n\s{6}\}/);
+      expect(funcMatch).not.toBeNull();
+      const funcBody = funcMatch[0];
+      expect(funcBody).toMatch(/hoster/);
+      expect(funcBody).toMatch(/siteKeyType/);
+      expect(funcBody).toMatch(/v3action/);
+    });
+
+    it('onWebInterfaceCaptchaJobFound should pass tabId to service worker message', () => {
+      const funcMatch = rc2Source.match(/function\s+onWebInterfaceCaptchaJobFound[\s\S]*?\n\s{6}\}/);
+      expect(funcMatch).not.toBeNull();
+      expect(funcMatch[0]).toMatch(/tabId:\s*tab/);
+    });
+  });
 });

@@ -49,6 +49,45 @@ function persistQueue() {
 
 let queueReady = restoreRequestQueue();
 
+// Make chrome.storage.session accessible from content scripts (for myjdCaptchaSolver.js)
+chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+
+// ============================================================
+// MYJD CAPTCHA CSP rule management
+// ============================================================
+function addCspStrippingRule(tabId) {
+ let ruleId = 10000 + tabId;
+ chrome.declarativeNetRequest.updateSessionRules({
+  addRules: [{
+   id: ruleId,
+   priority: 1,
+   action: {
+    type: 'modifyHeaders',
+    responseHeaders: [
+     { header: 'Content-Security-Policy', operation: 'remove' },
+     { header: 'Content-Security-Policy-Report-Only', operation: 'remove' },
+     { header: 'X-Content-Security-Policy', operation: 'remove' }
+    ]
+   },
+   condition: {
+    tabIds: [tabId],
+    resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest']
+   }
+  }]
+ }).catch(function(err) {
+  console.error('Background: Failed to add CSP stripping rule for tab', tabId, err);
+ });
+}
+
+function removeCspStrippingRule(tabId) {
+ let ruleId = 10000 + tabId;
+ chrome.declarativeNetRequest.updateSessionRules({
+  removeRuleIds: [ruleId]
+ }).catch(function(err) {
+  console.error('Background: Failed to remove CSP stripping rule for tab', tabId, err);
+ });
+}
+
 async function addLinkToRequestQueue(link, tab) {
  await queueReady;
  let tabKey = String(tab.id);
@@ -572,6 +611,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // CAPTCHA tab tracking and message handling
  // ============================================================
 
+ // MYJD CAPTCHA: prepare tab (write session storage, add CSP rule, navigate)
+ if (action === "myjd-prepare-captcha-tab") {
+  (async () => {
+   try {
+    let tabId = request.data.tabId;
+    let jobDetails = request.data.jobDetails;
+    await chrome.storage.session.set({ myjd_captcha_job: jobDetails });
+    addCspStrippingRule(tabId);
+    chrome.tabs.update(tabId, { url: jobDetails.targetUrl + '#rc2jdt' });
+    activeCaptchaTabs[tabId] = {
+     callbackUrl: 'MYJD',
+     captchaId: jobDetails.captchaId,
+     captchaType: jobDetails.captchaType,
+     hoster: jobDetails.hoster,
+     detectedAt: Date.now()
+    };
+    console.log('Background: MYJD CAPTCHA tab prepared:', tabId, jobDetails.hoster);
+    sendResponse({ status: 'ok' });
+   } catch (err) {
+    console.error('Background: Failed to prepare MYJD CAPTCHA tab:', err);
+    sendResponse({ status: 'error', error: err.message });
+   }
+  })();
+  return true;
+ }
+
+ // MYJD CAPTCHA: execute invisible/v3 CAPTCHA in MAIN world
+ if (action === "myjd-captcha-execute") {
+  if (sender.tab) {
+   chrome.scripting.executeScript({
+    target: { tabId: sender.tab.id },
+    world: 'MAIN',
+    args: [request.data.siteKey, request.data.v3action],
+    func: function(siteKey, v3action) {
+     if (typeof grecaptcha !== 'undefined') {
+      grecaptcha.ready(function() {
+       var opts = v3action ? { action: v3action } : {};
+       grecaptcha.execute(siteKey, opts);
+      });
+     } else if (typeof hcaptcha !== 'undefined') {
+      hcaptcha.execute();
+     }
+    }
+   }).catch(function(err) {
+    console.error('Background: Failed to execute CAPTCHA in MAIN world:', err);
+   });
+  }
+  sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // captcha-can-close: close sender tab (fallback for window.close())
+ if (action === "captcha-can-close") {
+  if (sender.tab) {
+   chrome.tabs.remove(sender.tab.id, function() {
+    if (chrome.runtime.lastError) { /* ignore */ }
+   });
+  }
+  sendResponse({ status: 'ok' });
+  return true;
+ }
+
  if (action === "captcha-tab-detected") {
   if (sender.tab) {
    activeCaptchaTabs[sender.tab.id] = {
@@ -591,24 +692,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (sender.tab) {
    delete activeCaptchaTabs[sender.tab.id];
   }
-  var solveRequest = new XMLHttpRequest();
-  solveRequest.open('GET', request.data.callbackUrl + '&do=solve&response=' + encodeURIComponent(request.data.token), true);
-  solveRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-  solveRequest.timeout = 10000;
-  solveRequest.onload = function() {
-   console.log('Background: CAPTCHA token submitted to JDownloader');
+  if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
+   // MYJD flow: route solution through my.jdownloader.org tabs
+   chrome.tabs.query({
+    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
+   }, function(tabs) {
+    if (tabs && tabs.length > 0) {
+     for (var i = 0; i < tabs.length; i++) {
+      chrome.tabs.sendMessage(tabs[i].id, {
+       name: 'response',
+       type: 'myjdrc2',
+       data: { captchaId: request.data.captchaId, token: request.data.token }
+      }, function() { /* ignore errors */ });
+     }
+    }
+   });
+   // Auto-close sender tab and clean up CSP rule
    if (sender.tab) {
+    removeCspStrippingRule(sender.tab.id);
     setTimeout(function() {
      chrome.tabs.remove(sender.tab.id, function() {
-      if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+      if (chrome.runtime.lastError) { /* ignore */ }
      });
     }, 2000);
    }
-  };
-  solveRequest.ontimeout = function() {
-   console.error('Background: CAPTCHA solve request timed out for', request.data.callbackUrl);
-  };
-  solveRequest.send();
+  } else if (request.data.callbackUrl && request.data.callbackUrl !== 'MYJD') {
+   // Localhost flow: submit token via HTTP GET
+   var solveRequest = new XMLHttpRequest();
+   solveRequest.open('GET', request.data.callbackUrl + '&do=solve&response=' + encodeURIComponent(request.data.token), true);
+   solveRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+   solveRequest.timeout = 10000;
+   solveRequest.onload = function() {
+    console.log('Background: CAPTCHA token submitted to JDownloader');
+    if (sender.tab) {
+     setTimeout(function() {
+      chrome.tabs.remove(sender.tab.id, function() {
+       if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+      });
+     }, 2000);
+    }
+   };
+   solveRequest.ontimeout = function() {
+    console.error('Background: CAPTCHA solve request timed out for', request.data.callbackUrl);
+   };
+   solveRequest.send();
+  } else {
+   console.log('Background: CAPTCHA token captured (no JDownloader callback):', request.data.token.substring(0, 20) + '...');
+  }
   sendResponse({ status: 'ok' });
   return true;
  }
@@ -617,21 +747,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (sender.tab) {
    delete activeCaptchaTabs[sender.tab.id];
   }
-  var skipRequest = new XMLHttpRequest();
-  skipRequest.open('GET', request.data.callbackUrl + '&do=skip&skiptype=' + request.data.skipType, true);
-  skipRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-  skipRequest.timeout = 10000;
-  skipRequest.onload = function() {
-   console.log('Background: CAPTCHA skip sent to JDownloader, type:', request.data.skipType);
+  if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
+   // MYJD flow: send tab-closed to my.jdownloader.org tabs
+   chrome.tabs.query({
+    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
+   }, function(tabs) {
+    if (tabs && tabs.length > 0) {
+     for (var i = 0; i < tabs.length; i++) {
+      chrome.tabs.sendMessage(tabs[i].id, {
+       name: 'tab-closed',
+       type: 'myjdrc2',
+       data: { captchaId: request.data.captchaId }
+      }, function() { /* ignore errors */ });
+     }
+    }
+   });
+   // Close sender tab and clean up CSP rule
    if (sender.tab) {
+    removeCspStrippingRule(sender.tab.id);
     setTimeout(function() {
      chrome.tabs.remove(sender.tab.id, function() {
-      if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+      if (chrome.runtime.lastError) { /* ignore */ }
      });
     }, 2000);
    }
-  };
-  skipRequest.send();
+  } else if (request.data.callbackUrl && request.data.callbackUrl !== 'MYJD') {
+   // Localhost flow: send skip via HTTP GET
+   var skipRequest = new XMLHttpRequest();
+   skipRequest.open('GET', request.data.callbackUrl + '&do=skip&skiptype=' + request.data.skipType, true);
+   skipRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+   skipRequest.timeout = 10000;
+   skipRequest.onload = function() {
+    console.log('Background: CAPTCHA skip sent to JDownloader, type:', request.data.skipType);
+    if (sender.tab) {
+     setTimeout(function() {
+      chrome.tabs.remove(sender.tab.id, function() {
+       if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+      });
+     }, 2000);
+    }
+   };
+   skipRequest.send();
+  } else {
+   console.log('Background: CAPTCHA skip captured (no JDownloader callback), type:', request.data.skipType);
+  }
   sendResponse({ status: 'ok' });
   return true;
  }
@@ -696,16 +855,39 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  delete requestQueue[String(tabId)];
  persistQueue();
 
+ // Always clean up CSP rules for closed tabs
+ removeCspStrippingRule(tabId);
+
  // CAPTCHA: send skip on tab close (CAP-07)
  if (activeCaptchaTabs[tabId]) {
   var info = activeCaptchaTabs[tabId];
   delete activeCaptchaTabs[tabId];
-  var httpRequest = new XMLHttpRequest();
-  httpRequest.open('GET', info.callbackUrl + '&do=skip&skiptype=single', true);
-  httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-  httpRequest.timeout = 10000;
-  httpRequest.send();
-  console.log('Background: CAPTCHA tab closed, sent skip(single) for', info.hoster);
+  if (info.callbackUrl === 'MYJD') {
+   // MYJD flow: send tab-closed to my.jdownloader.org tabs
+   chrome.tabs.query({
+    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
+   }, function(tabs) {
+    if (tabs && tabs.length > 0) {
+     for (var i = 0; i < tabs.length; i++) {
+      chrome.tabs.sendMessage(tabs[i].id, {
+       name: 'tab-closed',
+       type: 'myjdrc2',
+       data: { captchaId: info.captchaId }
+      }, function() { /* ignore errors */ });
+     }
+    }
+   });
+   console.log('Background: MYJD CAPTCHA tab closed, sent tab-closed for', info.hoster);
+  } else if (info.callbackUrl) {
+   var httpRequest = new XMLHttpRequest();
+   httpRequest.open('GET', info.callbackUrl + '&do=skip&skiptype=single', true);
+   httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+   httpRequest.timeout = 10000;
+   httpRequest.send();
+   console.log('Background: CAPTCHA tab closed, sent skip(single) for', info.hoster);
+  } else {
+   console.log('Background: CAPTCHA tab closed (no JDownloader callback) for', info.hoster);
+  }
  }
 });
 
