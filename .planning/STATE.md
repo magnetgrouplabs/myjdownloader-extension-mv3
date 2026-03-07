@@ -72,9 +72,10 @@ None currently.
 
 ## Context for Next Session
 
-Phase 2 complete (both plans). All LINK requirements verified end-to-end. Known issue: toolbar sidebar doesn't auto-dismiss after batch send (UI polish, not functional blocker). Phase 3 (Directory History) is next.
-Last session stopped at: Completed 02-02-PLAN.md
+Phase 3 context gathered. Decisions captured: inline clear button, per-device history, case-insensitive dedup with normalization, MRU ordering, max 10 entries, settings toggle to disable. Ready to plan.
+Last session stopped at: Phase 3 context gathered
+Resume file: .planning/phases/03-directory-history/03-CONTEXT.md
 
 ---
 *State initialized: 2026-03-06*
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-07*
