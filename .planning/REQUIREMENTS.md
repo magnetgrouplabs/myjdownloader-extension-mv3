@@ -31,16 +31,16 @@
 
 ### Web Tab CAPTCHA (Cross-Platform Fallback)
 
-- [ ] **CAP-01**: Content script injected on `http://127.0.0.1/*` detects JDownloader CAPTCHA pages via URL path pattern
-- [ ] **CAP-02**: Content script polls `g-recaptcha-response` / `h-captcha-response` textarea for solved tokens (500ms interval)
+- [x] **CAP-01**: Content script injected on `http://127.0.0.1/*` detects JDownloader CAPTCHA pages via URL path pattern
+- [x] **CAP-02**: Content script polls `g-recaptcha-response` / `h-captcha-response` textarea for solved tokens (500ms interval)
 - [ ] **CAP-03**: Solved token is relayed to service worker via `chrome.runtime.sendMessage`
 - [ ] **CAP-04**: Service worker submits token to JDownloader callback URL via HTTP
-- [ ] **CAP-05**: Skip buttons (hoster/package/all/single) injected into CAPTCHA page via content script
-- [ ] **CAP-06**: 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry
+- [x] **CAP-05**: Skip buttons (hoster/package/all/single) injected into CAPTCHA page via content script
+- [x] **CAP-06**: 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry
 - [ ] **CAP-07**: Closing the CAPTCHA tab triggers skip(hoster) via `chrome.tabs.onRemoved`
 - [ ] **CAP-08**: Dual-mode: uses native helper when installed, falls back to web tab when not
 - [ ] **CAP-09**: Rc2Service no longer closes JDownloader's CAPTCHA tab when using web tab mode
-- [ ] **CAP-10**: Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha
+- [x] **CAP-10**: Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha
 
 ### CAPTCHA Testing
 
@@ -109,16 +109,16 @@
 | DIR-03 | Phase 3 | Complete |
 | DIR-04 | Phase 3 | Complete |
 | DIR-05 | Phase 3 | Complete |
-| CAP-01 | Phase 4 | Pending |
-| CAP-02 | Phase 4 | Pending |
+| CAP-01 | Phase 4 | Complete |
+| CAP-02 | Phase 4 | Complete |
 | CAP-03 | Phase 4 | Pending |
 | CAP-04 | Phase 4 | Pending |
-| CAP-05 | Phase 4 | Pending |
-| CAP-06 | Phase 4 | Pending |
+| CAP-05 | Phase 4 | Complete |
+| CAP-06 | Phase 4 | Complete |
 | CAP-07 | Phase 4 | Pending |
 | CAP-08 | Phase 4 | Pending |
 | CAP-09 | Phase 4 | Pending |
-| CAP-10 | Phase 4 | Pending |
+| CAP-10 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Pending |
 | TEST-02 | Phase 5 | Pending |
 | TEST-03 | Phase 5 | Pending |

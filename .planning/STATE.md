@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: Not started
-status: planning
-last_updated: "2026-03-07T17:25:45.750Z"
+current_plan: Plan 1 of 2 complete
+status: executing
+last_updated: "2026-03-07T17:58:21.126Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_plans: 8
+  completed_plans: 7
+  percent: 87
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -18,10 +18,10 @@ progress:
 ## Current Position
 
 **Milestone:** v1.0
-**Active Phase:** 03-directory-history
-**Current Plan:** Not started
-**Status:** Ready to plan
-**Progress:** [██████████] 100%
+**Active Phase:** 04-web-tab-captcha
+**Current Plan:** Plan 1 of 2 complete
+**Status:** Executing
+**Progress:** [████████░░] 87%
 
 ## Phase Status
 
@@ -30,7 +30,7 @@ progress:
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
-| 4. Web Tab CAPTCHA | Not started | Depends on Phase 1 (BUG-02) |
+| 4. Web Tab CAPTCHA | In progress (1/2 plans) | Content script + manifest + tests done; service worker handlers next |
 | 5. CAPTCHA E2E Testing | Not started | Depends on Phase 4 |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
 
@@ -58,6 +58,10 @@ progress:
 | DIRECTORY_HISTORY_ENABLED raw key (not settings_ prefix) | 2026-03-07 | Must match StorageService constant exactly; existing keys use inconsistent prefix |
 | Clear button wipes ALL devices' saveto history | 2026-03-07 | Per DIR-04: clear is global, not per-device |
 | Trailing slash/backslash normalization before dedup | 2026-03-07 | Handles both Unix and Windows path formats |
+| IIFE with var for content script consistency | 2026-03-07 | Matches webinterfaceEnhancer.js style; avoids let/const in content scripts |
+| Event delegation for skip buttons | 2026-03-07 | Single click listener on container, reads dataset.skipType; MV3 CSP compliant |
+| 500ms token polling interval | 2026-03-07 | Balances responsiveness and CPU usage for CAPTCHA token detection |
+| beforeunload cleanup for both intervals | 2026-03-07 | Prevents memory leaks from polling and countdown on tab close |
 
 ## Blockers
 
@@ -73,12 +77,13 @@ None currently.
 | 02 | 01 | 2min | 2 | 2 |
 | 02 | 02 | 5min | 2 | 0 |
 | 03 | 01 | 4min | 2 | 10 |
+| 04 | 01 | 3min | 2 | 3 |
 
 ## Context for Next Session
 
-Phase 3 complete. All DIR requirements (DIR-01 through DIR-05) implemented and verified with 77 passing tests. Ready for Phase 4.
-Last session stopped at: Completed 03-01-PLAN.md
-Resume file: .planning/phases/04-web-tab-captcha/04-CONTEXT.md
+Phase 4 plan 1 complete. Content script, manifest registration, and 36 structural tests done. Plan 04-02 next (service worker handlers, Rc2Service modifications).
+Last session stopped at: Completed 04-01-PLAN.md
+Resume file: None
 
 ---
 *State initialized: 2026-03-06*
