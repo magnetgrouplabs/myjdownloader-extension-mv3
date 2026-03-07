@@ -1,20 +1,45 @@
 (function() {
 'use strict';
 
-// CAP-01: Only activate on JDownloader CAPTCHA URL paths
+// CAP-01: Detect CAPTCHA pages — JDownloader localhost or any site with widgets
 var captchaPathPattern = /\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//;
-if (!captchaPathPattern.test(window.location.pathname)) return;
+var isJdLocalhost = /^http:\/\/127\.0\.0\.1/.test(window.location.href) && captchaPathPattern.test(window.location.pathname);
 
-// Extract metadata from URL
-var pathParts = window.location.pathname.split('/');
-var captchaType = pathParts[2];  // recaptchav2, recaptchav3, or hcaptcha
-var hoster = decodeURIComponent(pathParts[3] || 'Unknown');
-var captchaId = new URLSearchParams(window.location.search).get('id');
-var callbackUrl = window.location.href;
+var captchaType, hoster, captchaId, callbackUrl;
+
+if (isJdLocalhost) {
+    // JDownloader localhost: extract metadata from URL
+    var pathParts = window.location.pathname.split('/');
+    captchaType = pathParts[2];  // recaptchav2, recaptchav3, or hcaptcha
+    hoster = decodeURIComponent(pathParts[3] || 'Unknown');
+    captchaId = new URLSearchParams(window.location.search).get('id');
+    callbackUrl = window.location.href;
+} else {
+    // Any website: detect CAPTCHA widgets by DOM presence
+    var recaptchaEl = document.querySelector('.g-recaptcha, [data-sitekey]');
+    var hcaptchaEl = document.querySelector('.h-captcha');
+    if (!recaptchaEl && !hcaptchaEl) return;
+
+    if (hcaptchaEl) {
+        captchaType = 'hcaptcha';
+    } else if (recaptchaEl && recaptchaEl.getAttribute('data-size') === 'invisible') {
+        captchaType = 'recaptchav3';
+    } else {
+        captchaType = 'recaptchav2';
+    }
+    hoster = window.location.hostname;
+    captchaId = null;
+    callbackUrl = null;
+}
 
 // Interval handles for cleanup
 var pollingHandle = null;
 var countdownHandle = null;
+var canCloseHandle = null;
+
+// JD protocol callback state
+var lastMouseMoveTime = 0;
+var loadedRetries = 0;
 
 // Send captcha-tab-detected message to service worker
 chrome.runtime.sendMessage({
@@ -36,10 +61,18 @@ pollingHandle = startTokenPolling(callbackUrl);
 // CAP-06: Start countdown timer
 startCountdown(callbackUrl);
 
+// JD protocol callbacks (localhost only)
+if (isJdLocalhost) {
+    canCloseHandle = startCanClosePolling(callbackUrl);
+    sendLoadedEvent(callbackUrl);
+    startMouseMoveReporting(callbackUrl);
+}
+
 // Cleanup on unload to prevent memory leaks
 window.addEventListener('beforeunload', function() {
     if (pollingHandle) clearInterval(pollingHandle);
     if (countdownHandle) clearInterval(countdownHandle);
+    if (canCloseHandle) clearInterval(canCloseHandle);
 });
 
 /**
@@ -197,6 +230,90 @@ function startCountdown(callbackUrl) {
             });
         }
     }, 1000);
+}
+
+/**
+ * JD Protocol: canClose polling
+ * Polls JDownloader every 1s to check if CAPTCHA was solved externally.
+ * When JD responds "true", clears all intervals and closes the tab.
+ */
+function startCanClosePolling(callbackUrl) {
+    var handle = setInterval(function() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', callbackUrl + '&do=canClose', true);
+        xhr.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+        xhr.timeout = 5000;
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.responseText === 'true') {
+                clearInterval(canCloseHandle);
+                clearInterval(pollingHandle);
+                clearInterval(countdownHandle);
+                try {
+                    window.close();
+                } catch (e) {
+                    // fallback: ask service worker to close the tab
+                }
+                chrome.runtime.sendMessage({ action: 'captcha-can-close' });
+            }
+        };
+        xhr.send();
+    }, 1000);
+
+    return handle;
+}
+
+/**
+ * JD Protocol: loaded event
+ * Sends window and CAPTCHA element geometry to JDownloader after widget renders.
+ * Retries up to 10 times if CAPTCHA element not yet in DOM.
+ */
+function sendLoadedEvent(callbackUrl) {
+    var el = document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .g-recaptcha, .h-captcha');
+    if (!el) {
+        if (loadedRetries < 10) {
+            loadedRetries++;
+            setTimeout(sendLoadedEvent.bind(null, callbackUrl), 500);
+        }
+        return;
+    }
+
+    var rect = el.getBoundingClientRect();
+    var params = '&do=loaded'
+        + '&x=' + (window.screenX || window.screenLeft || 0)
+        + '&y=' + (window.screenY || window.screenTop || 0)
+        + '&w=' + (window.outerWidth || 0)
+        + '&h=' + (window.outerHeight || 0)
+        + '&vw=' + (window.innerWidth || 0)
+        + '&vh=' + (window.innerHeight || 0)
+        + '&eleft=' + Math.round(rect.left)
+        + '&etop=' + Math.round(rect.top)
+        + '&ew=' + Math.round(rect.width)
+        + '&eh=' + Math.round(rect.height)
+        + '&dpi=' + (window.devicePixelRatio || 1);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', callbackUrl + params, true);
+    xhr.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+    xhr.timeout = 5000;
+    xhr.send();
+}
+
+/**
+ * JD Protocol: mouse-move reporting
+ * Reports user activity to JDownloader (3s throttle) to prevent timeout.
+ */
+function startMouseMoveReporting(callbackUrl) {
+    document.addEventListener('mousemove', function() {
+        var now = Date.now();
+        if (now - lastMouseMoveTime < 3000) return;
+        lastMouseMoveTime = now;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', callbackUrl + '&do=canClose&useractive=true&ts=' + now, true);
+        xhr.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+        xhr.timeout = 5000;
+        xhr.send();
+    });
 }
 
 })();
