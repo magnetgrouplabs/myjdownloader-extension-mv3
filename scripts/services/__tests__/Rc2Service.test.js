@@ -110,12 +110,12 @@ describe('Rc2Service Bug Fixes', () => {
       expect(funcParamMatch[0]).not.toMatch(/CaptchaNativeService/);
     });
 
-    it('onNewCaptchaAvailable should handle MYJD callbackUrl for web interface flow', () => {
+    it('onNewCaptchaAvailable should route MYJD flow through service worker', () => {
       const funcMatch = rc2Source.match(/function\s+onNewCaptchaAvailable\s*\([\s\S]*?\n\s{6}\}/);
       expect(funcMatch).not.toBeNull();
       expect(funcMatch[0]).toMatch(/callbackUrl\s*===\s*['"]MYJD['"]/);
-      expect(funcMatch[0]).toMatch(/chrome\.tabs\.query/);
-      expect(funcMatch[0]).toMatch(/my\.jdownloader\.org/);
+      expect(funcMatch[0]).toMatch(/chrome\.runtime\.sendMessage/);
+      expect(funcMatch[0]).toMatch(/myjd-prepare-captcha-tab/);
     });
 
     it('captchaInProgress variable should NOT exist (dedup no longer needed)', () => {

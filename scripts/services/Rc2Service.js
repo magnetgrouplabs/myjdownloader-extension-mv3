@@ -52,17 +52,23 @@ angular.module('myjdWebextensionApp')
       }
 
       function onWebInterfaceCaptchaJobFound(tab, captchaData, captchaJob) {
-        let params = {};        
-        params.challengeType = captchaData.challengeType || captchaData.type;
-        params.captchaId = captchaData.id;
-        params.hoster = captchaData.hoster;
+        let jobDetails = {
+            captchaId: captchaData.id,
+            captchaType: captchaData.challengeType || captchaData.type,
+            hoster: captchaData.hoster,
+            siteKey: captchaJob.siteKey,
+            siteKeyType: captchaJob.type,
+            v3action: captchaJob.v3Action,
+            targetUrl: captchaJob.siteUrl || captchaJob.contextUrl,
+            callbackUrl: 'MYJD'
+        };
 
-        params.v3action = captchaJob.v3Action;
-        params.siteKey = captchaJob.siteKey;
-        params.siteKeyType = captchaJob.type;      
-        params.finalUrl = captchaJob.siteUrl || captchaJob.contextUrl;
-
-        onNewCaptchaAvailable(tab, "MYJD", params);
+        // Send to service worker to prepare the CAPTCHA tab
+        // (writes session storage, adds CSP rule, navigates tab)
+        chrome.runtime.sendMessage({
+            action: 'myjd-prepare-captcha-tab',
+            data: { tabId: tab, jobDetails: jobDetails }
+        });
       }
 
       function sendRc2SolutionToJd(request, sender) {
@@ -224,29 +230,16 @@ angular.module('myjdWebextensionApp')
       });
 
       function onNewCaptchaAvailable(tabId, callbackUrl, params) {
-        // Web tab mode: content script on the CAPTCHA page handles solving.
-        // This function is only called from the MyJD web interface flow
-        // (webinterfaceEnhancer.js -> captcha-new message), not from localhost tabs.
+        // This function is called from the myjdrc2:captcha-new listener
+        // (webinterfaceEnhancer.js -> captcha-new message).
         // For localhost CAPTCHA pages, the content script auto-activates via manifest.
         console.log('Rc2Service: onNewCaptchaAvailable called for', callbackUrl);
 
         if (callbackUrl === 'MYJD') {
-          // MyJD web interface flow: forward to web interface tabs
-          chrome.tabs.query({
-            url: [
-              "http://my.jdownloader.org/*",
-              "https://my.jdownloader.org/*"
-            ]
-          }, function(tabs) {
-            if (tabs !== undefined && tabs.length > 0) {
-              for (var i = 0; i < tabs.length; i++) {
-                chrome.tabs.sendMessage(tabs[i].id, {
-                  name: "captcha-new",
-                  type: "myjdrc2",
-                  data: { callbackUrl: callbackUrl, params: JSON.stringify(params) }
-                });
-              }
-            }
+          // Route through service worker for MYJD flow
+          chrome.runtime.sendMessage({
+            action: 'myjd-prepare-captcha-tab',
+            data: { tabId: tabId, jobDetails: { ...params, callbackUrl: 'MYJD' } }
           });
         }
         // For localhost callback URLs, the content script on the CAPTCHA tab
