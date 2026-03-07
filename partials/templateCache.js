@@ -526,9 +526,14 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "                                    src=\"/images/saveto.png\"/></label><input\n" +
     "                                ng-value=\"selection.saveto\" ng-model=\"selection.saveto\"\n" +
     "                                id=\"saveto\" name=\"saveto\" type=\"text\" list=\"savetoHistory\">\n" +
-    "                            <datalist id=\"savetoHistory\">\n" +
+    "                            <datalist id=\"savetoHistory\" ng-if=\"directoryHistoryEnabled\">\n" +
     "                                <option ng-repeat=\"entry in history.saveto\" value=\"{{entry}}\">\n" +
     "                            </datalist>\n" +
+    "                            <a ng-if=\"directoryHistoryEnabled && history.saveto.length > 0\"\n" +
+    "                               ng-click=\"clearSavetoHistory()\"\n" +
+    "                               class=\"clear-saveto-btn\"\n" +
+    "                               title=\"Clear directory history\">\n" +
+    "                               <i class=\"fa fa-times\" aria-hidden=\"true\"></i></a>\n" +
     "                        </div>\n" +
     "                        <div>\n" +
     "                            <label title=\"{{'ui_add_links_archive_password' | translate}}\" for=\"archivepw\"><img\n" +

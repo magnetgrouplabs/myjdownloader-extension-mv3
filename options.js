@@ -3,7 +3,8 @@ let api = null;
 const STORAGE_KEYS = {
     CLICKNLOAD_ACTIVE: 'settings_clicknload_active',
     CONTEXT_MENU_SIMPLE: 'settings_context_menu_simple',
-    DEFAULT_PREFERRED_JD: 'settings_default_preferred_jd'
+    DEFAULT_PREFERRED_JD: 'settings_default_preferred_jd',
+    DIRECTORY_HISTORY_ENABLED: 'DIRECTORY_HISTORY_ENABLED'
 };
 
 function showMessage(msg, isError = false) {
@@ -38,7 +39,8 @@ function initApi() {
         'myjd_creds',
         STORAGE_KEYS.CLICKNLOAD_ACTIVE,
         STORAGE_KEYS.CONTEXT_MENU_SIMPLE,
-        STORAGE_KEYS.DEFAULT_PREFERRED_JD
+        STORAGE_KEYS.DEFAULT_PREFERRED_JD,
+        STORAGE_KEYS.DIRECTORY_HISTORY_ENABLED
     ], function(result) {
         if (result.myjd_creds) {
             try {
@@ -57,6 +59,10 @@ function initApi() {
             document.getElementById('context_menu_simple').checked = true;
         }
         
+        if (result[STORAGE_KEYS.DIRECTORY_HISTORY_ENABLED] !== undefined) {
+            document.getElementById('directory_history_enabled').checked = result[STORAGE_KEYS.DIRECTORY_HISTORY_ENABLED];
+        }
+
         if (result[STORAGE_KEYS.DEFAULT_PREFERRED_JD]) {
             document.getElementById('preferred_device').value = result[STORAGE_KEYS.DEFAULT_PREFERRED_JD].id || 'AskEveryTimeDevice';
         }
@@ -135,6 +141,10 @@ document.getElementById('clicknload_active').addEventListener('change', function
 
 document.getElementById('context_menu_simple').addEventListener('change', function() {
     saveSetting(STORAGE_KEYS.CONTEXT_MENU_SIMPLE, this.checked);
+});
+
+document.getElementById('directory_history_enabled').addEventListener('change', function() {
+    saveSetting(STORAGE_KEYS.DIRECTORY_HISTORY_ENABLED, this.checked);
 });
 
 document.getElementById('preferred_device').addEventListener('change', function() {
