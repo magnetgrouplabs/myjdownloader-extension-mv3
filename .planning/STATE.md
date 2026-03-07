@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 current_plan: Not started
 status: planning
-last_updated: "2026-03-07T21:35:14.159Z"
+last_updated: "2026-03-07T23:59:03.063Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 10
+  total_plans: 8
   completed_plans: 10
   percent: 83
 ---
@@ -38,8 +38,7 @@ progress:
 
 | Decision | Date | Context |
 |----------|------|---------|
-| Web tab CAPTCHA as cross-platform fallback | 2026-03-06 | Research validated feasibility; content scripts + MAIN world injection are fully MV3 compliant |
-| Keep native helper as primary CAPTCHA mode | 2026-03-06 | Proven, better UX; web tab is fallback when native not installed |
+| Web tab CAPTCHA via MyJD (same flow as MV2, MV3-compliant) | 2026-03-06 | CAPTCHAs solved in browser tabs through MyJD web interface; native helper abandoned |
 | chrome.storage.session for requestQueue | 2026-03-06 | Transient data; survives SW restart but not browser restart |
 | chrome.storage.local for directory history | 2026-03-06 | Persistent user preference; survives browser restart |
 | HTML5 datalist for directory dropdown | 2026-03-06 | Native autocomplete; no extra JS/AngularJS needed |

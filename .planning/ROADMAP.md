@@ -9,7 +9,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 - [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
 - [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
 - [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
-- [ ] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (same flow as MV2)
+- [x] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (same flow as MV2) (completed 2026-03-07)
 - [ ] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader
 - [ ] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep
 
@@ -73,11 +73,11 @@ Plans:
   5. reCAPTCHA v2, v3, and hCaptcha all function
   6. No countdown timer (old MV2 never had one)
   7. Content scripts only activate on correct URLs (localhost CAPTCHA pages or #rc2jdt hash)
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 04-01-PLAN.md — Fix content scripts: URL gate (BUG 2), remove countdown, hide MyJD skip buttons, update tests + CLAUDE.md
-- [ ] 04-02-PLAN.md — CAPTCHA job polling (BUG 1): offscreen API handler, background alarm coordination, new tab creation
+- [x] 04-01-PLAN.md — Fix content scripts: URL gate (BUG 2), remove countdown, hide MyJD skip buttons, update tests + CLAUDE.md
+- [x] 04-02-PLAN.md — CAPTCHA job polling (BUG 1): offscreen API handler, background alarm coordination, new tab creation
 
 ### Phase 5: CAPTCHA E2E Testing
 **Goal**: Validated confidence that both CAPTCHA flows work end-to-end with a real JDownloader instance
@@ -115,10 +115,10 @@ Plans:
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
-| 4. Web Tab CAPTCHA | 0/2 | Replanned (UAT bugs) | - |
+| 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-07 (Phase 4 replanned from scratch after UAT found critical bugs)*
+*Last updated: 2026-03-07 (Phase 4 complete — verified 7/7 success criteria)*
