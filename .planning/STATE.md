@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: "Phase 4 complete (3/3 plans)"
-status: phase-complete
-last_updated: "2026-03-07T21:03:12Z"
+current_plan: Phase 4 complete (4/4 plans)
+status: completed
+last_updated: "2026-03-07T21:31:25.219Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 10
+  completed_plans: 10
   percent: 83
 ---
 
@@ -19,7 +19,7 @@ progress:
 
 **Milestone:** v1.0
 **Active Phase:** 04-web-tab-captcha
-**Current Plan:** Phase 4 complete (3/3 plans)
+**Current Plan:** Phase 4 complete (4/4 plans)
 **Status:** Phase complete
 **Progress:** [████████░░] 83%
 
@@ -30,7 +30,7 @@ progress:
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
-| 4. Web Tab CAPTCHA | Complete (3/3 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote content script + service worker handlers |
+| 4. Web Tab CAPTCHA | Complete (4/4 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote + service worker handlers + JD protocol callbacks (canClose/loaded/mouse-move) + loginNeeded.html |
 | 5. CAPTCHA E2E Testing | Not started | Depends on Phase 4 |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
 
@@ -73,6 +73,9 @@ progress:
 | Session storage job transfer for MYJD CAPTCHA | 2026-03-07 | Service worker writes myjd_captcha_job, content script reads it |
 | CSP stripping via declarativeNetRequest modifyHeaders | 2026-03-07 | Tab-scoped rules with ID = 10000 + tabId for uniqueness |
 | myjdCaptchaSolver.js DOM replacement with 3 defenses | 2026-03-07 | document.open/close + readystatechange clearDocument + DOMContentLoaded body check |
+| XMLHttpRequest for JD protocol callbacks | 2026-03-07 | Matches IIFE content script style; not fetch; includes X-Myjd-Appkey header |
+| captcha-can-close as fallback after window.close() | 2026-03-07 | Service worker closes tab if window.close fails in content script |
+| loadedRetries max 10 at 500ms for element detection | 2026-03-07 | 5s total wait sufficient for CAPTCHA widget render |
 
 ## Blockers
 
@@ -92,13 +95,14 @@ None currently.
 | 04 | 02 | 4min | 2 | 4 |
 | Phase 04 P02 | 4min | 2 tasks | 4 files |
 | 04 | 03 | 8min | 2 | 8 |
+| 04 | 04 | 2min | 2 | 3 |
 
 ## Context for Next Session
 
-Phase 4 complete (3/3 plans). Dual-flow CAPTCHA architecture fully wired: localhost content script (Plan 01) + service worker handlers (Plan 02) + MYJD remote flow via Rc2Service -> service worker -> content script (Plan 03). 186 tests passing. Note: 3 MV2 parity features (canClose, loaded, mouse-move) apply to localhost flow and were identified in .continue-here.md but are separate from Plan 03's MYJD wiring scope.
-Last session stopped at: Completed 04-03-PLAN.md
-Resume file: .planning/phases/04-web-tab-captcha/04-CONTEXT.md
+Phase 4 complete (4/4 plans). Dual-flow CAPTCHA architecture fully wired with all MV2 parity features: localhost content script (Plan 01) + service worker handlers (Plan 02) + MYJD remote flow (Plan 03) + JD protocol callbacks canClose/loaded/mouse-move + loginNeeded.html (Plan 04). 216 tests passing across 10 suites.
+Last session stopped at: Completed 04-04-PLAN.md
+Resume file: None
 
 ---
 *State initialized: 2026-03-06*
-*Last updated: 2026-03-07T17:08:12Z*
+*Last updated: 2026-03-07T21:29:00Z*
