@@ -1,44 +1,62 @@
 # Phase 4: Web Tab CAPTCHA - Research
 
-**Researched:** 2026-03-07
-**Domain:** Chrome Extension MV3 content scripts, CAPTCHA token detection, tab lifecycle management
+**Researched:** 2026-03-07 (reevaluated for dual-flow architecture: localhost + MYJD remote)
+**Domain:** Chrome Extension MV3 content scripts, CAPTCHA rendering, declarativeNetRequest CSP stripping, MyJDownloader cloud API, dual-flow CAPTCHA architecture
 **Confidence:** HIGH
 
 ## Summary
 
-This phase replaces the native messaging CAPTCHA helper with a web-tab-only approach. JDownloader already serves localhost CAPTCHA pages at `http://127.0.0.1:9666/captcha/{type}/{domain}?id={id}` that render functional reCAPTCHA/hCaptcha widgets via its own `browserCaptcha.js` script. The extension's job is to inject a content script that: (1) polls for solved tokens in `g-recaptcha-response` / `h-captcha-response` textareas, (2) relays tokens to the service worker for HTTP submission to JDownloader, (3) injects skip buttons and a countdown timer, and (4) handles tab-close and timeout scenarios.
+This phase implements CAPTCHA solving via browser tabs using two distinct flows. **Flow A (Localhost)** enhances JDownloader's own CAPTCHA page at `http://127.0.0.1:PORT/captcha/...` with skip buttons, countdown timer, token polling, and JD protocol callbacks (canClose, loaded, mouse-move). **Flow B (MYJD Remote)** is the critical path for users whose JDownloader runs on a NAS/server -- when a CAPTCHA triggers on `my.jdownloader.org`, the extension queries the MYJD API for job details, navigates a new tab to the target domain, and a content script at `document_start` replaces the page DOM to render the CAPTCHA widget MV3-compliantly (no inline scripts).
 
-The approach is fully MV3-compliant and requires no new permissions. All needed permissions (`tabs`, `scripting`, `<all_urls>`, `http://127.0.0.1:9666/*`) are already declared. Content scripts on `http://127.0.0.1/*` match patterns are a core Chrome feature. The ISOLATED world is sufficient for DOM polling and UI injection -- no MAIN world script is needed for the primary flow.
+Plans 04-01 and 04-02 were previously executed covering only Flow A. They must be **replanned from scratch** to incorporate Flow B and ensure both flows share common patterns (skip UI, countdown, token polling) while diverging on their plumbing (HTTP callbacks vs MYJD cloud API, content script injection vs JD-rendered page, CSP handling).
 
-**Primary recommendation:** Build a single content script (`contentscripts/captchaSolverContentscript.js`) registered declaratively in `manifest.json` for `http://127.0.0.1/*`, with runtime URL filtering to only activate on CAPTCHA paths. Modify `Rc2Service.js` to stop closing CAPTCHA tabs and stop routing to `CaptchaNativeService`. Add `chrome.tabs.onRemoved` handler in the service worker for skip-on-close.
+The existing codebase already contains substantial infrastructure for the MYJD flow in `Rc2Service.js` (lines 297-331: `chrome.tabs.onUpdated` listener for `#rc2jdt` detection, `/captcha/getCaptchaJob` + `/captcha/get` API calls, `onWebInterfaceCaptchaJobFound()`). The old MV2 `rc2Contentscript.js` demonstrates the DOM replacement pattern using `document.open()`/`document.close()` and external `<script>` element injection -- this pattern is MV3-compatible when combined with `declarativeNetRequest` CSP header stripping. For invisible/v3 CAPTCHA execution, `chrome.scripting.executeScript({world: 'MAIN'})` is the MV3-compliant replacement for inline `<script>` elements.
+
+**Primary recommendation:** Implement three content scripts (captchaSolverContentscript.js for localhost, myjdCaptchaSolver.js for MYJD remote, webinterfaceEnhancer.js extended for CAPTCHA trigger detection) with a shared UI pattern, coordinated through the service worker via `chrome.storage.session` for job data passing and `declarativeNetRequest` session rules for per-tab CSP stripping.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
-- Web tab is the **sole CAPTCHA path** -- NOT a fallback. Native helper is abandoned.
-- CAP-08 reinterpreted: there is only web tab mode (no native helper detection or dual-mode needed)
+- Web tab is the **sole CAPTCHA path** -- native helper is abandoned
+- No dual-mode detection needed
 - Rc2Service's `handleRequest()` must stop closing the localhost CAPTCHA tab
-- Extension-styled buttons (blue/white color scheme matching the extension's UI)
-- Show hoster name in skip labels for context (e.g., "Skip rapidgator CAPTCHAs")
-- All four skip types available: hoster, package, all, single
-- 5-minute timeout, hardcoded (matches JDownloader's CAPTCHA timeout)
-- Send skip(single) when 5-minute countdown expires
-- Auto-close the CAPTCHA tab after a brief delay (~2 seconds) once token is submitted
-- No success message on solve -- just close
-- Use `chrome.tabs.onRemoved` listener to detect tab closure
+- **Two distinct CAPTCHA flows:**
+  - Flow A: Localhost (JD running locally) -- content script enhances JD's own page
+  - Flow B: MyJD Remote (JD on NAS/server) -- content script renders widget on target domain
+- **Three content scripts:**
+  1. `captchaSolverContentscript.js` -- localhost flow, `document_end`, `*://*/*`
+  2. `myjdCaptchaSolver.js` -- MYJD flow, `document_start`, `*://*/*` (exits if no `#rc2jdt` hash)
+  3. `webinterfaceEnhancer.js` -- detects CAPTCHA triggers on `my.jdownloader.org`
+- All registered statically in `manifest.json`
+- MYJD solver receives CAPTCHA job details via `chrome.storage.session`
+- MYJD CAPTCHA rendering: navigate to target domain, `document.open()`/`document.close()` DOM replacement, external `<script>` elements only (no inline JS)
+- `chrome.scripting.executeScript({world: 'MAIN'})` for reCAPTCHA v3/invisible and hCaptcha execute
+- `declarativeNetRequest` rules to strip CSP headers on MYJD CAPTCHA tabs
+- JD Protocol Callbacks (localhost only): `loaded` event, `canClose` polling (1s), mouse-move reporting (3s throttle)
+- Content script makes HTTP GETs directly for canClose/loaded/mouse-move (not via service worker)
+- `X-Myjd-Appkey: webextension-{version}` header on all localhost callbacks
+- Extension-styled skip buttons (blue/white), all four types, hoster name in labels
+- 5-minute timeout hardcoded, auto-skip(single) on expiry
+- Tab close sends skip, auto-close after solve (~2 seconds, no success message)
+- canClose=true means immediate tab close (no delay, no message)
+- If not connected to MyJD: redirect to `loginNeeded.html`
+- MYJD flow token submitted via myjdDeviceClientFactory `/captcha/solve` API
 
 ### Claude's Discretion
-- Skip button placement (above/below CAPTCHA, floating bar, etc.)
-- Countdown format (mm:ss, text, progress bar)
-- Countdown visual urgency styling
+- Skip button placement
+- Countdown format and urgency styling
 - Tab close skip type (hoster vs single)
-- Content script injection strategy (static manifest vs dynamic chrome.scripting)
+- Content script injection details for MYJD flow
 - Token polling implementation details
+- `loaded` event element detection strategy (find CAPTCHA iframe by known selectors)
 
 ### Deferred Ideas (OUT OF SCOPE)
-- Native helper removal/cleanup -- code can be removed in a future cleanup phase; not blocking web tab implementation
+- Native helper removal/cleanup -- code can be removed in a future cleanup phase
 - CaptchaNativeService.js deprecation -- mark as unused but don't delete during this phase
+- Incognito/privacy CAPTCHA mode -- disabled even in MV2; out of scope
+- MYJD skip via API (`/captcha/skip`) -- old extension had TODO for this; consider in Phase 5 testing
+- Window cleanup on tab close (remove empty windows) -- old extension's `close-me` handler did this; minor UX improvement
 </user_constraints>
 
 <phase_requirements>
@@ -46,16 +64,16 @@ The approach is fully MV3-compliant and requires no new permissions. All needed 
 
 | ID | Description | Research Support |
 |----|-------------|-----------------|
-| CAP-01 | Content script injected on `http://127.0.0.1/*` detects JDownloader CAPTCHA pages via URL path pattern | Declarative manifest content_scripts entry with `http://127.0.0.1/*` match pattern; runtime URL filter in script checks `/captcha/(recaptchav2\|recaptchav3\|hcaptcha)/` path |
-| CAP-02 | Content script polls `g-recaptcha-response` / `h-captcha-response` textarea for solved tokens (500ms interval) | ISOLATED world DOM polling; proven pattern from MV2 extension and 2Captcha/CapSolver extensions |
-| CAP-03 | Solved token is relayed to service worker via `chrome.runtime.sendMessage` | Standard content script to service worker messaging; message format: `{action: 'captcha-solved', token, callbackUrl}` |
-| CAP-04 | Service worker submits token to JDownloader callback URL via HTTP | Reuse existing `sendRc2SolutionToJd()` pattern: `XMLHttpRequest` GET to `callbackUrl + "&do=solve&response=" + token` |
-| CAP-05 | Skip buttons (hoster/package/all/single) injected into CAPTCHA page via content script | DOM element creation with event listeners (no inline handlers); blue/white extension theme; hoster name in labels |
-| CAP-06 | 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry | `setInterval` countdown in content script; sends skip(single) via `chrome.runtime.sendMessage` on expiry |
-| CAP-07 | Closing the CAPTCHA tab triggers skip via `chrome.tabs.onRemoved` | Service worker tracks active CAPTCHA tabs; onRemoved sends skip HTTP request to JDownloader callback URL |
-| CAP-08 | ~~Dual-mode~~ Reinterpreted: web tab is the sole CAPTCHA path | Remove CaptchaNativeService routing from Rc2Service.onNewCaptchaAvailable(); no dual-mode detection needed |
-| CAP-09 | Rc2Service no longer closes JDownloader's CAPTCHA tab | Remove `chrome.tabs.remove(request.tabId)` call from `handleRequest()` |
-| CAP-10 | Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha | Polling covers all types; reCAPTCHA v3 populates `g-recaptcha-response` textarea after `grecaptcha.execute()`; hCaptcha uses `h-captcha-response` |
+| CAP-01 | Content script on `http://127.0.0.1/*` detects CAPTCHA pages via URL path | Existing `captchaSolverContentscript.js` handles this; needs JD protocol callbacks added |
+| CAP-02 | Polls `g-recaptcha-response` / `h-captcha-response` textarea (500ms) | Shared polling pattern between Flow A and Flow B; ISOLATED world DOM access sufficient |
+| CAP-03 | Solved token relayed to service worker via `chrome.runtime.sendMessage` | Standard messaging pattern; Flow A sends `captcha-solved` with callbackUrl, Flow B sends with `captchaId` + `callbackUrl: "MYJD"` |
+| CAP-04 | Service worker submits token to JDownloader callback URL via HTTP | Flow A: HTTP GET to `callbackUrl + "&do=solve&response=TOKEN"`. Flow B: via `myjdDeviceClientFactory.sendRequest("/captcha/solve", ...)` through MyJD cloud API |
+| CAP-05 | Skip buttons (hoster/package/all/single) injected via content script | Shared UI component across both flows; extension-themed blue/white; event delegation |
+| CAP-06 | 5-minute countdown with auto-skip(single) on expiry | Shared between both flows; `setInterval` timer in content script |
+| CAP-07 | Tab close triggers skip via `chrome.tabs.onRemoved` | Flow A: HTTP skip to callbackUrl. Flow B: MYJD `tab-closed` message to webinterfaceEnhancer (existing pattern in Rc2Service `tabmode-init` listener) |
+| CAP-08 | ~~Dual-mode~~ Web tab is sole CAPTCHA path | Remove native helper routing; CaptchaNativeService unused |
+| CAP-09 | Rc2Service no longer closes CAPTCHA tab | Already implemented in current code |
+| CAP-10 | Works with reCAPTCHA v2, v3, hCaptcha | Flow A: JD renders widget, content script polls. Flow B: content script renders widget via external scripts + `chrome.scripting.executeScript({world: 'MAIN'})` for invisible/v3 |
 </phase_requirements>
 
 ## Standard Stack
@@ -63,481 +81,556 @@ The approach is fully MV3-compliant and requires no new permissions. All needed 
 ### Core
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| Chrome Extension APIs | MV3 | Content scripts, tabs, messaging | Core platform; already used throughout codebase |
-| AngularJS | 1.8.3 | Service layer (Rc2Service, ExtensionMessagingService) | Existing framework; services modified in-place |
+| Chrome Extension APIs | MV3 | Content scripts, tabs, messaging, scripting, declarativeNetRequest, storage.session | Core platform; already used throughout codebase |
+| AngularJS | 1.8.3 | Service layer (Rc2Service, myjdDeviceClientFactory, ExtensionMessagingService) | Existing framework; MYJD flow leverages existing API client infrastructure |
 | Jest | 27.5.1 | Unit testing | Already configured in project |
 
 ### Supporting
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| jest-chrome | 0.8.0 | Chrome API mocks | Testing content script messaging |
+| jest-chrome | 0.8.0 | Chrome API mocks | Testing content script messaging, declarativeNetRequest rules |
+| reCAPTCHA JS API | 3.x | CAPTCHA widget rendering | Flow B only -- loaded as external `<script>` from `google.com/recaptcha/api.js` |
+| hCaptcha JS API | 1.x | CAPTCHA widget rendering | Flow B only -- loaded as external `<script>` from `hcaptcha.com/1/api.js` |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| Static manifest content_scripts | Dynamic chrome.scripting.executeScript | Static is simpler, auto-injects on page load; dynamic gives more control but requires service worker to be awake |
-| ISOLATED world polling | MAIN world callback hooking | ISOLATED polling is simpler and sufficient for token detection; MAIN world only needed if JDownloader page structure changes |
-| MutationObserver | setInterval polling | MutationObserver is more elegant but textarea value changes may not trigger mutations; polling is proven and reliable |
+| `declarativeNetRequest` CSP stripping | Page-level meta CSP override | Cannot control meta tags from content scripts; header stripping is cleaner and more reliable |
+| `chrome.storage.session` for job data | URL hash parameters | Hash already used for `#rc2jdt` trigger; session storage supports structured data without URL encoding issues |
+| `document.open()`/`document.close()` | DOM element clearing | `document.open()` is what the old MV2 extension used; fully replaces document including any CSP meta tags; proven pattern |
+| `chrome.scripting.executeScript({world: 'MAIN'})` | `<script>` element with `src` to web_accessible_resource | MAIN world `func` injection is more surgical, avoids web_accessible_resources exposure, no file to maintain |
 
 ## Architecture Patterns
 
 ### Recommended Project Structure
 ```
 contentscripts/
-  captchaSolverContentscript.js    # NEW: CAPTCHA page content script
+  captchaSolverContentscript.js    # Flow A: enhance JD localhost page (MODIFIED: add protocol callbacks)
+  myjdCaptchaSolver.js             # NEW: Flow B: render CAPTCHA on target domain
+  webinterfaceEnhancer.js          # MODIFIED: detect CAPTCHA triggers on my.jdownloader.org
 scripts/services/
-  Rc2Service.js                     # MODIFIED: remove native routing, stop closing tabs
-  CaptchaNativeService.js           # UNCHANGED: mark as deprecated but don't delete
-background.js                       # MODIFIED: add captcha message handlers + tab tracking
-manifest.json                       # MODIFIED: add content_scripts entry
+  Rc2Service.js                    # MODIFIED: MYJD flow orchestration, solution routing
+  CaptchaNativeService.js          # UNCHANGED: mark as deprecated
+background.js                      # MODIFIED: MYJD CAPTCHA handlers, declarativeNetRequest CSP rules, storage.session job data
+manifest.json                      # MODIFIED: add myjdCaptchaSolver entry, declarativeNetRequest permission (already have it)
+loginNeeded.html                   # NEW: simple "please log in" page for unauthenticated MYJD flow
 ```
 
-### Pattern 1: Content Script URL Detection and Activation
-**What:** Content script injected on all `http://127.0.0.1/*` pages, but activates only on CAPTCHA URL paths
-**When to use:** When a broad match pattern is needed but the script should only act on specific pages
-**Example:**
+### Pattern 1: Flow A -- Localhost CAPTCHA Enhancement
+**What:** Content script on JD's localhost CAPTCHA page adds UI enhancements and protocol callbacks
+**When to use:** JDownloader running locally, opens `http://127.0.0.1:PORT/captcha/...`
+**Key behavior:**
+- JD renders the CAPTCHA widget; content script enhances the page
+- Token polling (500ms) for `g-recaptcha-response` / `h-captcha-response`
+- Skip buttons, countdown timer
+- JD protocol callbacks (direct HTTP GETs from content script):
+  - `loaded` event: sends window geometry after CAPTCHA widget renders
+  - `canClose` polling: checks every 1s if CAPTCHA solved elsewhere
+  - Mouse-move reporting: throttled to 3s, reports user activity
+- Token submitted via service worker HTTP GET to callbackUrl
+
+**Example -- canClose polling (direct from content script):**
 ```javascript
-// contentscripts/captchaSolverContentscript.js
+// Content script makes HTTP GETs directly -- fully MV3 compliant
+// (content scripts on http://127.0.0.1 can make XHR to same origin)
+var canCloseHandle = setInterval(function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', callbackUrl + '&do=canClose', true);
+    xhr.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+    xhr.timeout = 5000;
+    xhr.onreadystatechange = function() {
+        if (this.readyState === 4 && this.status === 200) {
+            if (xhr.response === 'true') {
+                clearInterval(canCloseHandle);
+                window.close(); // or just close tab
+            }
+        }
+    };
+    xhr.send();
+}, 1000);
+```
+
+**Example -- loaded event (direct from content script):**
+```javascript
+// Find CAPTCHA widget element and report dimensions
+function sendLoadedEvent() {
+    var element = document.querySelector(
+        'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .g-recaptcha, .h-captcha'
+    );
+    if (!element) return;
+    var bounds = element.getBoundingClientRect();
+    var params = 'x=' + (window.screenX || window.screenLeft)
+        + '&y=' + (window.screenY || window.screenTop)
+        + '&w=' + window.outerWidth + '&h=' + window.outerHeight
+        + '&vw=' + window.innerWidth + '&vh=' + window.innerHeight
+        + '&eleft=' + bounds.left + '&etop=' + bounds.top
+        + '&ew=' + bounds.width + '&eh=' + bounds.height
+        + '&dpi=' + window.devicePixelRatio;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', callbackUrl + '&do=loaded&' + params, true);
+    xhr.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
+    xhr.timeout = 5000;
+    xhr.send();
+}
+```
+
+### Pattern 2: Flow B -- MYJD Remote CAPTCHA Rendering
+**What:** When user triggers CAPTCHA via MYJD web interface, extension creates a new tab on the target domain and renders the CAPTCHA widget MV3-compliantly
+**When to use:** JDownloader running on NAS/server, user on `my.jdownloader.org`
+
+**Complete flow:**
+1. User on `my.jdownloader.org` triggers CAPTCHA (hash `#rc2jdt&c={captchaId}`)
+2. `Rc2Service.js` `chrome.tabs.onUpdated` handler detects the hash (already implemented in current code, lines 297-331)
+3. Rc2Service queries MYJD API: `/captcha/getCaptchaJob` then `/captcha/get` for job details
+4. Service worker writes job details to `chrome.storage.session` (key: `myjd_captcha_job`)
+5. Service worker adds `declarativeNetRequest` session rule to strip CSP for the target tab
+6. Service worker navigates tab to `targetDomain#rc2jdt`
+7. `myjdCaptchaSolver.js` content script (registered at `document_start`, matches `*://*/*`) detects `#rc2jdt` hash
+8. Content script calls `document.open()`/`document.close()` to replace page DOM
+9. Content script reads job details from `chrome.storage.session`
+10. Content script creates external `<script>` elements for reCAPTCHA/hCaptcha API
+11. For invisible/v3: service worker calls `chrome.scripting.executeScript({world: 'MAIN', func: ...})` to execute `grecaptcha.execute()`
+12. Token detected via polling, submitted via `myjdDeviceClientFactory.sendRequest("/captcha/solve", ...)`
+13. Tab auto-closes after 2 seconds
+
+**Example -- service worker prepares MYJD CAPTCHA tab:**
+```javascript
+// In Rc2Service.onWebInterfaceCaptchaJobFound or background.js MYJD handler:
+async function prepareMyjdCaptchaTab(tabId, captchaData, captchaJob) {
+    var jobDetails = {
+        captchaId: captchaData.id,
+        captchaType: captchaData.challengeType || captchaData.type,
+        hoster: captchaData.hoster,
+        siteKey: captchaJob.siteKey,
+        siteKeyType: captchaJob.type, // "NORMAL" or "INVISIBLE"
+        v3action: captchaJob.v3Action,
+        targetUrl: captchaJob.siteUrl || captchaJob.contextUrl,
+        callbackUrl: 'MYJD'
+    };
+
+    // 1. Store job details in session storage
+    await chrome.storage.session.set({ myjd_captcha_job: jobDetails });
+
+    // 2. Add CSP stripping rule for this tab
+    await chrome.declarativeNetRequest.updateSessionRules({
+        addRules: [{
+            id: 10000 + tabId, // unique rule ID per tab
+            priority: 1,
+            action: {
+                type: 'modifyHeaders',
+                responseHeaders: [
+                    { header: 'Content-Security-Policy', operation: 'remove' },
+                    { header: 'Content-Security-Policy-Report-Only', operation: 'remove' },
+                    { header: 'X-Content-Security-Policy', operation: 'remove' }
+                ]
+            },
+            condition: {
+                tabIds: [tabId],
+                resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest']
+            }
+        }]
+    });
+
+    // 3. Navigate to target domain
+    chrome.tabs.update(tabId, { url: jobDetails.targetUrl + '#rc2jdt' });
+}
+```
+
+**Example -- myjdCaptchaSolver.js DOM replacement approach:**
+```javascript
 (function() {
-  'use strict';
+'use strict';
 
-  // Only activate on CAPTCHA pages
-  const captchaPathPattern = /\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//;
-  if (!captchaPathPattern.test(window.location.pathname)) return;
+// Exit immediately if not a CAPTCHA trigger
+if (!location.hash.startsWith('#rc2jdt')) return;
 
-  // Extract metadata from URL
-  const pathParts = window.location.pathname.split('/');
-  // URL format: /captcha/{type}/{siteDomain}?id={id}
-  const captchaType = pathParts[2];  // recaptchav2, recaptchav3, hcaptcha
-  const siteDomain = pathParts[3];   // hoster domain
-  const captchaId = new URLSearchParams(window.location.search).get('id');
-  const callbackUrl = window.location.href;
+// Replace entire page DOM using document.open/close pattern
+// (proven by old MV2 rc2Contentscript.js)
+try {
+    document.open();
+    // Insert minimal placeholder HTML via document.open/close
+    var placeholderHtml = '<html><head><title>JDownloader CAPTCHA</title></head>'
+        + '<body style="margin:0;padding:32px;background:#3c686f;color:#fff;">'
+        + 'Loading CAPTCHA solver...</body></html>';
+    document.close();
+    // Then rebuild DOM using createElement/appendChild
+} catch (e) {
+    console.error('myjdCaptchaSolver: DOM replacement failed', e);
+}
 
-  // ... rest of content script
+// Read job details from session storage
+chrome.storage.session.get('myjd_captcha_job', function(result) {
+    var job = result.myjd_captcha_job;
+    if (!job) {
+        document.body.textContent = 'Error: No CAPTCHA job found';
+        return;
+    }
+    renderCaptchaWidget(job);
+});
+
+function renderCaptchaWidget(job) {
+    // Clear and rebuild DOM using createElement (no inline scripts)
+    while (document.head.firstChild) document.head.removeChild(document.head.firstChild);
+    while (document.body.firstChild) document.body.removeChild(document.body.firstChild);
+
+    var title = document.createElement('title');
+    title.textContent = 'CAPTCHA - ' + (job.hoster || 'JDownloader');
+    document.head.appendChild(title);
+
+    var container = document.createElement('div');
+    container.id = 'captchaContainer';
+    document.body.appendChild(container);
+
+    if (job.captchaType === 'HCaptchaChallenge' || job.captchaType === 'hcaptcha') {
+        var div = document.createElement('div');
+        div.className = 'h-captcha';
+        div.setAttribute('data-sitekey', job.siteKey);
+        container.appendChild(div);
+
+        var script = document.createElement('script');
+        script.src = 'https://hcaptcha.com/1/api.js';
+        document.head.appendChild(script);
+    } else {
+        // reCAPTCHA (v2, v3, enterprise)
+        var div = document.createElement('div');
+        div.className = 'g-recaptcha';
+        div.setAttribute('data-sitekey', job.siteKey);
+        if (job.siteKeyType === 'INVISIBLE') {
+            div.setAttribute('data-size', 'invisible');
+        }
+        container.appendChild(div);
+
+        var script = document.createElement('script');
+        script.src = 'https://www.google.com/recaptcha/api.js';
+        document.head.appendChild(script);
+    }
+
+    // Start token polling, skip buttons, countdown
+    startTokenPolling(job);
+    injectSkipButtons(job);
+    startCountdown(job);
+}
 })();
 ```
 
-### Pattern 2: Token Polling (ISOLATED World)
-**What:** Poll DOM textareas for CAPTCHA solution tokens at 500ms interval
-**When to use:** Detecting when user solves reCAPTCHA or hCaptcha
-**Example:**
+### Pattern 3: chrome.storage.session for Job Data Passing
+**What:** Service worker writes CAPTCHA job details to session storage; content script reads them
+**When to use:** Flow B -- passing structured data from service worker to content script that runs on a different domain
+**Why this approach:** `chrome.storage.session` requires `setAccessLevel('TRUSTED_AND_UNTRUSTED_CONTEXTS')` to be accessible from content scripts. This must be called once at service worker startup. Session storage is transient (cleared on browser restart), which is appropriate for in-flight CAPTCHA jobs.
+
+**Critical setup (required at service worker startup):**
 ```javascript
-// Source: MV2 extension pattern (rc2Contentscript.js ResultPoll) + 2Captcha extension pattern
-function startTokenPolling(callbackUrl) {
-  const POLL_INTERVAL = 500;
-  const pollHandle = setInterval(function() {
-    // reCAPTCHA v2/v3 stores token in textarea#g-recaptcha-response
-    // Note: multiple textareas may exist; check all
-    var textareas = document.querySelectorAll('textarea[id^="g-recaptcha-response"]');
-    for (var i = 0; i < textareas.length; i++) {
-      if (textareas[i].value && textareas[i].value.length > 30) {
-        clearInterval(pollHandle);
-        onTokenFound(textareas[i].value, callbackUrl);
-        return;
-      }
-    }
-
-    // hCaptcha stores token in textarea[name="h-captcha-response"]
-    var hcTextareas = document.querySelectorAll('textarea[name="h-captcha-response"]');
-    for (var j = 0; j < hcTextareas.length; j++) {
-      if (hcTextareas[j].value && hcTextareas[j].value.length > 30) {
-        clearInterval(pollHandle);
-        onTokenFound(hcTextareas[j].value, callbackUrl);
-        return;
-      }
-    }
-  }, POLL_INTERVAL);
-
-  return pollHandle;
-}
-```
-
-### Pattern 3: Content Script to Service Worker Messaging
-**What:** Send CAPTCHA events from content script to background service worker
-**When to use:** Token solved, skip requested, tab detected
-**Example:**
-```javascript
-// Content script sends to service worker
-function onTokenFound(token, callbackUrl) {
-  chrome.runtime.sendMessage({
-    action: 'captcha-solved',
-    data: {
-      token: token,
-      callbackUrl: callbackUrl
-    }
-  });
-}
-
-// Service worker receives and handles
-// In background.js onMessage handler:
-if (action === 'captcha-solved') {
-  var callbackUrl = request.data.callbackUrl;
-  var token = request.data.token;
-  // Submit to JDownloader via HTTP GET
-  var httpRequest = new XMLHttpRequest();
-  httpRequest.open('GET', callbackUrl + '&do=solve&response=' + token, true);
-  httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + version);
-  httpRequest.onload = function() {
-    // Close the CAPTCHA tab after brief delay
-    if (sender && sender.tab) {
-      setTimeout(function() {
-        chrome.tabs.remove(sender.tab.id);
-      }, 2000);
-    }
-  };
-  httpRequest.send();
-  sendResponse({ status: 'ok' });
-  return true;
-}
-```
-
-### Pattern 4: Active CAPTCHA Tab Tracking
-**What:** Service worker maintains a map of active CAPTCHA tab IDs to their callback URLs
-**When to use:** Needed for skip-on-close (CAP-07) and dedup guard
-**Example:**
-```javascript
-// Service worker (background.js)
-let activeCaptchaTabs = {};
-
-// When content script reports a CAPTCHA tab
-if (action === 'captcha-tab-detected') {
-  activeCaptchaTabs[sender.tab.id] = {
-    callbackUrl: request.data.callbackUrl,
-    captchaType: request.data.captchaType,
-    hoster: request.data.hoster,
-    detectedAt: Date.now()
-  };
-  sendResponse({ status: 'ok' });
-  return true;
-}
-
-// When tab is removed -- send skip
-chrome.tabs.onRemoved.addListener(function(tabId) {
-  if (activeCaptchaTabs[tabId]) {
-    var info = activeCaptchaTabs[tabId];
-    // Send skip to JDownloader
-    var httpRequest = new XMLHttpRequest();
-    httpRequest.open('GET', info.callbackUrl + '&do=skip&skiptype=hoster', true);
-    httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + version);
-    httpRequest.send();
-    delete activeCaptchaTabs[tabId];
-  }
+// In background.js, at top level:
+chrome.storage.session.setAccessLevel({
+    accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
 });
 ```
 
+**Quota:** 10 MB (more than sufficient for CAPTCHA job data which is less than 1KB).
+
+### Pattern 4: declarativeNetRequest Session Rules for Per-Tab CSP Stripping
+**What:** Dynamically add/remove CSP header stripping rules scoped to specific tabs
+**When to use:** Flow B only -- target domain may have CSP that blocks Google/Cloudflare reCAPTCHA/hCaptcha scripts
+**Key details:**
+- Session rules support `tabIds` condition (confirmed in Chrome docs) -- this is surgical, not global
+- Maximum 5,000 session rules (far more than needed)
+- Rules added before tab navigation, cleaned up after CAPTCHA completion
+- Must remove `Content-Security-Policy`, `Content-Security-Policy-Report-Only`, and `X-Content-Security-Policy` headers
+- Rule ID strategy: `10000 + tabId` for uniqueness
+
+### Pattern 5: chrome.scripting.executeScript for Invisible CAPTCHA Execution
+**What:** Execute `grecaptcha.execute()` or `hcaptcha.execute()` in the page's MAIN world
+**When to use:** Flow B with invisible/v3 reCAPTCHA or invisible hCaptcha
+**Why needed:** These APIs exist on the page's `window` object, not accessible from ISOLATED world
+**Key constraint:** MAIN world scripts are subject to the page's CSP. Since we strip CSP headers via declarativeNetRequest AND replace the page via `document.open()` (which removes meta CSP), this is not an issue.
+
+```javascript
+// Service worker calls this after reCAPTCHA script loads on the target tab
+chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    world: 'MAIN',
+    func: function(siteKey, v3action) {
+        if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.ready(function() {
+                var opts = { action: 'login' };
+                try { opts = JSON.parse(v3action); } catch(e) {}
+                grecaptcha.execute(siteKey, opts).then(function(token) {
+                    var el = document.getElementById('g-recaptcha-response');
+                    if (el) el.value = token;
+                });
+            });
+        }
+    },
+    args: [job.siteKey, job.v3action || '']
+});
+```
+
+### Pattern 6: webinterfaceEnhancer.js CAPTCHA Trigger Detection
+**What:** Detect CAPTCHA triggers on `my.jdownloader.org` and forward to service worker
+**Current state:** The existing `webinterfaceEnhancer.js` handles ping/pong and routes `myjdrc2` messages. The MYJD CAPTCHA detection is currently handled in `Rc2Service.js` via `chrome.tabs.onUpdated` -- this runs in the offscreen/popup context, not the service worker.
+**Problem:** `Rc2Service.js` runs in AngularJS context (offscreen document), which means it may not be alive when the MYJD web interface triggers a CAPTCHA.
+**Solution:** Move the `#rc2jdt&c=` detection to `background.js` service worker (via `chrome.tabs.onUpdated` listener at top level). This ensures it fires even when the popup/offscreen doc is closed.
+
 ### Anti-Patterns to Avoid
-- **Inline event handlers in injected HTML:** MV3 CSP prohibits `onclick="..."` in content scripts. Use `addEventListener()` instead.
-- **MAIN world script for simple DOM reads:** The ISOLATED world can read `textarea.value` just fine. Only use MAIN world if you need to access page JavaScript objects like `grecaptcha`.
-- **Relying on CaptchaNativeService for token submission:** The web tab flow must bypass native messaging entirely. Use direct HTTP from the service worker.
-- **Polling without cleanup:** Always clear the polling interval on token found, skip, timeout, or tab unload to prevent memory leaks.
-- **Hardcoding port 9666:** JDownloader's port is configurable. Use `window.location.port` in the content script and `http://127.0.0.1/*` (any port) in the match pattern.
+- **Inline `<script>` elements in DOM replacement:** MV3 CSP blocks inline scripts even with CSP headers stripped (if the extension's own CSP applies). Use external `<script src="...">` elements only. For programmatic execution, use `chrome.scripting.executeScript({world: 'MAIN'})`.
+- **Global CSP stripping:** Use `tabIds` condition on declarativeNetRequest rules. Never strip CSP globally.
+- **Relying on Rc2Service in offscreen doc for MYJD detection:** The offscreen doc may not be alive. Service worker must handle the `#rc2jdt` URL detection.
+- **Storing CAPTCHA job in URL hash parameters:** The hash is limited in size and requires encoding. Use `chrome.storage.session` for structured job data.
+- **Using MAIN world for token polling:** Token polling reads textarea values which works fine in ISOLATED world. Only use MAIN world for `grecaptcha.execute()` / `hcaptcha.execute()`.
+- **Forgetting to clean up declarativeNetRequest rules:** Always remove the CSP stripping rule when the CAPTCHA tab closes or completes.
 
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| CAPTCHA rendering | Custom CAPTCHA HTML generation | JDownloader's built-in localhost page | JDownloader already renders functional CAPTCHA widgets via `browserCaptcha.js`; page works standalone |
-| Token submission protocol | Custom HTTP callback format | Existing `callbackUrl + "&do=solve&response=" + token` pattern | Already proven in Rc2Service.sendRc2SolutionToJd() and CaptchaNativeService |
-| Skip HTTP protocol | Custom skip format | Existing `callbackUrl + "&do=skip&skiptype=" + type` pattern | Already proven in Rc2Service.onSkipRequest() |
-| Tab removal detection | Custom polling for closed tabs | `chrome.tabs.onRemoved` event API | Built-in Chrome API, already used in codebase (PopupCandidatesService, background.js) |
-| Extension messaging format | New message protocol | Existing `{action, data}` pattern from background.js | Consistent with all other content script -> service worker messaging in the codebase |
+| CAPTCHA rendering (localhost) | Custom widget rendering | JDownloader's built-in localhost page | JD already renders functional widgets via `browserCaptcha.js` |
+| MYJD API client | New HTTP client for MyJD | Existing `myjdDeviceClientFactory.sendRequest()` | Already handles authentication, encryption, device routing |
+| Tab-scoped CSP removal | Custom request interception | `declarativeNetRequest` session rules with `tabIds` | Built-in Chrome API, surgical per-tab control |
+| MAIN world code execution | `<script>` injection or web_accessible_resources | `chrome.scripting.executeScript({world: 'MAIN'})` | Official MV3 API, no CSP issues, no file exposure |
+| Job data passing to content script | URL parameters, `postMessage` | `chrome.storage.session` | Structured data, no encoding issues, 10MB quota |
+| Tab lifecycle management | Custom polling for tab state | `chrome.tabs.onRemoved` + `chrome.tabs.onUpdated` | Built-in Chrome APIs, already used in codebase |
 
-**Key insight:** JDownloader's localhost page does all the heavy lifting (loading CAPTCHA scripts, rendering widgets, handling Google/hCaptcha domain verification). The content script is an enhancer, not a replacement.
+**Key insight for Flow A:** JDownloader's localhost page renders the CAPTCHA widget. The content script is an enhancer (UI + protocol callbacks), not a renderer.
+**Key insight for Flow B:** The content script IS the renderer -- it must create the CAPTCHA widget HTML, load the external scripts, and handle invisible execution. The `document.open()`/`document.close()` pattern from the old MV2 `rc2Contentscript.js` is the proven approach.
 
 ## Common Pitfalls
 
-### Pitfall 1: reCAPTCHA v3 Token Not Appearing in Textarea
-**What goes wrong:** reCAPTCHA v3 is invisible. The token only appears after `grecaptcha.execute()` is called by the page's JavaScript. If JDownloader's `browserCaptcha.js` does not auto-execute v3, the textarea remains empty.
-**Why it happens:** v3 has no user interaction -- it generates a score-based token programmatically. The page must call `grecaptcha.execute()` explicitly.
-**How to avoid:** JDownloader's page should handle v3 execution via `browserCaptcha.js`. The content script polls the same `g-recaptcha-response` textarea -- v3 populates it identically to v2. If v3 tokens appear without user interaction, the content script will detect them within 500ms. Verify during testing that JDownloader's page auto-executes v3.
-**Warning signs:** Polling runs for the full 5-minute timeout on v3 pages without finding a token.
+### Pitfall 1: chrome.storage.session Not Accessible from Content Scripts
+**What goes wrong:** Content script calls `chrome.storage.session.get()` and gets undefined/error
+**Why it happens:** By default, `chrome.storage.session` is only accessible from TRUSTED_CONTEXTS (extension pages). Content scripts run in UNTRUSTED context.
+**How to avoid:** Call `chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })` once at service worker startup in `background.js`.
+**Warning signs:** myjdCaptchaSolver.js gets empty result from session storage despite service worker writing data.
 
-### Pitfall 2: Multiple CAPTCHA Textareas
-**What goes wrong:** Google may render multiple `g-recaptcha-response` textareas (one per widget instance). Using `getElementById` only finds the first one.
-**Why it happens:** The reCAPTCHA API adds an ID like `g-recaptcha-response-100000` for additional instances.
-**How to avoid:** Use `document.querySelectorAll('textarea[id^="g-recaptcha-response"]')` to find all matching textareas. Same for hCaptcha: `document.querySelectorAll('textarea[name="h-captcha-response"]')`.
-**Warning signs:** Token detection fails on pages with multiple CAPTCHA widgets.
+### Pitfall 2: declarativeNetRequest Rules Not Cleaning Up
+**What goes wrong:** CSP stripping rules accumulate as CAPTCHA tabs open and close
+**Why it happens:** Rules are only removed if explicit cleanup code runs on tab close
+**How to avoid:** Add cleanup in `chrome.tabs.onRemoved` handler: `chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [10000 + tabId] })`. Also clean up on CAPTCHA completion (solve/skip).
+**Warning signs:** Other tabs on the same domain have CSP stripped unexpectedly. Session rule count grows.
 
-### Pitfall 3: Service Worker Terminated During CAPTCHA Solving
-**What goes wrong:** Chrome terminates the service worker after 30 seconds of inactivity. If the user takes 3 minutes to solve a CAPTCHA, the service worker may not be running when the content script sends the solved token.
-**Why it happens:** MV3 service workers have a short idle timeout. The keepAlive alarm (every 4 minutes) may not be sufficient.
-**How to avoid:** `chrome.runtime.sendMessage()` from the content script will automatically wake the service worker. The `activeCaptchaTabs` map will be lost, but `chrome.tabs.onRemoved` listeners registered at the top level of the service worker survive restarts (Chrome re-registers them). For the solved token path, the content script includes the `callbackUrl` in its message, so the service worker doesn't need prior state.
-**Warning signs:** Messages from content script fail with "Could not establish connection" errors.
+### Pitfall 3: document.open() Timing at document_start
+**What goes wrong:** `document.open()` fails or the page's original content still renders
+**Why it happens:** At `document_start`, the DOM is minimal but the browser may still be loading. Some sites use complex redirect chains.
+**How to avoid:** The old MV2 extension used multiple clearing strategies: `document.open()`/`document.close()`, `clearDocument()` on `readystatechange`, and body element removal on `DOMContentLoaded`. Implement all three as defense in depth. The old code in `rc2Contentscript.js` (lines 546-603) demonstrates this.
+**Warning signs:** Original page content flickers before CAPTCHA UI appears.
 
-### Pitfall 4: Callback URL Extraction
-**What goes wrong:** The content script needs the JDownloader callback URL to send skip/solve requests, but it's not obvious how to extract it from the page.
-**Why it happens:** JDownloader's CAPTCHA page URL IS the callback URL (e.g., `http://127.0.0.1:9666/captcha/recaptchav2/domain?id=123`). The `&do=solve&response=TOKEN` and `&do=skip&skiptype=TYPE` parameters are appended to this URL.
-**How to avoid:** Use `window.location.href` as the base callback URL. The URL already contains the `?id=` parameter, so append with `&do=...`.
-**Warning signs:** HTTP requests to JDownloader fail with 404 or unexpected responses.
+### Pitfall 4: reCAPTCHA Domain Validation Failure
+**What goes wrong:** reCAPTCHA widget shows "ERROR for site owner" or refuses to render
+**Why it happens:** reCAPTCHA validates that the site key matches the domain the widget is loaded on. If the content script navigates to the wrong domain, or the domain does not match the site key's registered domains, it fails.
+**How to avoid:** Navigate to the exact domain from `captchaJob.siteUrl || captchaJob.contextUrl` (the URL JDownloader provides). This is the domain the hoster registered with Google. The old MV2 extension did exactly this.
+**Warning signs:** reCAPTCHA renders error instead of challenge.
 
-### Pitfall 5: Content Script Injecting on Non-CAPTCHA Localhost Pages
-**What goes wrong:** The match pattern `http://127.0.0.1/*` also matches JDownloader's other localhost endpoints (e.g., CNL flash/add pages, status pages).
-**Why it happens:** Broad match pattern catches all localhost traffic.
-**How to avoid:** First line of the content script must check `window.location.pathname` against the CAPTCHA URL pattern (`/captcha/(recaptchav2|recaptchav3|hcaptcha)/`). Exit immediately if no match.
-**Warning signs:** Unexpected DOM modifications on non-CAPTCHA localhost pages.
+### Pitfall 5: MYJD API Calls from Service Worker Context
+**What goes wrong:** `myjdDeviceClientFactory` is an AngularJS service -- it cannot be called from the service worker.
+**Why it happens:** The service worker (`background.js`) does not have AngularJS. The factory runs in the offscreen document or popup.
+**How to avoid:** Two approaches: (a) Route the `/captcha/solve` call through the offscreen document (similar to how `add-link` is handled), or (b) Move the MYJD CAPTCHA detection and API calls to Rc2Service (which runs in the AngularJS context). The existing code already has the MYJD detection in Rc2Service -- keep it there but add the `chrome.storage.session` write and `declarativeNetRequest` rule creation as messages to the service worker.
+**Warning signs:** "myjdDeviceClientFactory is not defined" errors in service worker console.
 
-### Pitfall 6: Race Between JDownloader's Own Token Submission and Extension's
-**What goes wrong:** JDownloader's `browserCaptcha.js` may submit the solved token via its own XMLHttpRequest. The extension's content script also detects the token and tells the service worker to submit. Double submission occurs.
-**Why it happens:** Both the page's JS and the extension independently detect the token.
-**How to avoid:** This is benign -- JDownloader accepts the first valid token and ignores duplicates. The extension's primary role after detecting the token is closing the tab. However, the extension should still send the token to confirm the flow works even if `browserCaptcha.js` is not present or fails.
-**Warning signs:** Console logs show two solve requests to the same callback URL. This is harmless.
+### Pitfall 6: Invisible/v3 CAPTCHA Token Not Appearing
+**What goes wrong:** Token polling runs for 5 minutes without finding a token on v3/invisible pages
+**Why it happens:** v3/invisible reCAPTCHA requires explicit `grecaptcha.execute()` call. The content script must trigger this in the MAIN world.
+**How to avoid:** After the reCAPTCHA script loads (detect via `script.onload` or poll for `grecaptcha` on window), use `chrome.scripting.executeScript({world: 'MAIN'})` to call `grecaptcha.execute()`. For hCaptcha invisible, call `hcaptcha.execute()`. The content script sends a message to the service worker requesting MAIN world execution.
+**Warning signs:** CAPTCHA renders but shows no interaction element and token stays empty.
 
-### Pitfall 7: Tab Removed Before Content Script Fully Loads
-**What goes wrong:** If the tab is removed very quickly (before `document_end`), the content script never registers, and the `captcha-tab-detected` message is never sent. The service worker's `onRemoved` handler has no entry in `activeCaptchaTabs` for this tab.
-**Why it happens:** User closes tab immediately, or page navigation fails.
-**How to avoid:** Also listen for CAPTCHA tabs in `Rc2Service.handleRequest()` -- when a tab matching the CAPTCHA URL pattern is detected via `chrome.tabs.onUpdated`, register it in `activeCaptchaTabs` immediately (don't wait for the content script).
-**Warning signs:** Skip-on-close doesn't fire for quickly-closed tabs.
+### Pitfall 7: Service Worker Termination During MYJD Flow
+**What goes wrong:** Service worker terminates while waiting for MYJD API responses or while user solves CAPTCHA
+**Why it happens:** MV3 service workers terminate after 30 seconds of inactivity
+**How to avoid:** The keepAlive alarm (every 4 minutes) helps. For the API call sequence, use `chrome.runtime.sendMessage()` which wakes the service worker. The `chrome.storage.session` persists job data across service worker restarts. The `declarativeNetRequest` session rules also persist.
+**Warning signs:** CAPTCHA flow stalls after service worker restart.
+
+### Pitfall 8: Race Between Rc2Service and background.js for MYJD Detection
+**What goes wrong:** Both `Rc2Service.js` (in offscreen/popup) and `background.js` (service worker) detect the `#rc2jdt` hash, causing duplicate handling
+**Why it happens:** `chrome.tabs.onUpdated` fires in all extension contexts
+**How to avoid:** Keep the primary detection in Rc2Service (it has API access). Have background.js only ensure the offscreen document is alive when it sees the hash pattern. Use a flag in `chrome.storage.session` to prevent double-handling.
+**Warning signs:** Tab navigates twice, duplicate API calls.
+
+## Existing Code Analysis
+
+### Rc2Service.js -- What Already Works
+The current `Rc2Service.js` already contains most of the MYJD flow infrastructure:
+
+1. **MYJD CAPTCHA detection** (lines 297-331): `chrome.tabs.onUpdated` listener detects `#rc2jdt&c={captchaId}` hash, queries `/captcha/getCaptchaJob` then `/captcha/get`, calls `onWebInterfaceCaptchaJobFound()`
+2. **Login check** (line 326): Redirects to `loginNeeded.html` if not connected
+3. **Solution routing** (lines 68-107): `sendRc2SolutionToJd()` has two paths -- localhost HTTP and MYJD message routing through `webinterfaceEnhancer.js`
+4. **canClose polling** (lines 148-165, 177-210): Full implementation via `ExtensionMessagingService` -- but this runs in the AngularJS context
+5. **Mouse-move** (lines 110-116): HTTP GET with throttling
+6. **Loaded event** (lines 118-139): Window geometry reporting
+7. **Tab-close for MYJD** (lines 188-209): Sends `tab-closed` message to `my.jdownloader.org` tabs
+8. **Skip handling** (lines 256-291): Both localhost HTTP and MYJD (has TODO for API skip)
+
+**What needs to change:**
+- The `onNewCaptchaAvailable` currently uses the old MV2 approach (store in `rc2TabUpdateCallbacks`, navigate tab, inject script via `executeScript`). This needs to be replaced with the new Flow B approach (write to session storage, add CSP rule via message to service worker, navigate tab).
+- canClose/loaded/mouse-move for localhost flow should move to the content script (direct HTTP) instead of going through Rc2Service messaging. This is simpler and avoids service worker dependency.
+
+### background.js -- What Already Works
+1. **CAPTCHA tab tracking** (lines 575-645): `activeCaptchaTabs` map, handlers for `captcha-tab-detected`, `captcha-solved`, `captcha-skip`
+2. **Tab close handler** (lines 702-722): Sends skip(single) on tab removal
+3. **declarativeNetRequest** (lines 297-307): Already uses session rules for CNL interceptor -- same pattern for CSP stripping
+
+**What needs to change:**
+- Add MYJD-specific message handlers for the new flow
+- Add `chrome.storage.session.setAccessLevel()` call at startup
+- Add CSP rule management for MYJD CAPTCHA tabs
+- Add handler for `myjd-captcha-execute` message (MAIN world script injection for v3/invisible)
+
+### webinterfaceEnhancer.js -- What Already Works
+1. **Message routing** (lines 46-65): Routes `myjdrc2` messages between chrome runtime and window.postMessage
+2. **Ping/pong** (lines 12-21): Extension detection for my.jdownloader.org
+
+**What needs to change:**
+- The MYJD CAPTCHA trigger detection (`#rc2jdt&c=` hash) currently lives in Rc2Service's `chrome.tabs.onUpdated` handler, which runs in the AngularJS context. This is actually fine because Rc2Service runs when the popup/offscreen document is alive. However, we should ensure the detection also works from the service worker as a fallback.
+
+### manifest.json -- What Needs Adding
+```json
+{
+    "content_scripts": [
+        {
+            "all_frames": false,
+            "js": ["contentscripts/myjdCaptchaSolver.js"],
+            "matches": ["*://*/*"],
+            "run_at": "document_start"
+        }
+    ]
+}
+```
+Note: `declarativeNetRequest` permission is already declared. No new permissions needed.
 
 ## Code Examples
 
-### Content Script: CAPTCHA Page Detection and UI Injection
+### MyJD API Flow -- Getting CAPTCHA Job Details
 ```javascript
-// Source: project pattern from webinterfaceEnhancer.js + research validation document
-(function() {
-  'use strict';
-
-  var captchaPathPattern = /\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//;
-  if (!captchaPathPattern.test(window.location.pathname)) return;
-
-  var pathParts = window.location.pathname.split('/');
-  var captchaType = pathParts[2];
-  var hoster = decodeURIComponent(pathParts[3] || 'Unknown');
-  var captchaId = new URLSearchParams(window.location.search).get('id');
-  var callbackUrl = window.location.href;
-
-  // Notify service worker this tab is a CAPTCHA tab
-  chrome.runtime.sendMessage({
-    action: 'captcha-tab-detected',
-    data: {
-      callbackUrl: callbackUrl,
-      captchaType: captchaType,
-      hoster: hoster,
-      captchaId: captchaId
-    }
-  });
-
-  // Inject skip buttons
-  injectSkipButtons(callbackUrl, hoster);
-
-  // Start token polling
-  startTokenPolling(callbackUrl);
-
-  // Start countdown timer
-  startCountdown(callbackUrl);
-})();
+// Source: existing Rc2Service.js lines 297-331 (already in codebase)
+// This code already works -- shows the API call sequence:
+myjdDeviceClientFactory.get(device)
+    .sendRequest("/captcha/getCaptchaJob", captchaId)
+    .then(function(captchaData) {
+        // captchaData.data = { id, challengeType, type, hoster, ... }
+        if (captchaData && captchaData.data && captchaData.data.id) {
+            return myjdDeviceClientFactory.get(device)
+                .sendRequest("/captcha/get", JSON.stringify(captchaData.data.id), "rawtoken");
+        }
+    })
+    .then(function(captchaJobResponse) {
+        // captchaJobResponse.data = { siteKey, siteUrl, contextUrl, type, v3Action, ... }
+        // type = "NORMAL" or "INVISIBLE"
+        // v3Action = action string for v3 grecaptcha.execute()
+    });
 ```
 
-### Content Script: Skip Button Injection (Extension-Themed)
+### MYJD Solution Submission (existing pattern)
 ```javascript
-function injectSkipButtons(callbackUrl, hoster) {
-  var container = document.createElement('div');
-  container.id = 'myjd-captcha-controls';
-  // Use inline styles since content scripts can inject styles safely
-  container.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:16px auto;max-width:500px;';
-
-  var buttons = [
-    { type: 'hoster', label: 'Skip ' + hoster + ' CAPTCHAs', primary: false },
-    { type: 'package', label: 'Skip Package', primary: false },
-    { type: 'all', label: 'Skip All', primary: false },
-    { type: 'single', label: 'Skip This', primary: false }
-  ];
-
-  buttons.forEach(function(btn) {
-    var el = document.createElement('button');
-    el.textContent = btn.label;
-    el.dataset.skipType = btn.type;
-    el.style.cssText = 'padding:8px 16px;border:1px solid #2196F3;border-radius:4px;' +
-      'background:#fff;color:#2196F3;cursor:pointer;font-size:13px;';
-    container.appendChild(el);
-  });
-
-  container.addEventListener('click', function(e) {
-    var skipType = e.target.dataset.skipType;
-    if (skipType) {
-      chrome.runtime.sendMessage({
-        action: 'captcha-skip',
-        data: { callbackUrl: callbackUrl, skipType: skipType }
-      });
+// Source: existing Rc2Service.sendRc2SolutionToJd lines 86-106
+// For MYJD flow, solution goes through webinterfaceEnhancer to my.jdownloader.org
+// which then calls the MyJD API to submit the token
+chrome.tabs.query({
+    url: ["http://my.jdownloader.org/*", "https://my.jdownloader.org/*"]
+}, function(tabs) {
+    if (tabs && tabs.length > 0) {
+        for (var i = 0; i < tabs.length; i++) {
+            chrome.tabs.sendMessage(tabs[i].id, {
+                name: "response",
+                type: "myjdrc2",
+                data: { captchaId: captchaId, token: token }
+            });
+        }
     }
-  });
-
-  document.body.appendChild(container);
-}
-```
-
-### Content Script: Countdown Timer
-```javascript
-function startCountdown(callbackUrl) {
-  var TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-  var startTime = Date.now();
-
-  var timerEl = document.createElement('div');
-  timerEl.id = 'myjd-countdown';
-  timerEl.style.cssText = 'text-align:center;margin:12px auto;font-size:14px;color:#666;';
-  document.body.appendChild(timerEl);
-
-  var timerHandle = setInterval(function() {
-    var elapsed = Date.now() - startTime;
-    var remaining = Math.max(0, TIMEOUT_MS - elapsed);
-    var minutes = Math.floor(remaining / 60000);
-    var seconds = Math.floor((remaining % 60000) / 1000);
-    timerEl.textContent = 'Time remaining: ' + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-
-    // Visual urgency under 1 minute
-    if (remaining < 60000) {
-      timerEl.style.color = '#f44336';
-      timerEl.style.fontWeight = 'bold';
-    }
-
-    if (remaining <= 0) {
-      clearInterval(timerHandle);
-      timerEl.textContent = 'Timed out - skipping...';
-      chrome.runtime.sendMessage({
-        action: 'captcha-skip',
-        data: { callbackUrl: callbackUrl, skipType: 'single' }
-      });
-    }
-  }, 1000);
-
-  return timerHandle;
-}
-```
-
-### Manifest Entry for Content Script
-```json
-{
-  "content_scripts": [
-    {
-      "matches": ["http://127.0.0.1/*"],
-      "js": ["contentscripts/captchaSolverContentscript.js"],
-      "run_at": "document_end",
-      "all_frames": false
-    }
-  ]
-}
-```
-
-### Service Worker: CAPTCHA Message Handlers (background.js additions)
-```javascript
-// Track active CAPTCHA tabs for skip-on-close
-let activeCaptchaTabs = {};
-
-// In the onMessage listener:
-if (action === 'captcha-tab-detected') {
-  activeCaptchaTabs[sender.tab.id] = {
-    callbackUrl: request.data.callbackUrl,
-    captchaType: request.data.captchaType,
-    hoster: request.data.hoster,
-    detectedAt: Date.now()
-  };
-  sendResponse({ status: 'ok' });
-  return true;
-}
-
-if (action === 'captcha-solved') {
-  // Remove from active tabs
-  if (sender.tab) delete activeCaptchaTabs[sender.tab.id];
-  // Submit token to JDownloader
-  var httpRequest = new XMLHttpRequest();
-  httpRequest.open('GET', request.data.callbackUrl + '&do=solve&response=' + request.data.token, true);
-  httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-  httpRequest.onload = function() {
-    if (sender.tab) {
-      setTimeout(function() { chrome.tabs.remove(sender.tab.id); }, 2000);
-    }
-  };
-  httpRequest.send();
-  sendResponse({ status: 'ok' });
-  return true;
-}
-
-if (action === 'captcha-skip') {
-  // Remove from active tabs
-  if (sender.tab) delete activeCaptchaTabs[sender.tab.id];
-  // Send skip to JDownloader
-  var httpRequest = new XMLHttpRequest();
-  httpRequest.open('GET', request.data.callbackUrl + '&do=skip&skiptype=' + request.data.skipType, true);
-  httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-  httpRequest.onload = function() {
-    if (sender.tab) {
-      setTimeout(function() { chrome.tabs.remove(sender.tab.id); }, 2000);
-    }
-  };
-  httpRequest.send();
-  sendResponse({ status: 'ok' });
-  return true;
-}
-
-// Tab close handler for skip
-chrome.tabs.onRemoved.addListener(function(tabId) {
-  if (activeCaptchaTabs[tabId]) {
-    var info = activeCaptchaTabs[tabId];
-    var httpRequest = new XMLHttpRequest();
-    httpRequest.open('GET', info.callbackUrl + '&do=skip&skiptype=hoster', true);
-    httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-    httpRequest.send();
-    delete activeCaptchaTabs[tabId];
-  }
 });
 ```
 
-### Rc2Service.js Modifications
+### loginNeeded.html
+```html
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MyJDownloader - Login Required</title>
+    <style>
+        body {
+            background-color: #dbf5fb;
+            margin: 0;
+            padding: 32px;
+            font-family: Arial, sans-serif;
+        }
+        .message { font-weight: bold; font-size: 16px; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="message">
+        You need to be logged in with the MyJDownloader Browser extension
+        to solve CAPTCHAs remotely.
+        Click the MyJDownloader icon in your browser toolbar and log in,
+        then try again.
+    </div>
+</body>
+</html>
+```
+
+### DOM Replacement Defense-in-Depth (from old MV2 rc2Contentscript.js)
 ```javascript
-// BEFORE (current code, line 42-51):
-function handleRequest(request) {
-  if (request.url.match(/http:\/\/127\.0\.0\.1:\d+\/captcha\/(recaptchav(2|3)|hcaptcha)\/.*\?id=\d+$/gm) !== null) {
-    chrome.tabs.remove(request.tabId, function() { ... });
-  }
+// The old MV2 extension used multiple strategies to ensure the target page
+// content is fully replaced. This pattern should be replicated:
+
+// Strategy 1: document.open/close at document_start
+// (replaces entire document, removes meta CSP)
+
+// Strategy 2: clearDocument on readystatechange
+function clearDocument() {
+    try {
+        var htmls = document.getElementsByTagName("html");
+        var children = htmls[0].childNodes;
+        for (var i = 0; i < children.length; i++) {
+            var parentElement = children[i];
+            while (parentElement.childElementCount > 0) {
+                parentElement.removeChild(parentElement.lastChild);
+            }
+        }
+    } catch (error) { console.error(error); }
 }
 
-// AFTER (web tab mode -- do NOT close the tab):
-function handleRequest(request) {
-  if (request.url.match(/http:\/\/127\.0\.0\.1:\d+\/captcha\/(recaptchav(2|3)|hcaptcha)\/.*\?id=\d+$/gm) !== null) {
-    // Web tab mode: let the CAPTCHA page stay open
-    // Content script will handle token detection, skip buttons, and tab lifecycle
-    console.log('Rc2Service: CAPTCHA tab detected, letting content script handle:', request.url);
-  }
-}
-
-// BEFORE (onNewCaptchaAvailable, line 253):
-CaptchaNativeService.sendCaptcha(captchaJob).then(...).catch(...)
-
-// AFTER: Remove CaptchaNativeService routing entirely.
-// The content script on the CAPTCHA tab handles everything.
-// onNewCaptchaAvailable is only needed for MYJD web interface flow.
+// Strategy 3: Remove foreign body elements on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    var bodies = document.getElementsByTagName("body");
+    for (var i = 0; i < bodies.length; i++) {
+        if (bodies[i].id !== "myjd-captcha-solver") {
+            bodies[i].parentElement.removeChild(bodies[i]);
+        }
+    }
+});
 ```
 
 ## State of the Art
 
-| Old Approach | Current Approach | When Changed | Impact |
-|--------------|------------------|--------------|--------|
-| Inline `<script>` injection (MV2 CSP) | MAIN world scripts via `world: "MAIN"` | Chrome MV3 (2022+) | Content scripts can access page JS objects without CSP violations |
-| `chrome.extension.isAllowedIncognitoAccess` | `chrome.runtime.isAllowedIncognitoAccess` | MV3 migration | Already handled in Rc2Service |
-| Background pages (always-on) | Service workers (ephemeral) | MV3 | Must handle service worker termination; listeners registered at top level survive restarts |
-| `browserSolverEnhancer.js` + `rc2Contentscript.js` (MV2) | `captchaSolverContentscript.js` (MV3) | This phase | Single content script replaces two MV2 scripts; no inline JS needed |
-| Native messaging to WebView2 binary | Web tab with content script polling | This phase | Cross-platform, zero installation, simpler maintenance |
+| Old Approach (MV2) | Current Approach (MV3) | When Changed | Impact |
+|---------------------|------------------------|--------------|--------|
+| `chrome.tabs.executeScript()` with inline JS | `chrome.scripting.executeScript({world: 'MAIN', func: ...})` | Chrome MV3 (2022+) | No inline JS; function passed as reference |
+| Inline `<script>` elements in DOM | External `<script src="...">` only | Chrome MV3 CSP | Must use `declarativeNetRequest` to strip CSP for external script loading |
+| `chrome.extension.isAllowedIncognitoAccess` | `chrome.runtime.isAllowedIncognitoAccess` | MV3 migration | Already handled |
+| Background pages (always-on) | Service workers (ephemeral) | MV3 | Must handle SW termination; `chrome.storage.session` + `declarativeNetRequest` session rules persist |
+| `browserSolverEnhancer.js` + `rc2Contentscript.js` | `captchaSolverContentscript.js` + `myjdCaptchaSolver.js` | This phase | Separate scripts for separate concerns |
+| `webRequest.onHeadersReceived` for CSP modification | `declarativeNetRequest.updateSessionRules` with `modifyHeaders` | MV3 | Declarative, per-tab scoping via `tabIds` |
+| Native messaging to WebView2 binary | Web tab with content script rendering | This phase | Cross-platform, zero installation |
 
 **Deprecated/outdated:**
-- `CaptchaNativeService.js`: Will be deprecated by this phase (mark as unused, don't delete)
-- `captcha-helper/` directory: Native Rust binary no longer used as CAPTCHA path; cleanup deferred
+- `CaptchaNativeService.js`: Deprecated by this phase (mark unused, do not delete)
+- `captcha-helper/` directory: Native Rust binary no longer used; cleanup deferred
 - `browserSolverEnhancer.js`, `rc2Contentscript.js`, `browser_solver_template.html`: Already removed in prior MV3 migration
+- Old MV2 `rc2TabUpdateCallbacks` approach in Rc2Service: Replace with `chrome.storage.session` approach
 
 ## Open Questions
 
-1. **Does JDownloader's `browserCaptcha.js` auto-execute reCAPTCHA v3?**
-   - What we know: JDownloader's `browserCaptcha.js` handles reCAPTCHA rendering. v3 requires `grecaptcha.execute()` to be called.
-   - What's unclear: Whether `browserCaptcha.js` calls `execute()` automatically for v3 challenges or if it renders an "I'm not a robot" button.
-   - Recommendation: Test manually. If v3 auto-executes, the content script just polls. If not, the content script may need to click a button or inject a MAIN world script to call `grecaptcha.execute()`. The native helper's `html.rs` shows it handles v3 by rendering an invisible button that calls `executeCaptcha()` -- JDownloader's own page likely does something similar.
+1. **Content script XHR from localhost page for protocol callbacks**
+   - What we know: Content scripts have the extension's host permissions, allowing XHR to `<all_urls>`. The old MV2 extension did NOT make direct XHR from content scripts -- it routed through the background page via `ExtensionMessagingService`.
+   - What is unclear: Whether content script XHR to `http://127.0.0.1:PORT` works without CORS issues in MV3 isolated world.
+   - Recommendation: Try direct XHR first (simpler). If CORS blocks it, fall back to routing through service worker via `chrome.runtime.sendMessage`. The context decision says "content script polls callbackUrl directly" so this is the intended approach.
 
-2. **Does JDownloader's page submit tokens via its own XHR?**
-   - What we know: The `browserCaptcha.js` script includes built-in token submission. The page IS designed to work standalone.
-   - What's unclear: Whether the extension should also submit the token (resulting in a benign double-submit) or defer entirely to the page's own submission.
-   - Recommendation: The extension should always submit the token as well. This ensures the flow works even if `browserCaptcha.js` fails. JDownloader ignores duplicate token submissions.
+2. **MYJD API solution submission architecture**
+   - What we know: The existing code routes solutions through `webinterfaceEnhancer.js` on `my.jdownloader.org` tabs. The web interface itself then calls the MYJD API.
+   - What is unclear: Whether we should also implement direct `/captcha/solve` API calls from the extension (bypassing the web interface tab).
+   - Recommendation: Use the existing pattern first (route through webinterfaceEnhancer). This is proven and does not require new API client code in the service worker. The TODO for direct API skip can remain deferred.
 
-3. **Service worker `activeCaptchaTabs` state loss on termination**
-   - What we know: `activeCaptchaTabs` is an in-memory object that is lost when the service worker terminates.
-   - What's unclear: Whether to persist it to `chrome.storage.session`.
-   - Recommendation: Do NOT persist. The content script includes `callbackUrl` in every message, so the service worker doesn't need prior state for the solve/skip paths. For skip-on-close, the `chrome.tabs.onRemoved` handler can fall back to querying for CAPTCHA tabs if `activeCaptchaTabs` is empty. Alternatively, `handleRequest()` in Rc2Service also sees CAPTCHA tabs and could register them via a message to background.js.
+3. **Race condition: Rc2Service `chrome.tabs.onUpdated` vs service worker**
+   - What we know: The `#rc2jdt&c=` detection currently runs in Rc2Service (AngularJS context in popup/offscreen). The service worker may need its own handler as a fallback.
+   - What is unclear: Whether the offscreen document is reliably alive when my.jdownloader.org triggers a CAPTCHA.
+   - Recommendation: Keep the Rc2Service handler as primary (it has `myjdDeviceClientFactory` access). Add a lightweight detection in `background.js` `chrome.tabs.onUpdated` that ensures the offscreen document is alive when it sees `#rc2jdt` patterns. The offscreen doc is created on demand already (via `createOffscreenDocument()`).
 
 ## Validation Architecture
 
@@ -552,16 +645,16 @@ CaptchaNativeService.sendCaptcha(captchaJob).then(...).catch(...)
 ### Phase Requirements to Test Map
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| CAP-01 | Content script detects CAPTCHA URL pattern | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | No -- Wave 0 |
-| CAP-02 | Token polling finds g-recaptcha-response / h-captcha-response | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | No -- Wave 0 |
-| CAP-03 | Token relayed to service worker via chrome.runtime.sendMessage | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | No -- Wave 0 |
-| CAP-04 | Service worker submits token to JDownloader callback URL | unit | `npx jest __tests__/background.test.js -x` | No -- Wave 0 |
-| CAP-05 | Skip buttons injected with correct labels and handlers | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | No -- Wave 0 |
-| CAP-06 | Countdown timer expires and sends skip(single) | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | No -- Wave 0 |
-| CAP-07 | Tab close triggers skip via chrome.tabs.onRemoved | unit | `npx jest __tests__/background.test.js -x` | No -- Wave 0 |
-| CAP-08 | No dual-mode detection; native routing removed | unit (structural) | `npx jest __tests__/Rc2Service.test.js -x` | Yes (needs update) |
-| CAP-09 | handleRequest() no longer closes CAPTCHA tab | unit (structural) | `npx jest __tests__/Rc2Service.test.js -x` | Yes (needs update) |
-| CAP-10 | Works with reCAPTCHA v2, v3, hCaptcha | manual-only | Manual E2E test with JDownloader | N/A (Phase 5) |
+| CAP-01 | Content script detects CAPTCHA URL pattern (localhost) | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes (needs update for protocol callbacks) |
+| CAP-02 | Token polling for g-recaptcha-response / h-captcha-response | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-03 | Token relayed to service worker | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-04 | Service worker submits token (both flows) | unit | `npx jest __tests__/background-captcha.test.js -x` | Partial (needs MYJD flow tests) |
+| CAP-05 | Skip buttons with correct labels and handlers | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-06 | Countdown timer with auto-skip | unit | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-07 | Tab close triggers skip (both flows) | unit | `npx jest __tests__/background-captcha.test.js -x` | Partial (needs MYJD flow tests) |
+| CAP-08 | Web tab is sole path (no native routing) | unit (structural) | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-09 | handleRequest() no longer closes tab | unit (structural) | `npx jest __tests__/captchaSolverContentscript.test.js -x` | Yes |
+| CAP-10 | reCAPTCHA v2, v3, hCaptcha support | manual-only | Manual E2E with JDownloader | N/A (Phase 5) |
 
 ### Sampling Rate
 - **Per task commit:** `npx jest --testPathPattern=__tests__ -x`
@@ -569,37 +662,40 @@ CaptchaNativeService.sendCaptcha(captchaJob).then(...).catch(...)
 - **Phase gate:** Full suite green before `/gsd:verify-work`
 
 ### Wave 0 Gaps
-- [ ] `scripts/services/__tests__/captchaSolverContentscript.test.js` -- covers CAP-01, CAP-02, CAP-03, CAP-05, CAP-06 (source-level structural tests matching project pattern)
-- [ ] `scripts/services/__tests__/background-captcha.test.js` -- covers CAP-04, CAP-07 (service worker captcha message handlers)
-- [ ] Update `scripts/services/__tests__/Rc2Service.test.js` -- covers CAP-08, CAP-09 (structural verification that native routing is removed and tabs not closed)
+- [ ] `scripts/services/__tests__/myjdCaptchaSolver.test.js` -- structural tests for MYJD flow content script (hash detection, DOM replacement, widget rendering)
+- [ ] Update `scripts/services/__tests__/captchaSolverContentscript.test.js` -- add tests for canClose polling, loaded event, mouse-move reporting
+- [ ] `scripts/services/__tests__/background-captcha.test.js` -- needs MYJD flow handlers (CSP rule management, storage.session, MAIN world execution trigger)
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Project source code: `Rc2Service.js`, `CaptchaNativeService.js`, `background.js`, `manifest.json`, `webinterfaceEnhancer.js` -- current implementation patterns
-- Project research: `.planning/research/WEB-TAB-CAPTCHA-VALIDATION.md` -- detailed technical validation of web tab approach
-- Native helper `html.rs` -- shows CAPTCHA HTML structure, skip buttons, v3 handling patterns
-- [Content Scripts - Chrome Developers](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts) -- MV3 content script capabilities, ISOLATED vs MAIN world
-- [Match Patterns - Chrome Developers](https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns) -- `http://127.0.0.1/*` pattern support confirmed
-- [Manifest content_scripts - Chrome Developers](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts) -- Declarative registration with `world` property
-- [reCAPTCHA v3 - Google Developers](https://developers.google.com/recaptcha/docs/v3) -- v3 token via `grecaptcha.execute()`, populates `g-recaptcha-response`
+- Project source code: `Rc2Service.js`, `background.js`, `captchaSolverContentscript.js`, `webinterfaceEnhancer.js`, `manifest.json`, `myjdDeviceClientFactory.js`, `MyjdDeviceService.js`, `MyjdService.js`, `ExtensionMessagingService.js`, `PopupCandidatesService.js`
+- Old MV2 extension source: `rc2Contentscript.js` (full MYJD flow with DOM replacement), `browserSolverEnhancer.js` (localhost enhancement), `webinterfaceEnhancer.js` (message routing), old `Rc2Service.js` (identical MYJD detection logic)
+- [chrome.declarativeNetRequest API](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest) -- session rules with `tabIds`, `modifyHeaders` with `remove`, max 5000 session rules
+- [chrome.storage API](https://developer.chrome.com/docs/extensions/reference/api/storage) -- `session.setAccessLevel('TRUSTED_AND_UNTRUSTED_CONTEXTS')`, 10MB quota
+- [chrome.scripting API](https://developer.chrome.com/docs/extensions/reference/api/scripting) -- `executeScript({world: 'MAIN', func, args})`, Chrome 95+
+- [Content Scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts) -- MAIN world CSP behavior, ISOLATED world CSP
 
 ### Secondary (MEDIUM confidence)
-- [2Captcha Solver extension](https://github.com/rucaptcha/2captcha-solver) -- MV3 content script pattern for CAPTCHA interaction, confirms approach viability
-- [tabs.onRemoved - MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/onRemoved) -- Tab removal event API
-- JDownloader source (GitHub mirror) -- `recaptcha.html` template structure with meta tags, `browserCaptcha.js` behavior
+- [Disable-CSP Extension](https://github.com/lisonge/Disable-CSP) -- confirms declarativeNetRequest CSP removal pattern
+- [reCAPTCHA v3 docs](https://developers.google.com/recaptcha/docs/v3) -- `grecaptcha.execute()` API, token via textarea
+- [hCaptcha docs](https://docs.hcaptcha.com/) -- `hcaptcha.execute()` API, h-captcha-response textarea
 
 ### Tertiary (LOW confidence)
-- reCAPTCHA v3 textarea element naming (`g-recaptcha-response-data-100000`) -- confirmed by Google docs but may vary by version; polling with `querySelectorAll` prefix match handles this
+- Content script XHR to localhost from ISOLATED world -- believed to work due to extension host permissions, but needs runtime verification
 
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH -- All APIs already used in codebase; no new dependencies needed
-- Architecture: HIGH -- Content script pattern well-established in project; polling proven by MV2 extension and third-party extensions
-- Pitfalls: HIGH -- Identified from MV2 codebase analysis, Chrome MV3 service worker behavior, and reCAPTCHA DOM structure
-- Token detection: HIGH -- `g-recaptcha-response` textarea is a stable reCAPTCHA API contract; `h-captcha-response` similarly stable
-- v3 invisible handling: MEDIUM -- JDownloader's `browserCaptcha.js` likely handles it, but needs manual verification
+- Standard stack: HIGH -- All APIs already used in codebase; no new dependencies
+- Architecture (Flow A): HIGH -- Already implemented in 04-01/04-02, just needs protocol callbacks
+- Architecture (Flow B): HIGH -- Old MV2 code provides complete reference implementation; MV3 equivalents confirmed via official docs
+- declarativeNetRequest CSP stripping: HIGH -- Official docs confirm `tabIds` support and `modifyHeaders` remove operation
+- chrome.storage.session access from content scripts: HIGH -- Official docs confirm `setAccessLevel` API
+- chrome.scripting.executeScript MAIN world: HIGH -- Official docs, Chrome 95+, JSON-serializable args
+- MYJD API integration: HIGH -- Existing codebase has complete implementation in Rc2Service
+- document.open()/document.close() at document_start: MEDIUM -- Old MV2 code proves it works, but MV3 behavior needs runtime verification
+- Content script direct XHR for protocol callbacks: MEDIUM -- Should work via host permissions, needs testing
 
 **Research date:** 2026-03-07
 **Valid until:** 2026-04-07 (stable APIs, no fast-moving dependencies)
