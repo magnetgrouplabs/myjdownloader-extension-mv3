@@ -1,142 +1,116 @@
 # Phase 4: Web Tab CAPTCHA - Context
 
-**Gathered:** 2026-03-07 (reevaluated after JDownloader source + MV2 extension review)
+**Gathered:** 2026-03-07 (corrected after reading old MV2 extension source code)
 **Status:** Ready for replanning
 
 <domain>
 ## Phase Boundary
 
-Content script on JDownloader's localhost CAPTCHA page (`http://127.0.0.1:PORT/captcha/...`) that detects CAPTCHA challenges, polls for solved tokens, injects skip buttons and countdown timer, relays results to the service worker, and implements JD protocol callbacks (canClose, loaded, mouse-move). **Additionally**, a separate content script for solving CAPTCHAs via the MyJDownloader web interface when JD runs on a remote machine (NAS, server) — navigates to target domain, renders CAPTCHA widget MV3-compliantly, submits token via MYJD cloud API.
+MV3-compliant reimplementation of the old MV2 extension's CAPTCHA solving. Must be **functionally identical** to the old extension. No new features, no removed features. The old extension has two CAPTCHA trigger paths (localhost and MyJD) that both result in a CAPTCHA widget rendered on the target domain. The user solves it; the token routes back to JDownloader.
 
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### CAPTCHA mode
-- Web tab is the **sole CAPTCHA path** — native helper is abandoned
-- No dual-mode detection needed
-- Rc2Service's `handleRequest()` must stop closing the localhost CAPTCHA tab
+### Core principle
+- **Functionally identical to old MV2 extension, 100% MV3 compliant**
+- Native helper is abandoned — web tab is the sole CAPTCHA path
+- No new features beyond what the old extension did
 
-### Two distinct CAPTCHA flows
+### How the old MV2 extension works (ground truth)
 
-**Flow A: Localhost (JD running locally)**
-- Content script enhances JDownloader's own CAPTCHA page
-- JD renders the CAPTCHA widget; we add skip buttons, countdown, token polling
-- HTTP callbacks to `callbackUrl` for solve/skip/loaded/canClose/mouse-move
-- `X-Myjd-Appkey: webextension-{version}` header on all callbacks
+**Trigger Path A: Localhost (JD running on same machine)**
+1. JD opens a browser tab to `http://127.0.0.1:PORT/captcha/recaptchav2/hoster/?id=123`
+2. `Rc2Service.handleRequest()` detects the localhost URL pattern
+3. Injects `browserSolverEnhancer.js` via `chrome.tabs.executeScript`
+4. `browserSolverEnhancer.js` reads meta tags from JD's page (`sitekey`, `challengeType`, `siteDomain`, `siteUrl`, `v3action`, `enterprise`)
+5. Sends `myjdrc2:captcha-new` with `callbackUrl = localhost URL` and extracted params
+6. `onNewCaptchaAvailable()` stores params in `rc2TabUpdateCallbacks`, navigates tab to `{targetDomain}#rc2jdt`
+7. Tab finishes loading → injects `rc2Contentscript.js` via `chrome.tabs.executeScript`
+8. Content script sends `captcha-get` message, receives `captcha-set` with CAPTCHA data
+9. Clears page DOM, loads `browser_solver_template.html` template, renders CAPTCHA widget
+10. Skip buttons visible (hoster/package/all/cancel)
+11. JD protocol callbacks active: `loaded`, `canClose` polling (1s), `mouse-move` reporting (3s throttle)
+12. Token polling → solved → sends `myjdrc2:response` → `sendRc2SolutionToJd()` sends HTTP GET to localhost `callbackUrl + &do=solve&response=` → tab closes after 2s
 
-**Flow B: MyJD Remote (JD on NAS/server)**
-- User on `my.jdownloader.org` triggers CAPTCHA via `#rc2jdt&c={captchaId}` hash
-- Extension queries MYJD API: `/captcha/getCaptchaJob` then `/captcha/get` for job details
-- Navigates new tab to target domain with `#rc2jdt` hash
-- Content script at `document_start` replaces page DOM, renders CAPTCHA widget (no inline scripts)
-- Token submitted via myjdDeviceClientFactory `/captcha/solve` API (through MyJD cloud)
-- If not connected to MyJD: redirect to `loginNeeded.html` (MV3 compliant)
+**Trigger Path B: MyJD Remote (JD on NAS/server)**
+1. `#rc2jdt&c={captchaId}` appears in a tab URL (from my.jdownloader.org web interface)
+2. `Rc2Service` `chrome.tabs.onUpdated` catches it, extracts captchaId
+3. Checks `myjdClientFactory.get().isConnected()` — if not connected, redirects tab to `loginNeeded.html`
+4. Queries MyJD API: `/captcha/getCaptchaJob` → `/captcha/get` for siteKey, type, targetUrl
+5. `onWebInterfaceCaptchaJobFound()` → `onNewCaptchaAvailable()` with `callbackUrl = "MYJD"`
+6. Same as localhost from step 6: navigates tab to `{targetDomain}#rc2jdt`, injects content script
+7. Content script renders CAPTCHA widget
+8. **Skip buttons HIDDEN** for MyJD flow (`captchaControlsContainer.style = "display:none"`)
+9. **No JD protocol callbacks** for MyJD flow (canClose/loaded/mouse-move only fire when `callbackUrl !== "MYJD"`)
+10. Token polling → solved → sends `myjdrc2:response` → `sendRc2SolutionToJd()` finds my.jdownloader.org tabs → sends `{name: "response", type: "myjdrc2", data: {captchaId, token}}` → `webinterfaceEnhancer.js` relays via `window.postMessage` → web interface sends to JD via cloud API → tab closes after 2s
 
-### JD Protocol Callbacks (localhost flow)
-- **`loaded` event**: Send window geometry (`x, y, w, h, vw, vh, eleft, etop, ew, eh, dpi`) after CAPTCHA widget renders. JD uses for auto-click. Send even though auto-click may not work perfectly through browser tab — it's part of the protocol and signals "CAPTCHA is displayed"
-- **`canClose` polling**: Content script polls `callbackUrl + "&do=canClose"` every 1 second directly (not via service worker). Returns `"true"` when solved elsewhere — close tab immediately (no message, no delay)
-- **Mouse-move reporting**: Match MV2 exactly — 3-second throttle on mousemove events, send `callbackUrl + "&do=canClose&useractive=true&ts=TIMESTAMP"`. Prevents JD from timing out challenges
-- All three are HTTP GETs from the content script directly — fully MV3 compliant
+**Tab close behavior (both flows):**
+- Localhost: `removeRc2CanCloseCheck()` clears canClose polling, sends HTTP skip
+- MyJD: finds my.jdownloader.org tabs, sends `{name: "tab-closed", type: "myjdrc2", data: {captchaId}}`
 
-### Meta tag extraction
-- Extract JD page meta tags for enrichment: `sitekey`, `challengeType`, `challengeId`, `siteDomain`, `siteUrl`
-- Use for better skip button labels, richer logging, future-proofing
-- **Ignore** `enterprise` flag (JD handles widget rendering)
-- **Ignore** `v3action` (JD handles widget rendering)
-- URL path remains primary for CAPTCHA type detection (meta tags are supplementary)
+### What does NOT exist in the old extension
+- No 5-minute countdown timer — **dropped** per user decision
+- No auto-skip on timeout — **dropped** per user decision
+- No CAPTCHA widget detection on arbitrary websites — content script ONLY activates on `#rc2jdt` hash
+- No skip buttons for MyJD flow — hidden in old extension, same here
 
-### Content script architecture
-- **Three scripts, three concerns:**
-  1. `captchaSolverContentscript.js` — localhost flow (enhance JD page). `document_end`, `*://*/*`
-  2. `myjdCaptchaSolver.js` — MYJD flow (render widget on target domain). `document_start`, `*://*/*` — exits immediately if no `#rc2jdt` hash
-  3. `webinterfaceEnhancer.js` — detects CAPTCHA triggers on `my.jdownloader.org` (existing)
-- All registered statically in `manifest.json`
-- MYJD solver receives CAPTCHA job details via `chrome.storage.session` (service worker writes before navigating)
-
-### MYJD CAPTCHA rendering
-- Navigate to target domain (required for reCAPTCHA/hCaptcha origin validation)
-- Content script at `document_start`: replace page DOM via `document.open()`/`document.close()` pattern
-- Load reCAPTCHA/hCaptcha scripts as external `<script>` elements (no inline JS)
-- For reCAPTCHA v3/invisible and hCaptcha execute: use `chrome.scripting.executeScript({world: 'MAIN'})` — explicitly supported in MV3
-- Token polling same as localhost flow (500ms, check textarea values)
-- `declarativeNetRequest` rules to strip CSP headers on MYJD CAPTCHA tabs (some sites block Google/Cloudflare scripts)
-
-### Skip button appearance
-- Extension-styled buttons (blue/white color scheme)
-- Show hoster name in skip labels for context
-- All four skip types: hoster, package, all, single
-
-### Skip button placement
-- Claude's discretion
-
-### Countdown display
-- 5-minute timeout, hardcoded
-- Placement and format at Claude's discretion
-- Visual urgency styling at Claude's discretion
-
-### Auto-skip on timeout
-- Send skip(single) when 5-minute countdown expires
-
-### Tab close behavior
-- Closing CAPTCHA tab sends skip — exact skip type at Claude's discretion
-- `chrome.tabs.onRemoved` listener
-
-### Post-solve behavior
-- Auto-close tab after ~2 seconds once token submitted
-- No success message
+### MV3 compliance changes (how to replicate without CSP violations)
+- `chrome.tabs.executeScript` → `chrome.scripting.executeScript` or static manifest content_scripts
+- Inline `<script>` tag injection (reCAPTCHA/hCaptcha rendering) → external `<script>` elements + `chrome.scripting.executeScript({world: 'MAIN'})` for invisible/v3 execution
+- `webRequestBlocking` CSP stripping → `declarativeNetRequest` modifyHeaders rules
+- Template loading (`browser_solver_template.html` via XHR) → same approach works in MV3 or build DOM programmatically
+- Persistent background page → service worker (already done)
 
 ### Claude's Discretion
-- Skip button placement
-- Countdown format and urgency styling
-- Tab close skip type (hoster vs single)
-- Content script injection details for MYJD flow
-- Token polling implementation details
-- `loaded` event element detection strategy (find CAPTCHA iframe by known selectors)
+- Whether to use one content script or two (user doesn't care, just needs to work)
+- DOM building approach (template file vs programmatic)
+- MV3 implementation details for script injection
+- Token polling interval (old uses 500ms)
+- How to transfer CAPTCHA data to content script (`chrome.storage.session` vs messaging)
 
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-- **User's JD is on a NAS (Unraid)** — localhost CAPTCHA flow does NOT work for their setup. The MYJD remote flow is essential, not optional
-- Hoster name visible in skip UI (extract from URL path or meta tags)
-- Auto-close after solve matches existing behavior (2-second delay)
-- Skip(single) on timeout is less aggressive than skip(hoster) — give each CAPTCHA a chance
-- canClose=true means immediate tab close (no delay, no message)
-- Mouse-move keeps challenges alive on JD side — critical for slow solvers
+- Must be functionally identical to old MV2 extension — "just make sure it functions the same way as the old one did"
+- Both localhost and MyJD flows must work — this is a general-purpose extension, not just for one user's setup
+- Skip buttons: localhost only (hidden for MyJD), matching old behavior
+- JD protocol callbacks (loaded/canClose/mouse-move): localhost only, matching old behavior
+- Auto-close tab after solve (~2 seconds), matching old behavior
+- `loginNeeded.html` shown when CAPTCHA triggers but extension not connected to MyJD
 
 </specifics>
 
 <code_context>
 ## Existing Code Insights
 
-### Reusable Assets
-- `Rc2Service.js:handleRequest()` (line 43): Detects CAPTCHA URL pattern — currently just logs, needs to stay hands-off for localhost flow
-- `Rc2Service.js:sendRc2SolutionToJd()` (line 72): Two-path token submission (localhost HTTP vs MYJD messaging) — reusable for MYJD flow
-- `Rc2Service.js:onRc2FrameLoaded()` (line 118): Has loaded event HTTP call implementation — but content script will handle this directly now
-- `Rc2Service.js:onRc2MouseMove()` (line 110): Has mouse-move HTTP call — but content script will handle directly
-- `Rc2Service.js:checkRc2TabModeCanClose()` (line 148): Has canClose polling — but content script will handle directly
-- `webinterfaceEnhancer.js`: Content script on `my.jdownloader.org` — bridges myjdrc2 messages. Will be extended for MYJD CAPTCHA detection
-- `ExtensionMessagingService`: Message routing framework — still used for MYJD flow communication
-- `myjdDeviceClientFactory`: API client for MyJDownloader cloud — needed for `/captcha/getCaptchaJob`, `/captcha/get`, `/captcha/solve`
-- `background.js` CAPTCHA handlers (lines 575-722): Tab tracking, solve/skip HTTP callbacks, tabs.onRemoved listener
+### Old MV2 Source (reference implementation)
+- Located at: `C:\Users\anthony\AppData\Local\Microsoft\Edge\User Data\Default\Extensions\fbcohnmimjicjdomonkcbcpbpnhggkip\3.3.20_0\`
+- Key files: `Rc2Service.js`, `rc2Contentscript.js`, `browserSolverEnhancer.js`, `webinterfaceEnhancer.js`
+- Template: `res/browser_solver_template.html`
+
+### Current MV3 Code (needs correction)
+- `Rc2Service.js` — Mostly correct but `onNewCaptchaAvailable()` was changed; needs to match old behavior
+- `myjdCaptchaSolver.js` — MyJD flow content script; works but shows skip buttons (should be hidden)
+- `captchaSolverContentscript.js` — Has CAPTCHA detection on arbitrary websites (old extension doesn't do this); needs removal or rework
+- `background.js` — CAPTCHA handlers mostly correct; has countdown/skip logic that should be removed
+- `webinterfaceEnhancer.js` — Unchanged from old extension, correct as-is
 
 ### Established Patterns
-- Content scripts use `chrome.runtime.sendMessage` to communicate with service worker
+- Content scripts use `chrome.runtime.sendMessage` to service worker
 - `ExtensionMessagingService` wraps chrome messaging with service/action routing
-- Tab lifecycle managed via `chrome.tabs.onRemoved`
-- HTTP callbacks to JDownloader use `XMLHttpRequest` with `X-Myjd-Appkey` header
-- `chrome.storage.session` for transient data (requestQueue precedent from Phase 1)
+- HTTP callbacks use `XMLHttpRequest` with `X-Myjd-Appkey` header
+- `chrome.storage.session` for transient data (Phase 1 precedent)
 
 ### Integration Points
-- `manifest.json` content_scripts array: needs new `myjdCaptchaSolver.js` entry at `document_start`
-- `manifest.json` `declarative_net_request`: needs CSP stripping rules for MYJD CAPTCHA tabs
-- `Rc2Service.handleRequest()`: must stay hands-off (not close CAPTCHA tab)
-- `Rc2Service` ExtensionMessagingService listeners: existing myjdrc2 handlers may need updates for new MYJD flow
-- `background.js`: existing captcha-tab-detected/captcha-solved/captcha-skip handlers need to coexist with MYJD flow
-- `webinterfaceEnhancer.js`: needs CAPTCHA job detection logic (detect `#rc2jdt&c=` hash trigger)
+- `manifest.json` content_scripts array
+- `manifest.json` declarative_net_request (CSP stripping)
+- `Rc2Service` — tab update listener, CAPTCHA flow orchestration
+- `background.js` — tab tracking, CAPTCHA message routing
+- `webinterfaceEnhancer.js` — message relay on my.jdownloader.org
 
 </code_context>
 
@@ -144,14 +118,15 @@ Content script on JDownloader's localhost CAPTCHA page (`http://127.0.0.1:PORT/c
 ## Deferred Ideas
 
 - Native helper removal/cleanup — code can be removed in a future cleanup phase
-- CaptchaNativeService.js deprecation — mark as unused but don't delete during this phase
+- CaptchaNativeService.js deprecation — removed from DI but file stays on disk
 - Incognito/privacy CAPTCHA mode — disabled even in MV2; out of scope
-- MYJD skip via API (`/captcha/skip`) — old extension had TODO for this; consider in Phase 5 testing
-- Window cleanup on tab close (remove empty windows) — old extension's `close-me` handler did this; minor UX improvement
+- MYJD skip via API (`/captcha/skip`) — old extension had TODO for this; consider in Phase 5
+- Window cleanup on tab close (old extension's `close-me` handler)
+- Skip buttons for MyJD flow — not in old extension, could be future enhancement
 
 </deferred>
 
 ---
 
 *Phase: 04-web-tab-captcha*
-*Context gathered: 2026-03-07 (reevaluated)*
+*Context gathered: 2026-03-07 (corrected)*
