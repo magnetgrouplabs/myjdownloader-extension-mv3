@@ -50,8 +50,8 @@
 
 ### Settings
 
-- [ ] **SET-01**: CAPTCHA_PRIVACY_MODE setting has a visible UI toggle in the settings page
-- [ ] **SET-02**: DIRECTORY_HISTORY_ENABLED setting has a visible UI toggle in the AngularJS settings page
+- [x] **SET-01**: CAPTCHA_PRIVACY_MODE setting has a visible UI toggle in the settings page
+- [x] **SET-02**: DIRECTORY_HISTORY_ENABLED setting has a visible UI toggle in the AngularJS settings page
 
 ### MV3 Compliance & CWS Submission
 
@@ -135,8 +135,8 @@
 | CWS-06 | Phase 6 | Complete |
 | CWS-07 | Phase 6 | Complete |
 
-| SET-01 | Phase 9 | Pending |
-| SET-02 | Phase 9 | Pending |
+| SET-01 | Phase 9 | Complete |
+| SET-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1 requirements: 37 total

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 1 of 1
+current_plan: 2 of 2
 status: complete
-last_updated: "2026-03-08T17:24:38Z"
+last_updated: "2026-03-08T17:29:37Z"
 progress:
   total_phases: 9
-  completed_phases: 8
-  total_plans: 14
-  completed_plans: 16
-  percent: 84
+  completed_phases: 9
+  total_plans: 15
+  completed_plans: 17
+  percent: 88
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -19,9 +19,9 @@ progress:
 
 **Milestone:** v1.0
 **Active Phase:** 09-settings-audit
-**Current Plan:** 1 of 1 (complete)
+**Current Plan:** 2 of 2 (complete)
 **Status:** Phase complete
-**Progress:** [████████░░] 84%
+**Progress:** [█████████░] 88%
 
 ## Phase Status
 
@@ -34,7 +34,7 @@ progress:
 | 5. CAPTCHA E2E Testing | Complete (2/2 plans) | Code path verification 67/67 PASS; live E2E blocked by JD auto-solve; issue template + README created |
 | 6. MV3 Compliance Audit | Complete (2/2 plans) | Manifest cleanup + compliance report + README migration table + runtime CSP verification |
 | 7. Requirements & Docs Cleanup | Complete (1/1 plans) | Fixed obsolete requirement text (CAP-06, CAP-08, TEST-03, CWS-01, CWS-05) |
-| 9. Settings Audit | Complete (1/1 plans) | Fixed storage key mismatches, deleted dead options page |
+| 9. Settings Audit | Complete (2/2 plans) | Fixed storage key mismatches, deleted dead options page, added missing UI toggles |
 
 ## Key Decisions
 
@@ -112,11 +112,12 @@ None currently.
 | Phase 06 P02 | 1min | 2 tasks | 1 files |
 | 07 | 01 | 2min | 2 | 1 |
 | 09 | 01 | 3min | 2 | 3 |
+| 09 | 02 | 2min | 2 | 3 |
 
 ## Context for Next Session
 
-Phase 9 COMPLETE (1/1 plans). Fixed 4 storage key mismatches in background.js, deleted dead options page. 217 tests pass.
-Last session stopped at: Completed 09-01-PLAN.md
+Phase 9 COMPLETE (2/2 plans). Added CAPTCHA_PRIVACY_MODE and DIRECTORY_HISTORY_ENABLED UI toggles to settings page. 222 tests pass.
+Last session stopped at: Completed 09-02-PLAN.md
 
 ---
 *State initialized: 2026-03-06*
