@@ -148,7 +148,11 @@ Plans:
   1. CAPTCHA_PRIVACY_MODE has a visible toggle in the AngularJS settings page
   2. DIRECTORY_HISTORY_ENABLED has a visible toggle in the AngularJS settings page
   3. All StorageService setting keys have corresponding UI controls
-**Plans:** 0 plans
+**Plans:** 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Storage key audit: fix background.js key mismatches, delete dead options page, update tests
+- [ ] 09-02-PLAN.md — Add missing CAPTCHA_PRIVACY_MODE and DIRECTORY_HISTORY_ENABLED toggles to settings UI
 
 ## Progress
 
@@ -162,8 +166,8 @@ Plans:
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
 | 7. Requirements & Docs Cleanup | 1/1 | Complete | 2026-03-08 |
 | 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
-| 9. Settings Page Audit & Wiring | 0/0 | Pending | - |
+| 9. Settings Page Audit & Wiring | 0/2 | Planned | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-08 (Phase 7 planning)*
+*Last updated: 2026-03-08 (Phase 9 planning)*
