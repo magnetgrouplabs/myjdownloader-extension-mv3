@@ -46,7 +46,7 @@
 
 - [x] **TEST-01**: Manual E2E test script documents full CAPTCHA flow (extension detects -> web tab/native helper -> solve -> token submitted -> download proceeds)
 - [x] **TEST-02**: JDownloader localhost CAPTCHA page validated to render standalone (no extension enhancement needed)
-- [ ] **TEST-03**: Web tab mode tested with reCAPTCHA v2 and hCaptcha (native helper mode removed)
+- [x] **TEST-03**: Web tab mode tested with reCAPTCHA v2 and hCaptcha (native helper mode removed)
 
 ### Settings
 
@@ -126,7 +126,7 @@
 | CAP-10 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Complete |
 | TEST-02 | Phase 5 | Complete |
-| TEST-03 | Phase 8 | Pending |
+| TEST-03 | Phase 8 | Complete |
 | CWS-01 | Phase 6 | Complete |
 | CWS-02 | Phase 6 | Complete |
 | CWS-03 | Phase 6 | Complete |
