@@ -36,9 +36,9 @@
 - [x] **CAP-03**: Solved token is relayed to service worker via `chrome.runtime.sendMessage`
 - [x] **CAP-04**: Service worker submits token to JDownloader callback URL via HTTP
 - [x] **CAP-05**: Skip buttons (hoster/package/all/single) injected into CAPTCHA page via content script
-- [ ] **CAP-06**: 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry
+- [x] **CAP-06**: No countdown timer on CAPTCHA page (old MV2 never had one); tab close triggers skip
 - [x] **CAP-07**: Closing the CAPTCHA tab triggers skip(hoster) via `chrome.tabs.onRemoved`
-- [ ] **CAP-08**: Dual-mode: uses native helper when installed, falls back to web tab when not
+- [x] **CAP-08**: Web tab CAPTCHA solving only — opens browser tab on target domain via MyJD API (native helper abandoned)
 - [x] **CAP-09**: Rc2Service no longer closes JDownloader's CAPTCHA tab when using web tab mode
 - [x] **CAP-10**: Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha
 
@@ -46,7 +46,7 @@
 
 - [x] **TEST-01**: Manual E2E test script documents full CAPTCHA flow (extension detects -> web tab/native helper -> solve -> token submitted -> download proceeds)
 - [x] **TEST-02**: JDownloader localhost CAPTCHA page validated to render standalone (no extension enhancement needed)
-- [ ] **TEST-03**: Both web tab and native helper modes tested with reCAPTCHA v2 and hCaptcha
+- [ ] **TEST-03**: Web tab mode tested with reCAPTCHA v2 and hCaptcha (native helper mode removed)
 
 ### Settings
 
@@ -55,11 +55,11 @@
 
 ### MV3 Compliance & CWS Submission
 
-- [x] **CWS-01**: Every permission has written justification (`<all_urls>`, `nativeMessaging`, `tabs`, `scripting`, `offscreen`, `declarativeNetRequest`)
+- [x] **CWS-01**: Every permission has written justification (`<all_urls>`, `tabs`, `scripting`, `offscreen`, `declarativeNetRequest`)
 - [x] **CWS-02**: Privacy policy created and hosted, covering credential handling, URL data, storage usage
 - [x] **CWS-03**: RequireJS `eval` path audited — confirmed dead or patched to throw
 - [x] **CWS-04**: No CSP violation warnings in any extension page console (popup, toolbar, offscreen)
-- [x] **CWS-05**: Extension description accurately reflects MV3 features including native helper requirement
+- [x] **CWS-05**: Extension description accurately reflects MV3 features (web tab CAPTCHA, no native helper)
 - [x] **CWS-06**: At least 2 screenshots showing core features in CWS listing
 - [x] **CWS-07**: `postMessage` wildcard origins replaced with specific origin strings
 
@@ -119,9 +119,9 @@
 | CAP-03 | Phase 4 | Complete |
 | CAP-04 | Phase 4 | Complete |
 | CAP-05 | Phase 4 | Complete |
-| CAP-06 | Phase 7 | Pending |
+| CAP-06 | Phase 4, 7 | Complete |
 | CAP-07 | Phase 4 | Complete |
-| CAP-08 | Phase 7 | Pending |
+| CAP-08 | Phase 4, 7 | Complete |
 | CAP-09 | Phase 4 | Complete |
 | CAP-10 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Complete |
@@ -145,4 +145,4 @@
 
 ---
 *Requirements defined: 2026-03-06*
-*Last updated: 2026-03-06 after initial definition*
+*Last updated: 2026-03-08 after Phase 7 requirement text cleanup*
