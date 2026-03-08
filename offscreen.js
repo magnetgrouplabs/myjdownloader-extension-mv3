@@ -34,40 +34,65 @@ require(['jdapi'], function(API) {
         return;
     }
 
-    try {
-        api = new API({
-            API_ROOT: "https://api.jdownloader.org",
-            APP_KEY: "myjd_webextension_chrome"
-        });
-        console.log('[Offscreen] API created successfully');
+    // Wait for chrome.storage to be available (race condition on extension reload)
+    function waitForChromeStorage(callback, attempts) {
+        if (chrome && chrome.storage && chrome.storage.local) {
+            callback();
+        } else if (attempts > 0) {
+            setTimeout(function() { waitForChromeStorage(callback, attempts - 1); }, 100);
+        } else {
+            console.warn('[Offscreen] chrome.storage not available, proceeding with localStorage fallback');
+            callback();
+        }
+    }
 
-        // Restore session: put stored session into localStorage so jdapi can find it,
-        // then call api.connect() to let jdapi do a proper reconnection handshake.
-        chrome.storage.local.get(['myjd_session'], function(result) {
-            if (result.myjd_session) {
-                try {
-                    localStorage.setItem("jdapi/src/core/core.js", result.myjd_session);
-                    console.log('[Offscreen] Session data placed in localStorage, connecting...');
-                    api.connect({}).done(function() {
+    waitForChromeStorage(function() {
+        try {
+            api = new API({
+                API_ROOT: "https://api.jdownloader.org",
+                APP_KEY: "myjd_webextension_chrome"
+            });
+            console.log('[Offscreen] API created successfully');
+
+            // Restore session from chrome.storage into localStorage so jdapi can find it,
+            // then call api.connect() to do a proper reconnection handshake.
+            if (chrome && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(['myjd_session'], function(result) {
+                    if (chrome.runtime.lastError) {
+                        console.warn('[Offscreen] Storage read error:', chrome.runtime.lastError.message);
                         isReady = true;
-                        console.log('[Offscreen] Connected successfully via restored session');
-                    }).fail(function(err) {
-                        console.warn('[Offscreen] Session restore connect failed:', err);
+                        return;
+                    }
+                    if (result.myjd_session) {
+                        try {
+                            localStorage.setItem("jdapi/src/core/core.js", result.myjd_session);
+                            console.log('[Offscreen] Session data placed in localStorage, connecting...');
+                            api.connect({}).done(function() {
+                                isReady = true;
+                                console.log('[Offscreen] Connected successfully via restored session');
+                            }).fail(function(err) {
+                                console.warn('[Offscreen] Session restore connect failed:', err);
+                                isReady = true;
+                            });
+                        } catch(e) {
+                            console.error('[Offscreen] Failed to restore session:', e);
+                            isReady = true;
+                        }
+                    } else {
                         isReady = true;
-                    });
-                } catch(e) {
-                    console.error('[Offscreen] Failed to restore session:', e);
-                    isReady = true;
-                }
+                        console.log('[Offscreen] No session to restore');
+                    }
+                });
             } else {
                 isReady = true;
-                console.log('[Offscreen] No session to restore');
+                console.log('[Offscreen] No chrome.storage, using localStorage only');
             }
-        });
-    } catch(e) {
-        console.error('[Offscreen] Failed to create API:', e);
-        console.error('[Offscreen] Error stack:', e.stack);
-    }
+        } catch(e) {
+            console.error('[Offscreen] Failed to create API:', e);
+            console.error('[Offscreen] Error stack:', e.stack);
+            isReady = true;
+        }
+    }, 30);
 }, function(err) {
     console.error('[Offscreen] Failed to load jdapi module:', err);
     console.error('[Offscreen] RequireJS error:', JSON.stringify(err));

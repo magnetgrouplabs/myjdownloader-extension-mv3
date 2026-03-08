@@ -22,7 +22,6 @@ angular.module('myjdWebextensionApp')
             this.SETTINGS_CAPTCHA_PRIVACY_MODE = "CAPTCHA_PRIVACY_MODE";
             this.SETTINGS_DEFAULT_OVERWRITE_PACKAGIZER = "DEFAULT_OVERWRITE_PACKAGIZER";
             this.SETTINGS_CLICKNLOAD_ACTIVE = "CLICKNLOAD_ACTIVE";
-            this.SETTINGS_DIRECTORY_HISTORY_ENABLED = "DIRECTORY_HISTORY_ENABLED";
             this.SaveForLaterDevice = {id: "SaveForLaterDevice", name: "Save for later"};
             this.AskEveryTimeDevice = {id: "AskEveryTimeDevice", name: "Ask every time"};
             this.LastUsedDevice = {id: "LastUsedDevice", name: "Last Used"};
@@ -84,10 +83,6 @@ angular.module('myjdWebextensionApp')
                 },
                 CLICKNLOAD_ACTIVE: {
                     key: StorageService.SETTINGS_CLICKNLOAD_ACTIVE,
-                    defaultValue: true
-                },
-                DIRECTORY_HISTORY_ENABLED: {
-                    key: StorageService.SETTINGS_DIRECTORY_HISTORY_ENABLED,
                     defaultValue: true
                 }
             };

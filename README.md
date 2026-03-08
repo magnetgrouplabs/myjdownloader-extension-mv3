@@ -13,7 +13,6 @@ This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fu
 - **In-page toolbar** — Preview and manage queued links before sending
 - **Click'N'Load (CNL)** — Automatic interception of CNL-enabled sites
 - **CAPTCHA solving** — Solves reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help
-- **Directory history** — Remembers your last 10 download directories
 - **Session persistence** — Stays logged in across browser restarts
 - **Device selection** — Choose which JDownloader instance receives your downloads
 
@@ -22,6 +21,10 @@ This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fu
 The extension connects to JDownloader through the MyJDownloader cloud API. JDownloader can run anywhere — your NAS, a server, or your local machine. As long as it's connected to MyJDownloader, the extension can send links and solve CAPTCHAs for it.
 
 ## CAPTCHA Solving
+
+> **Testing status:** CAPTCHA solving has been verified through code path analysis (67/67 checks passing) and 199 unit tests, but has **not been tested end-to-end with a live JDownloader instance** — JDownloader's built-in solvers handle most CAPTCHAs automatically, making it difficult to trigger the browser extension flow. If you encounter a CAPTCHA that routes to the extension, please [report your experience](../../issues/new?template=captcha-bug-report.yml) whether it works or not. Community testing is how we validate this feature.
+
+### How It Should Work
 
 When JDownloader encounters a CAPTCHA it can't solve automatically, the extension opens a browser tab with the CAPTCHA widget. You solve it, and the token is sent back to JDownloader through MyJDownloader.
 
@@ -46,7 +49,6 @@ When JDownloader encounters a CAPTCHA it can't solve automatically, the extensio
 ### CAPTCHA Tab Features
 
 - **Skip buttons** — Skip this CAPTCHA, skip the hoster, skip the package, or skip all
-- **5-minute countdown** — Auto-skips if you don't solve in time
 - **Tab close = skip** — Closing the tab sends a skip signal to JDownloader
 
 ### JDownloader CAPTCHA Settings
@@ -86,33 +88,6 @@ For non-CAPTCHA bugs, please include:
 - Browser and extension version
 - JDownloader version and connection status
 - Screenshots if applicable
-
-## Development
-
-### Testing
-
-```bash
-npm install
-npx jest
-```
-
-216 unit tests cover service worker handlers, CAPTCHA orchestration, content scripts, and UI controllers.
-
-### Architecture
-
-See [ARCHITECTURE.md](.planning/codebase/ARCHITECTURE.md) for detailed architecture documentation.
-
-### Key Files
-
-| Component | Location |
-|-----------|----------|
-| Service worker | `background.js` |
-| Extension popup | `popup.html` / `popup.js` |
-| CAPTCHA content script | `contentscripts/myjdCaptchaSolver.js` |
-| CAPTCHA orchestration | `scripts/services/Rc2Service.js` |
-| WebInterface bridge | `contentscripts/webinterfaceEnhancer.js` |
-| Add-links toolbar | `toolbar.html` |
-| Offscreen API ops | `offscreen.html` / `offscreen.js` |
 
 ## MV2 to MV3 Migration
 

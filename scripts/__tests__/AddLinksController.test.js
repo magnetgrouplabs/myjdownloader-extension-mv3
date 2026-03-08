@@ -35,68 +35,6 @@ function extractFunction(src, name) {
 
 const sendAddLinkQueriesBody = extractFunction(source, 'sendAddLinkQueries');
 const sendCnlQueriesBody = extractFunction(source, 'sendCnlQueries');
-const addToHistoryBody = extractFunction(source, 'addToHistory');
-const saveOptionsAndHistoryBody = extractFunction(source, 'saveOptionsAndHistory');
-
-describe('AddLinksController - Directory History (DIR-01..05)', () => {
-
-  it('addToHistory function should exist', () => {
-    expect(addToHistoryBody).not.toBeNull();
-  });
-
-  it('addToHistory saveto branch should use toLowerCase() for case-insensitive comparison', () => {
-    expect(addToHistoryBody).toMatch(/toLowerCase\(\)/);
-  });
-
-  it('addToHistory saveto branch should normalize trailing slashes/backslashes', () => {
-    expect(addToHistoryBody).toMatch(/replace\s*\(\s*\/\[.*\\\\.*\].*\/\s*,\s*['"]['"].*\)/);
-  });
-
-  it('addToHistory saveto branch should cap array at 10 entries', () => {
-    const hasCap = /length\s*>\s*10/.test(addToHistoryBody) || /\.length\s*=\s*10/.test(addToHistoryBody);
-    expect(hasCap).toBe(true);
-  });
-
-  it('addToHistory saveto branch should use splice to remove old entry and unshift for MRU', () => {
-    expect(addToHistoryBody).toMatch(/splice/);
-    expect(addToHistoryBody).toMatch(/unshift/);
-  });
-
-  it('addToHistory should preserve original behavior for non-saveto keys ($.inArray)', () => {
-    expect(addToHistoryBody).toMatch(/\$\.inArray/);
-  });
-
-  it('clearSavetoHistory function should exist on $scope', () => {
-    expect(source).toMatch(/\$scope\.clearSavetoHistory\s*=\s*function/);
-  });
-
-  it('clearSavetoHistory should empty saveto array', () => {
-    // Look for pattern setting saveto to empty array
-    const clearFuncMatch = source.match(/clearSavetoHistory\s*=\s*function[\s\S]*?(?=\$scope\.\w+\s*=\s*function|\}\s*;?\s*$)/);
-    expect(clearFuncMatch).not.toBeNull();
-    expect(clearFuncMatch[0]).toMatch(/\.saveto\s*=\s*\[\]/);
-  });
-
-  it('clearSavetoHistory should iterate all device keys in cached history', () => {
-    const clearFuncMatch = source.match(/clearSavetoHistory\s*=\s*function[\s\S]*?(?=\$scope\.\w+\s*=\s*function|\}\s*;?\s*$)/);
-    expect(clearFuncMatch).not.toBeNull();
-    expect(clearFuncMatch[0]).toMatch(/Object\.keys/);
-  });
-
-  it('clearSavetoHistory should persist via storageService.set with ADD_LINK_CACHED_HISTORY', () => {
-    const clearFuncMatch = source.match(/clearSavetoHistory\s*=\s*function[\s\S]*?(?=\$scope\.\w+\s*=\s*function|\}\s*;?\s*$)/);
-    expect(clearFuncMatch).not.toBeNull();
-    expect(clearFuncMatch[0]).toMatch(/storageService\.set.*ADD_LINK_CACHED_HISTORY/s);
-  });
-
-  it('saveOptionsAndHistory saveto section should be guarded by directoryHistoryEnabled', () => {
-    expect(saveOptionsAndHistoryBody).toMatch(/directoryHistoryEnabled/);
-  });
-
-  it('source should read DIRECTORY_HISTORY_ENABLED setting', () => {
-    expect(source).toMatch(/SETTINGS_DIRECTORY_HISTORY_ENABLED|DIRECTORY_HISTORY_ENABLED/);
-  });
-});
 
 describe('AddLinksController - Batch Send Refactor', () => {
 

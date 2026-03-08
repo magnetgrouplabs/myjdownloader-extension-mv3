@@ -44,7 +44,12 @@ angular.module('myjdWebextensionApp')
                 }
             });
             promise.catch(function (e) {
-                console.error("ExtensionMessagingService: Failed to send message " + JSON.stringify(e));
+                // "Not logged in" is expected state, not an error
+                if (e === "Not logged in" || e === "API not initialized") {
+                    console.log("ExtensionMessagingService: " + JSON.stringify(e));
+                } else {
+                    console.error("ExtensionMessagingService: Failed to send message " + JSON.stringify(e));
+                }
             });
             return promise;
         };

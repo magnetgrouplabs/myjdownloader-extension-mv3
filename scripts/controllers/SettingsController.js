@@ -44,7 +44,6 @@ angular.module('myjdWebextensionApp')
         $scope.settings[$scope.settingsKeys.COUNTDOWN_VALUE.key] = $scope.settingsKeys[$scope.settingsKeys.COUNTDOWN_VALUE.key].defaultValue;
         $scope.settings[$scope.settingsKeys.CLICKNLOAD_ACTIVE.key] = $scope.settingsKeys[$scope.settingsKeys.CLICKNLOAD_ACTIVE.key].defaultValue;
         $scope.settings[$scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key] = $scope.settingsKeys[$scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key].defaultValue;
-        $scope.settings[$scope.settingsKeys.DIRECTORY_HISTORY_ENABLED.key] = $scope.settingsKeys[$scope.settingsKeys.DIRECTORY_HISTORY_ENABLED.key].defaultValue;
 
         initSettings();
 
@@ -143,7 +142,6 @@ angular.module('myjdWebextensionApp')
             "settings." + $scope.settingsKeys.DEFAULT_AUTOSTART.key,
             "settings." + $scope.settingsKeys.DEFAULT_AUTOEXTRACT.key,
             "settings." + $scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key,
-            "settings." + $scope.settingsKeys.DIRECTORY_HISTORY_ENABLED.key,
             "settings." + $scope.settingsKeys.CLICKNLOAD_ACTIVE.key,
             "settings." + $scope.settingsKeys.DEFAULT_OVERWRITE_PACKAGIZER.key],
             function (newValues, oldValues, scope) {
@@ -176,11 +174,6 @@ angular.module('myjdWebextensionApp')
                 changes.push({
                     key: $scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key,
                     value: scope.settings[$scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key]
-                });
-
-                changes.push({
-                    key: $scope.settingsKeys.DIRECTORY_HISTORY_ENABLED.key,
-                    value: scope.settings[$scope.settingsKeys.DIRECTORY_HISTORY_ENABLED.key]
                 });
 
                 changes.push({
