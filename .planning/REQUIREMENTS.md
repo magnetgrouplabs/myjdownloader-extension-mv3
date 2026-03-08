@@ -44,8 +44,8 @@
 
 ### CAPTCHA Testing
 
-- [ ] **TEST-01**: Manual E2E test script documents full CAPTCHA flow (extension detects -> web tab/native helper -> solve -> token submitted -> download proceeds)
-- [ ] **TEST-02**: JDownloader localhost CAPTCHA page validated to render standalone (no extension enhancement needed)
+- [x] **TEST-01**: Manual E2E test script documents full CAPTCHA flow (extension detects -> web tab/native helper -> solve -> token submitted -> download proceeds)
+- [x] **TEST-02**: JDownloader localhost CAPTCHA page validated to render standalone (no extension enhancement needed)
 - [ ] **TEST-03**: Both web tab and native helper modes tested with reCAPTCHA v2 and hCaptcha
 
 ### MV3 Compliance & CWS Submission
@@ -119,8 +119,8 @@
 | CAP-08 | Phase 4 | Complete |
 | CAP-09 | Phase 4 | Complete |
 | CAP-10 | Phase 4 | Complete |
-| TEST-01 | Phase 5 | Pending |
-| TEST-02 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Complete |
+| TEST-02 | Phase 5 | Complete |
 | TEST-03 | Phase 5 | Pending |
 | CWS-01 | Phase 6 | Pending |
 | CWS-02 | Phase 6 | Pending |
