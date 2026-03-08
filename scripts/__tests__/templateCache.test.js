@@ -35,6 +35,35 @@ describe('templateCache - Directory History UI (DIR-01, DIR-04)', () => {
   });
 });
 
+const settingsSource = fs.readFileSync(
+  path.join(__dirname, '..', 'controllers', 'SettingsController.js'), 'utf8'
+);
+
+describe('Settings Toggles (SET-01, SET-02)', () => {
+
+  it('templateCache contains CAPTCHA_PRIVACY_MODE checkbox with correct ng-model', () => {
+    expect(source).toMatch(/id=.*captcha_privacy_mode/);
+    expect(source).toMatch(/ng-model=.*settingsKeys\.CAPTCHA_PRIVACY_MODE\.key/);
+  });
+
+  it('templateCache contains DIRECTORY_HISTORY_ENABLED checkbox with correct ng-model', () => {
+    expect(source).toMatch(/id=.*directory_history_enabled/);
+    expect(source).toMatch(/ng-model=.*settingsKeys\.DIRECTORY_HISTORY_ENABLED\.key/);
+  });
+
+  it('SettingsController initializes CAPTCHA_PRIVACY_MODE in $scope.settings', () => {
+    expect(settingsSource).toMatch(/\$scope\.settings\[\$scope\.settingsKeys\.CAPTCHA_PRIVACY_MODE\.key\]\s*=\s*\$scope\.settingsKeys\[\$scope\.settingsKeys\.CAPTCHA_PRIVACY_MODE\.key\]\.defaultValue/);
+  });
+
+  it('SettingsController initializes DIRECTORY_HISTORY_ENABLED in $scope.settings', () => {
+    expect(settingsSource).toMatch(/\$scope\.settings\[\$scope\.settingsKeys\.DIRECTORY_HISTORY_ENABLED\.key\]\s*=\s*\$scope\.settingsKeys\[\$scope\.settingsKeys\.DIRECTORY_HISTORY_ENABLED\.key\]\.defaultValue/);
+  });
+
+  it('SettingsController has DIRECTORY_HISTORY_ENABLED in $watchGroup', () => {
+    expect(settingsSource).toMatch(/settingsKeys\.DIRECTORY_HISTORY_ENABLED\.key/);
+  });
+});
+
 describe('main.css - Clear Button Styling (DIR-04)', () => {
 
   it('main.css should contain .clear-saveto-btn styling', () => {
