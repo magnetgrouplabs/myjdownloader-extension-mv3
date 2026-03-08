@@ -151,7 +151,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Storage key audit: fix background.js key mismatches, delete dead options page, update tests
+- [x] 09-01-PLAN.md — Storage key audit: fix background.js key mismatches, delete dead options page, update tests
 - [ ] 09-02-PLAN.md — Add missing CAPTCHA_PRIVACY_MODE and DIRECTORY_HISTORY_ENABLED toggles to settings UI
 
 ## Progress
@@ -166,8 +166,8 @@ Plans:
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
 | 7. Requirements & Docs Cleanup | 1/1 | Complete | 2026-03-08 |
 | 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
-| 9. Settings Page Audit & Wiring | 0/2 | Planned | - |
+| 9. Settings Page Audit & Wiring | 1/2 | In Progress | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-08 (Phase 9 planning)*
+*Last updated: 2026-03-08 (Phase 9 Plan 01 complete)*
