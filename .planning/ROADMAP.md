@@ -103,11 +103,11 @@ Plans:
   3. RequireJS code path confirmed safe (no runtime CSP violations)
   4. Extension loads cleanly with zero console CSP warnings
   5. postMessage calls use specific origins, not wildcards
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 06-01: Permission justification and privacy policy
-- [ ] 06-02: Code audit (RequireJS, CSP, postMessage origins)
+- [ ] 06-01-PLAN.md — Manifest cleanup (remove nativeMessaging, clean web_accessible_resources) + compliance report + README migration table
+- [ ] 06-02-PLAN.md — CSP runtime verification (checkpoint: load extension, check all page consoles)
 
 ## Progress
 
@@ -118,8 +118,8 @@ Plans:
 | 3. Directory History | 0/1 | Planning complete | - |
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 0/2 | Planning complete | - |
-| 6. MV3 Compliance Audit | 0/2 | Not started | - |
+| 6. MV3 Compliance Audit | 0/2 | Planning complete | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-08 (Phase 5 planning complete — 2 plans in 2 waves)*
+*Last updated: 2026-03-08 (Phase 6 planning complete — 2 plans in 2 waves)*
