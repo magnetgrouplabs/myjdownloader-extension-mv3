@@ -161,14 +161,21 @@ Note: `style-src` is NOT restricted by default -- inline style tags are allowed.
 | `loginNeeded.html` | None | NO | YES (style block, lines 6-36) | PASS -- CSS allowed under MV3 CSP |
 | `background.js` | Service worker, no DOM | N/A | N/A | PASS |
 
-### Runtime Verification Note
+### Runtime Verification Results
 
-The analysis above is based on static code review. For definitive verification, load the extension in Chrome and check the DevTools console on each page for CSP error messages of the form:
+Runtime CSP verification performed on 2026-03-08 by loading the extension in Chrome and inspecting DevTools console on each page for "Refused to" or "Content Security Policy" error messages.
 
-- "Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source..."
-- "Refused to execute inline script because it violates the following Content Security Policy directive..."
+| Page | CSP Errors | Console Notes | Status |
+|------|-----------|---------------|--------|
+| `popup.html` | None | 403 on listdevices (expired session token -- not CSP) | PASS |
+| `background.js` (service worker) | None | ERR_CONNECTION_REFUSED on localhost:9666 ping (expected -- JD on NAS, not local) | PASS |
+| `toolbar.html` | None | Clean | PASS |
+| `offscreen.html` | None | Clean | PASS |
+| `loginNeeded.html` | N/A (no scripts) | N/A | PASS |
 
-**Assessment:** PASS -- No extension-authored code violates MV3 CSP. All scripts are loaded as external files. AngularJS is prevented from using dynamic code generation by `ng-csp`.
+**Zero CSP violations found.** All console messages were functional (expired auth token, expected localhost timeout) -- none related to Content Security Policy.
+
+**Assessment:** VERIFIED PASS -- Runtime testing confirms zero CSP violations across all extension pages. AngularJS ng-csp mode prevents dynamic code generation. All scripts loaded as external files. MV3 default CSP (`script-src 'self'; object-src 'self'`) fully satisfied.
 
 ---
 
@@ -284,7 +291,7 @@ At least 2 screenshots are required for the Chrome Web Store listing. Recommende
 | 3 | Code Safety (CWS-03) | PASS | `angular.js:1292` CSP probe bypassed by ng-csp | -- |
 | 4 | Code Safety (CWS-03) | PASS | `angular.js:16548` ASTCompiler bypassed by ng-csp | -- |
 | 5 | Code Safety (CWS-03) | FINDING | `rx.all.js:21` Function constructor fallback (short-circuited) | Low |
-| 6 | CSP (CWS-04) | PASS | All pages compliant; no inline scripts | -- |
+| 6 | CSP (CWS-04) | VERIFIED PASS | Runtime test: zero CSP violations on all 5 pages | -- |
 | 7 | postMessage (CWS-07) | FINDING | `webinterfaceEnhancer.js:54` wildcard origin | Low |
 | 8 | Privacy Policy (CWS-02) | ACTION NEEDED | Must be created and hosted | Required |
 | 9 | Description (CWS-05) | ACTION NEEDED | Update for MV3 | Required |
