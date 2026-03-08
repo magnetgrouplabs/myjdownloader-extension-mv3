@@ -13,47 +13,6 @@ on:
       - master
 
 jobs:
-  cargo-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Run cargo audit
-        run: cd captcha-helper && cargo audit || true
-
-  cargo-clippy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Run cargo clippy
-        run: cd captcha-helper && cargo clippy --all-targets --all-features -- -D warnings
-
-  cargo-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run cargo test
-        run: cd captcha-helper && cargo test
-
   npm-audit:
     runs-on: ubuntu-latest
     steps:
@@ -77,27 +36,6 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
-
-  virustotal:
-    runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-
-      - name: Build release binary
-        run: cd captcha-helper && cargo build --release
-
-      - name: VirusTotal Scan
-        uses: crazy-max/ghaction-virustotal@v4
-        with:
-          vt_api_key: ${{ secrets.VT_APIKEY }}
-          files: captcha-helper/target/release/myjd-captcha-helper.exe
 
   trufflehog:
     runs-on: ubuntu-latest
