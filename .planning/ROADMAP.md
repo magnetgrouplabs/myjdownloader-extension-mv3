@@ -8,7 +8,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 
 - [x] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session (completed 2026-03-06)
 - [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
-- [x] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button (completed 2026-03-06)
+- [x] ~~**Phase 3: Directory History**~~ - SCRAPPED (feature removed, original MV2 saveto behavior preserved)
 - [x] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (completed 2026-03-07)
 - [x] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader (completed 2026-03-08)
 - [x] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep (completed 2026-03-08)
@@ -50,19 +50,8 @@ Plans:
 - [x] 02-01-PLAN.md — Batch send refactor: structural tests + sendAddLinkQueries single-call implementation
 - [x] 02-02-PLAN.md — E2E verification: automated test suite + manual browser verification of all LINK requirements
 
-### Phase 3: Directory History
-**Goal**: Users can quickly re-select previously used download directories without retyping
-**Depends on**: Nothing (independent of phases 1-2)
-**Requirements**: DIR-01, DIR-02, DIR-03, DIR-04, DIR-05
-**Success Criteria** (what must be TRUE):
-  1. After sending links to 3 different directories, all 3 appear in the dropdown on next use
-  2. Directory history survives browser restart
-  3. Clear button empties the history; dropdown shows no entries afterward
-  4. Duplicate paths (case-insensitive) are collapsed to one entry
-**Plans:** 1/1 Complete
-
-Plans:
-- [x] 03-01-PLAN.md — StorageService setting key, AddLinksController history logic (normalization, cap, clear), templateCache UI (conditional datalist, clear button), options page toggle
+### Phase 3: Directory History — SCRAPPED
+Feature removed. The original MV2 saveto history/autofill behavior is preserved as-is.
 
 ### Phase 4: Web Tab CAPTCHA
 **Goal**: CAPTCHA solving works identically to old MV2 extension — both localhost and MyJD flows, MV3-compliant, with independent CAPTCHA detection via API polling
@@ -138,7 +127,10 @@ Plans:
   1. Phase 5 VERIFICATION.md exists with pass/fail for each success criterion
   2. reCAPTCHA v2 verified working in web tab mode
   3. hCaptcha verified working in web tab mode
-**Plans:** 0 plans
+**Plans:** 1 plan
+
+Plans:
+- [ ] 08-01-PLAN.md — Create Phase 5 VERIFICATION.md and close TEST-03 in REQUIREMENTS.md
 
 ### Phase 9: Settings Page Audit & Wiring
 **Goal**: Ensure all defined settings have UI controls and are properly wired to extension behavior
@@ -160,12 +152,12 @@ Plans:
 |-------|---------------|--------|-----------|
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
 | 2. Multi-Link Stacking | 2/2 | Complete | 2026-03-06 |
-| 3. Directory History | 1/1 | Complete | 2026-03-06 |
+| 3. Directory History | - | Scrapped | - |
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 2/2 | Complete | 2026-03-08 |
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
 | 7. Requirements & Docs Cleanup | 1/1 | Complete | 2026-03-08 |
-| 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
+| 8. Phase 5 Verification & TEST-03 | 0/1 | In Progress | - |
 | 9. Settings Page Audit & Wiring | 2/2 | Complete   | 2026-03-08 |
 
 ---
