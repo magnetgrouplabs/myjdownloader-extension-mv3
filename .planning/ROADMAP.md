@@ -6,12 +6,15 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 
 ## Phases
 
-- [ ] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session
+- [x] **Phase 1: Bug Fixes & Queue Persistence** - Fix known bugs and migrate requestQueue to chrome.storage.session (completed 2026-03-06)
 - [x] **Phase 2: Multi-Link Stacking** - Restore MV2-style link accumulation in toolbar sidebar (completed 2026-03-06)
-- [ ] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button
-- [x] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (same flow as MV2) (completed 2026-03-07)
-- [ ] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader
-- [ ] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep
+- [x] **Phase 3: Directory History** - Persistent dropdown on "Save to" field with clear button (completed 2026-03-06)
+- [x] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (completed 2026-03-07)
+- [x] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader (completed 2026-03-08)
+- [x] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep (completed 2026-03-08)
+- [ ] **Phase 7: Requirements & Docs Cleanup** - Fix obsolete requirement text and sync ROADMAP state
+- [ ] **Phase 8: Phase 5 Verification & TEST-03 Closure** - Create missing VERIFICATION.md, verify CAPTCHA types
+- [ ] **Phase 9: Settings Page Audit & Wiring** - Ensure all settings have UI controls and are properly wired
 
 ## Phase Details
 
@@ -109,17 +112,55 @@ Plans:
 - [ ] 06-01-PLAN.md — Manifest cleanup (remove nativeMessaging, clean web_accessible_resources) + compliance report + README migration table
 - [ ] 06-02-PLAN.md — CSP runtime verification (checkpoint: load extension, check all page consoles)
 
+### Phase 7: Requirements & Docs Cleanup
+**Goal**: Correct obsolete requirement text (native helper references, countdown timer) and sync ROADMAP state to reality
+**Depends on**: Phase 6 (audit identified the gaps)
+**Requirements**: CAP-06, CAP-08, TEST-03 (text only), CWS-01, CWS-05
+**Gap Closure**: Closes requirement text gaps from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. CAP-06 text says "No countdown timer" (matches implementation and CLAUDE.md)
+  2. CAP-08 text says "Web tab only" (no native helper reference)
+  3. TEST-03 text references web tab mode only (no native helper mode)
+  4. CWS-01 justification does not reference nativeMessaging
+  5. CWS-05 description does not reference native helper
+  6. ROADMAP checkboxes and progress table match actual phase completion state
+**Plans:** 0 plans
+
+### Phase 8: Phase 5 Verification & TEST-03 Closure
+**Goal**: Create missing Phase 5 VERIFICATION.md and satisfy TEST-03 by verifying CAPTCHA types in web tab mode
+**Depends on**: Phase 7 (requirement text must be correct before verifying against it)
+**Requirements**: TEST-03
+**Gap Closure**: Closes integration gap (Phase 5 unverified) and TEST-03 requirement
+**Success Criteria** (what must be TRUE):
+  1. Phase 5 VERIFICATION.md exists with pass/fail for each success criterion
+  2. reCAPTCHA v2 verified working in web tab mode
+  3. hCaptcha verified working in web tab mode
+**Plans:** 0 plans
+
+### Phase 9: Settings Page Audit & Wiring
+**Goal**: Ensure all defined settings have UI controls and are properly wired to extension behavior
+**Depends on**: Nothing (independent)
+**Requirements**: SET-01, SET-02
+**Success Criteria** (what must be TRUE):
+  1. CAPTCHA_PRIVACY_MODE has a visible toggle in the AngularJS settings page
+  2. DIRECTORY_HISTORY_ENABLED has a visible toggle in the AngularJS settings page
+  3. All StorageService setting keys have corresponding UI controls
+**Plans:** 0 plans
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. Bug Fixes & Queue Persistence | 3/3 | Complete | 2026-03-06 |
-| 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
-| 3. Directory History | 0/1 | Planning complete | - |
+| 2. Multi-Link Stacking | 2/2 | Complete | 2026-03-06 |
+| 3. Directory History | 1/1 | Complete | 2026-03-06 |
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
-| 5. CAPTCHA E2E Testing | 0/2 | Planning complete | - |
-| 6. MV3 Compliance Audit | 0/2 | Planning complete | - |
+| 5. CAPTCHA E2E Testing | 2/2 | Complete | 2026-03-08 |
+| 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
+| 7. Requirements & Docs Cleanup | 0/0 | Pending | - |
+| 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
+| 9. Settings Page Audit & Wiring | 0/0 | Pending | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-08 (Phase 6 planning complete — 2 plans in 2 waves)*
+*Last updated: 2026-03-08 (gap closure phases 7-9 added from milestone audit)*

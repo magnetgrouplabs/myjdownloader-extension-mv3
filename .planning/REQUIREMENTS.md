@@ -36,9 +36,9 @@
 - [x] **CAP-03**: Solved token is relayed to service worker via `chrome.runtime.sendMessage`
 - [x] **CAP-04**: Service worker submits token to JDownloader callback URL via HTTP
 - [x] **CAP-05**: Skip buttons (hoster/package/all/single) injected into CAPTCHA page via content script
-- [x] **CAP-06**: 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry
+- [ ] **CAP-06**: 5-minute timeout countdown displayed on CAPTCHA page; auto-skips on expiry
 - [x] **CAP-07**: Closing the CAPTCHA tab triggers skip(hoster) via `chrome.tabs.onRemoved`
-- [x] **CAP-08**: Dual-mode: uses native helper when installed, falls back to web tab when not
+- [ ] **CAP-08**: Dual-mode: uses native helper when installed, falls back to web tab when not
 - [x] **CAP-09**: Rc2Service no longer closes JDownloader's CAPTCHA tab when using web tab mode
 - [x] **CAP-10**: Works with reCAPTCHA v2 (checkbox), reCAPTCHA v3 (invisible), and hCaptcha
 
@@ -47,6 +47,11 @@
 - [x] **TEST-01**: Manual E2E test script documents full CAPTCHA flow (extension detects -> web tab/native helper -> solve -> token submitted -> download proceeds)
 - [x] **TEST-02**: JDownloader localhost CAPTCHA page validated to render standalone (no extension enhancement needed)
 - [ ] **TEST-03**: Both web tab and native helper modes tested with reCAPTCHA v2 and hCaptcha
+
+### Settings
+
+- [ ] **SET-01**: CAPTCHA_PRIVACY_MODE setting has a visible UI toggle in the settings page
+- [ ] **SET-02**: DIRECTORY_HISTORY_ENABLED setting has a visible UI toggle in the AngularJS settings page
 
 ### MV3 Compliance & CWS Submission
 
@@ -114,14 +119,14 @@
 | CAP-03 | Phase 4 | Complete |
 | CAP-04 | Phase 4 | Complete |
 | CAP-05 | Phase 4 | Complete |
-| CAP-06 | Phase 4 | Complete |
+| CAP-06 | Phase 7 | Pending |
 | CAP-07 | Phase 4 | Complete |
-| CAP-08 | Phase 4 | Complete |
+| CAP-08 | Phase 7 | Pending |
 | CAP-09 | Phase 4 | Complete |
 | CAP-10 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Complete |
 | TEST-02 | Phase 5 | Complete |
-| TEST-03 | Phase 5 | Pending |
+| TEST-03 | Phase 8 | Pending |
 | CWS-01 | Phase 6 | Complete |
 | CWS-02 | Phase 6 | Complete |
 | CWS-03 | Phase 6 | Complete |
@@ -130,9 +135,12 @@
 | CWS-06 | Phase 6 | Complete |
 | CWS-07 | Phase 6 | Complete |
 
+| SET-01 | Phase 9 | Pending |
+| SET-02 | Phase 9 | Pending |
+
 **Coverage:**
-- v1 requirements: 35 total
-- Mapped to phases: 35
+- v1 requirements: 37 total
+- Mapped to phases: 37
 - Unmapped: 0
 
 ---
