@@ -2,10 +2,11 @@
 
 console.log("Background: Starting MyJDownloader MV3...");
 
+// Key strings must match StorageService.settingsKeys values
 const STORAGE_KEYS = {
- CLICKNLOAD_ACTIVE: 'settings_clicknload_active',
- CONTEXT_MENU_SIMPLE: 'settings_context_menu_simple',
- DEFAULT_PREFERRED_JD: 'settings_default_preferred_jd'
+ CLICKNLOAD_ACTIVE: 'CLICKNLOAD_ACTIVE',
+ CONTEXT_MENU_SIMPLE: 'CONTEXT_MENU_SIMPLE',
+ DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
 };
 
 const DEVICE_TYPES = {
@@ -818,8 +819,8 @@ async function handleCnlCaptured(cnlData) {
  await chrome.storage.local.set({ 'cnl_queue': cnlRequestQueue });
 
  try {
-  const settings = await chrome.storage.local.get(['settings_add_links_dialog_active', 'settings_default_preferred_jd']);
-  const shouldOpenPopup = settings.settings_add_links_dialog_active !== false;
+  const settings = await chrome.storage.local.get(['ADD_LINKS_DIALOG_ACTIVE', 'DEFAULT_PREFERRED_JD']);
+  const shouldOpenPopup = settings.ADD_LINKS_DIALOG_ACTIVE !== false;
 
   if (shouldOpenPopup) {
    await chrome.storage.local.set({ 'cnl_pending': true });
