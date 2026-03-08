@@ -1,4 +1,4 @@
-name: Release - Date-Based Versioning
+name: Release
 
 on:
   push:
@@ -10,53 +10,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Extract Version
       id: version
       run: |
-        # Extract version from tag (e.g., v2026.02.24)
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Extracted version: $VERSION"
-    
+
     - name: Validate Version Format
       run: |
         VERSION=${{ steps.version.outputs.version }}
-        # Check if version matches YYYY.MM.DD format
         if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$'; then
-          echo "❌ Invalid version format: $VERSION. Expected YYYY.MM.DD"
+          echo "Invalid version format: $VERSION. Expected YYYY.MM.DD"
           exit 1
         fi
-        echo "✅ Version format validated: $VERSION"
-    
+
     - name: Update Manifest Version
       run: |
         VERSION=${{ steps.version.outputs.version }}
-        
-        # Update manifest.json with new version
-        if [ -f manifest.json ]; then
-          sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VERSION\"/" manifest.json
-          echo "✅ Updated manifest.json version to $VERSION"
-        else
-          echo "❌ manifest.json not found"
-          exit 1
-        fi
-    
+        sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VERSION\"/" manifest.json
+
     - name: Create Release Package
       run: |
         VERSION=${{ steps.version.outputs.version }}
-        
-        # Create zip package
-        zip -r "myjdownloader-extension-mv3-$VERSION.zip" . \
-          -x "*.git*" \
-          -x "*.github*" \
-          -x "*.DS_Store" \
-          -x "node_modules/*" \
-          -x "test/*" \
-          -x "*.log"
-        
-        echo "✅ Created release package: myjdownloader-extension-mv3-$VERSION.zip"
-    
+        mkdir -p package/myjdownloader-extension
+        cp manifest.json package/myjdownloader-extension/
+        cp background.js package/myjdownloader-extension/
+        cp popup.html package/myjdownloader-extension/
+        cp offscreen.html offscreen.js package/myjdownloader-extension/
+        cp loginNeeded.html package/myjdownloader-extension/
+        cp toolbar.html package/myjdownloader-extension/
+        cp autograbber-indicator.html package/myjdownloader-extension/
+        cp README.md LICENSE package/myjdownloader-extension/
+        cp -r scripts package/myjdownloader-extension/
+        cp -r contentscripts package/myjdownloader-extension/
+        cp -r vendor package/myjdownloader-extension/
+        cp -r images package/myjdownloader-extension/
+        cp -r _locales package/myjdownloader-extension/
+        cp -r partials package/myjdownloader-extension/
+        cp -r styles package/myjdownloader-extension/
+        # Remove test files from package
+        find package/myjdownloader-extension -name "__tests__" -type d -exec rm -rf {} + 2>/dev/null || true
+        find package/myjdownloader-extension -name "*.test.js" -delete 2>/dev/null || true
+        cd package
+        zip -r "../myjdownloader-extension-mv3-${VERSION}.zip" myjdownloader-extension
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
@@ -64,33 +62,33 @@ jobs:
         name: "MyJDownloader Extension MV3 v${{ steps.version.outputs.version }}"
         body: |
           ## MyJDownloader Browser Extension (Manifest V3)
-          
-          ### What's Changed
-          - Updated to Manifest V3
-          - Full compatibility with Chrome Extension Manifest V3
-          - All core features working
-          
+
+          Full Manifest V3 conversion of the MyJDownloader browser extension, compliant with Chrome Web Store requirements.
+
+          ### What's New
+          - **MV3 conversion** — Service worker, `chrome.scripting`, `chrome.storage.session`, strict CSP compliance
+          - **CAPTCHA solving** — reCAPTCHA v2/v3, Enterprise, and hCaptcha via browser tabs through MyJDownloader API
+          - **Multi-link stacking** — Right-click multiple links and batch send to JDownloader
+          - **Bug fixes** — Queue persistence across service worker restarts, duplicate CAPTCHA prevention, tab cleanup
+          - **MV3 compliance** — Removed deprecated permissions, cleaned manifest, no CSP violations
+
+          > **Note:** CAPTCHA solving has been verified through code path analysis and unit tests but has not been tested end-to-end with a live JDownloader instance. Please [report your experience](../../issues/new?template=captcha-bug-report.yml) if the extension handles a CAPTCHA for you.
+
           ### Installation
           1. Download `myjdownloader-extension-mv3-${{ steps.version.outputs.version }}.zip`
           2. Extract the zip file
-          3. Load unpacked extension in Chrome
-          
+          3. Open `chrome://extensions/` and enable Developer mode
+          4. Click **Load unpacked** and select the extracted folder
+          5. Log in to your MyJDownloader account via the extension popup
+
           ### Features
-          - ✅ One-click downloads via context menu
-          - ✅ Device selection and management
-          - ✅ Click'N'Load (CNL) interception
-          - ✅ In-page toolbar
-          - ✅ Session persistence
-          - ✅ Captcha solving support
-          
-          ### Technical Details
-          - **Version**: ${{ steps.version.outputs.version }}
-          - **Manifest**: V3
-          - **License**: GPL-3.0
-          
-          ---
-          
-          This is a community-maintained Manifest V3 conversion of the MyJDownloader Browser Extension.
+          - Right-click to download with JDownloader
+          - Multi-link stacking with batch send
+          - Click'N'Load (CNL) interception
+          - In-page toolbar for link management
+          - CAPTCHA solving (reCAPTCHA v2/v3, hCaptcha) in browser tabs
+          - Session persistence across browser restarts
+          - Device selection for multiple JDownloader instances
         files: myjdownloader-extension-mv3-${{ steps.version.outputs.version }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
