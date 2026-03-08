@@ -12,7 +12,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 - [x] **Phase 4: Web Tab CAPTCHA** - MV3-compliant CAPTCHA solving via MyJD web interface (completed 2026-03-07)
 - [x] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader (completed 2026-03-08)
 - [x] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep (completed 2026-03-08)
-- [ ] **Phase 7: Requirements & Docs Cleanup** - Fix obsolete requirement text and sync ROADMAP state
+- [x] **Phase 7: Requirements & Docs Cleanup** - Fix obsolete requirement text and sync ROADMAP state (completed 2026-03-08)
 - [ ] **Phase 8: Phase 5 Verification & TEST-03 Closure** - Create missing VERIFICATION.md, verify CAPTCHA types
 - [ ] **Phase 9: Settings Page Audit & Wiring** - Ensure all settings have UI controls and are properly wired
 
@@ -127,7 +127,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md — Fix obsolete requirement text + sync ROADMAP state
+- [x] 07-01-PLAN.md — Fix obsolete requirement text + sync ROADMAP state
 
 ### Phase 8: Phase 5 Verification & TEST-03 Closure
 **Goal**: Create missing Phase 5 VERIFICATION.md and satisfy TEST-03 by verifying CAPTCHA types in web tab mode
@@ -160,7 +160,7 @@ Plans:
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 2/2 | Complete | 2026-03-08 |
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
-| 7. Requirements & Docs Cleanup | 0/1 | In Progress | - |
+| 7. Requirements & Docs Cleanup | 1/1 | Complete | 2026-03-08 |
 | 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
 | 9. Settings Page Audit & Wiring | 0/0 | Pending | - |
 

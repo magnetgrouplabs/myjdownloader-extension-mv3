@@ -6,11 +6,11 @@ current_plan: Not started
 status: completed
 last_updated: "2026-03-08T14:25:07.743Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 12
-  completed_plans: 14
-  percent: 100
+  total_phases: 9
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 15
+  percent: 78
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -18,10 +18,10 @@ progress:
 ## Current Position
 
 **Milestone:** v1.0
-**Active Phase:** 06-mv3-compliance-audit
-**Current Plan:** Not started
-**Status:** Milestone complete
-**Progress:** [██████████] 100%
+**Active Phase:** 07-requirements-docs-cleanup
+**Current Plan:** 1/1 complete
+**Status:** Phase 7 complete
+**Progress:** [████████░░] 78%
 
 ## Phase Status
 
@@ -33,6 +33,7 @@ progress:
 | 4. Web Tab CAPTCHA | Complete (4/4 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote + service worker handlers + JD protocol callbacks (canClose/loaded/mouse-move) + loginNeeded.html |
 | 5. CAPTCHA E2E Testing | Complete (2/2 plans) | Code path verification 67/67 PASS; live E2E blocked by JD auto-solve; issue template + README created |
 | 6. MV3 Compliance Audit | Complete (2/2 plans) | Manifest cleanup + compliance report + README migration table + runtime CSP verification |
+| 7. Requirements & Docs Cleanup | Complete (1/1 plans) | Fixed obsolete requirement text (CAP-06, CAP-08, TEST-03, CWS-01, CWS-05) |
 
 ## Key Decisions
 
@@ -81,6 +82,8 @@ progress:
 | Live E2E blocked by JD auto-solve | 2026-03-08 | All file hosters' CAPTCHAs solved by JD built-in solvers; community issue template created instead |
 | nativeMessaging removed; CaptchaNativeService unloaded | 2026-03-08 | Native helper abandoned; permission and script tag removed, file kept on disk |
 | Vendor restricted constructs documented as dead code | 2026-03-08 | ng-csp bypasses AngularJS dynamic code gen; RequireJS eval is loader-plugin-only dead code |
+| CAP-06 marked complete (no countdown timer) | 2026-03-08 | Implementation correctly has no countdown; CLAUDE.md and Phase 4 confirm intended behavior |
+| CAP-08 marked complete (web tab only) | 2026-03-08 | Web tab CAPTCHA fully implemented; native helper abandoned per project decision |
 
 ## Blockers
 
@@ -105,11 +108,12 @@ None currently.
 | 05 | 02 | 15min | 2 | 4 |
 | Phase 06 P01 | 5min | 3 tasks | 4 files |
 | Phase 06 P02 | 1min | 2 tasks | 1 files |
+| 07 | 01 | 2min | 2 | 1 |
 
 ## Context for Next Session
 
-Phase 6 COMPLETE (2/2 plans). All 6 phases done. MV3 compliance audit complete with runtime CSP verification. Extension ready for CWS submission pending: privacy policy, description, screenshots.
-Last session stopped at: Completed 06-02-PLAN.md
+Phase 7 COMPLETE (1/1 plans). Obsolete requirement text corrected — CAP-06/CAP-08 marked complete, native helper/nativeMessaging/countdown references removed. ROADMAP already synced.
+Last session stopped at: Completed 07-01-PLAN.md
 Resume file: None
 
 ---
