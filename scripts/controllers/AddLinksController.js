@@ -266,35 +266,6 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
       $scope.selection.showOptionalValues = !prevValue;
     };
 
-    $scope.directoryHistoryEnabled = true; // default until loaded
-    storageService.get(storageService.SETTINGS_DIRECTORY_HISTORY_ENABLED, function(result) {
-      $timeout(function() {
-        $scope.directoryHistoryEnabled = result[storageService.SETTINGS_DIRECTORY_HISTORY_ENABLED] !== undefined
-          ? result[storageService.SETTINGS_DIRECTORY_HISTORY_ENABLED]
-          : true;
-      }, 0);
-    });
-
-    $scope.clearSavetoHistory = function() {
-      $scope.history.saveto = [];
-      if ($scope.cachedHistory) {
-        Object.keys($scope.cachedHistory).forEach(function(deviceId) {
-          if ($scope.cachedHistory[deviceId] && $scope.cachedHistory[deviceId].saveto) {
-            $scope.cachedHistory[deviceId].saveto = [];
-          }
-        });
-      }
-      storageService.get(storageService.ADD_LINK_CACHED_HISTORY, function(result) {
-        var history = result[storageService.ADD_LINK_CACHED_HISTORY] || {};
-        Object.keys(history).forEach(function(deviceId) {
-          if (history[deviceId] && history[deviceId].saveto) {
-            history[deviceId].saveto = [];
-          }
-        });
-        storageService.set(storageService.ADD_LINK_CACHED_HISTORY, history);
-      });
-    };
-
     $scope.refreshDevices = function () {
       loadDeviceList();
     };
@@ -303,29 +274,8 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
       if ($scope.history[key] === undefined) {
         $scope.history[key] = [];
       }
-      if (key === 'saveto') {
-        // Normalize: strip trailing slashes/backslashes
-        var normalized = value.replace(/[\\/]+$/, '');
-        if (!normalized) return; // empty after normalization
-        // Case-insensitive dedup: find existing entry
-        var existingIdx = -1;
-        for (var i = 0; i < $scope.history[key].length; i++) {
-          if ($scope.history[key][i].toLowerCase() === normalized.toLowerCase()) {
-            existingIdx = i;
-            break;
-          }
-        }
-        if (existingIdx !== -1) {
-          $scope.history[key].splice(existingIdx, 1);
-        }
-        $scope.history[key].unshift(normalized);
-        if ($scope.history[key].length > 10) {
-          $scope.history[key].length = 10;
-        }
-      } else {
-        if ($.inArray(value, $scope.history[key]) === -1) {
-          $scope.history[key].unshift(value);
-        }
+      if ($.inArray(value, $scope.history[key]) === -1) {
+        $scope.history[key].unshift(value);
       }
     }
 
@@ -352,7 +302,7 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
       if ($scope.selection.packageName !== undefined) {
         addToHistory("packageName", $scope.selection.packageName);
       }
-      if ($scope.selection.saveto !== undefined && $scope.directoryHistoryEnabled) {
+      if ($scope.selection.saveto !== undefined) {
         addToHistory("saveto", $scope.selection.saveto);
       }
       if ($scope.selection.archivepw !== undefined) {

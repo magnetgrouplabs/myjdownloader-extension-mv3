@@ -6,10 +6,6 @@
 build/
 dist/
 
-# Rust build artifacts
-captcha-helper/target/
-*.exe.WebView2/
-
 # IDE files
 .vscode/
 .idea/
@@ -38,14 +34,29 @@ yarn.lock
 
 # Extension specific
 _metadata/
-.crx
 
-# Documentation
-.DOCS/
-
-# Test files
-/test/
+# Test coverage
 /coverage/
 
-# Claude settings
+# AI / planning / Claude
 .claude/
+.planning/
+CLAUDE.md
+
+# Abandoned native helper
+captcha-helper/
+
+# Playwright / browser testing
+.playwright-mcp/
+
+# Dev-only files
+manifest.json.backup
+magilla-build-test.ps1
+test-captcha*.html
+captcha-test.txt
+captcha-state
+popup-state
+extensions-page
+
+# GitHub issue templates (not part of extension)
+.github/ISSUE_TEMPLATE/

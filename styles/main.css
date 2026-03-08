@@ -664,20 +664,6 @@ a.expandOptionalValuesLink:hover {
     width: 22px;
 }
 
-.clear-saveto-btn {
-    display: inline-block;
-    cursor: pointer;
-    color: #999;
-    font-size: 12px;
-    vertical-align: middle;
-    margin-left: 4px;
-    text-decoration: none;
-}
-
-.clear-saveto-btn:hover {
-    color: #c9302c;
-}
-
 .packagizerOverwrite > input[type=checkbox] {
     width: 13px;
     height: 13px;
