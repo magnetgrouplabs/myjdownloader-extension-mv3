@@ -71,13 +71,13 @@
  "manifest_version": 3,
  "name": "MyJDownloader MV3",
  "options_ui": { "page": "popup.html#!/settings", "open_in_tab": true },
- "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen", "nativeMessaging" ],
+ "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen" ],
  "host_permissions": [ "<all_urls>", "http://127.0.0.1:9666/*", "http://localhost:9666/*" ],
  "short_name": "MyJDownloader",
  "update_url": "https://clients2.google.com/service/update2/crx",
  "version": "2026.02.24",
 "web_accessible_resources": [ {
-  "resources": [ "toolbar.html", "autograbber-indicator.html", "captcha-helper/test-native-messaging.html", "captcha-helper/test-native-messaging.js" ],
+  "resources": [ "toolbar.html", "autograbber-indicator.html" ],
   "matches": [ "*://*/*" ]
 } ]
 }
