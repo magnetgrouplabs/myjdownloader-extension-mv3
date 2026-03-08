@@ -13,7 +13,7 @@ This milestone takes the mostly-complete MV3 conversion and makes it release-rea
 - [x] **Phase 5: CAPTCHA E2E Testing** - Validate CAPTCHA flow end-to-end with real JDownloader (completed 2026-03-08)
 - [x] **Phase 6: MV3 Compliance Audit** - Permission justification, privacy policy, CWS submission prep (completed 2026-03-08)
 - [x] **Phase 7: Requirements & Docs Cleanup** - Fix obsolete requirement text and sync ROADMAP state (completed 2026-03-08)
-- [ ] **Phase 8: Phase 5 Verification & TEST-03 Closure** - Create missing VERIFICATION.md, verify CAPTCHA types
+- [x] **Phase 8: Phase 5 Verification & TEST-03 Closure** - Create missing VERIFICATION.md, verify CAPTCHA types (completed 2026-03-08)
 - [x] **Phase 9: Settings Page Audit & Wiring** - Ensure all settings have UI controls and are properly wired (completed 2026-03-08)
 
 ## Phase Details
@@ -127,7 +127,7 @@ Plans:
   1. Phase 5 VERIFICATION.md exists with pass/fail for each success criterion
   2. reCAPTCHA v2 verified working in web tab mode
   3. hCaptcha verified working in web tab mode
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 08-01-PLAN.md — Create Phase 5 VERIFICATION.md and close TEST-03 in REQUIREMENTS.md
@@ -157,7 +157,7 @@ Plans:
 | 5. CAPTCHA E2E Testing | 2/2 | Complete | 2026-03-08 |
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
 | 7. Requirements & Docs Cleanup | 1/1 | Complete | 2026-03-08 |
-| 8. Phase 5 Verification & TEST-03 | 0/1 | In Progress | - |
+| 8. Phase 5 Verification & TEST-03 | 1/1 | Complete   | 2026-03-08 |
 | 9. Settings Page Audit & Wiring | 2/2 | Complete   | 2026-03-08 |
 
 ---

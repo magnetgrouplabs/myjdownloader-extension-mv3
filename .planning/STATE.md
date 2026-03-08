@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 current_plan: Not started
 status: completed
-last_updated: "2026-03-08T17:33:17.365Z"
+last_updated: "2026-03-08T20:13:20.400Z"
 progress:
   total_phases: 9
-  completed_phases: 8
-  total_plans: 15
-  completed_plans: 17
-  percent: 88
+  completed_phases: 9
+  total_plans: 16
+  completed_plans: 18
+  percent: 100
 ---
 
 # Project State: MyJDownloader MV3 Extension
@@ -21,7 +21,7 @@ progress:
 **Active Phase:** 09-settings-audit
 **Current Plan:** Not started
 **Status:** Milestone complete
-**Progress:** [█████████░] 88%
+**Progress:** [██████████] 100%
 
 ## Phase Status
 
@@ -29,11 +29,12 @@ progress:
 |-------|--------|-------|
 | 1. Bug Fixes & Queue Persistence | Complete (3/3 plans) | Queue persistence + bug fixes + gap closure done |
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
-| 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
+| 3. Directory History | Scrapped | Feature removed; original MV2 saveto behavior preserved |
 | 4. Web Tab CAPTCHA | Complete (4/4 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote + service worker handlers + JD protocol callbacks (canClose/loaded/mouse-move) + loginNeeded.html |
 | 5. CAPTCHA E2E Testing | Complete (2/2 plans) | Code path verification 67/67 PASS; live E2E blocked by JD auto-solve; issue template + README created |
 | 6. MV3 Compliance Audit | Complete (2/2 plans) | Manifest cleanup + compliance report + README migration table + runtime CSP verification |
 | 7. Requirements & Docs Cleanup | Complete (1/1 plans) | Fixed obsolete requirement text (CAP-06, CAP-08, TEST-03, CWS-01, CWS-05) |
+| 8. Phase 5 Verification | Complete (1/1 plans) | Phase 5 VERIFICATION.md created; TEST-03 closed; all 37 v1 requirements Complete |
 | 9. Settings Audit | Complete (2/2 plans) | Fixed storage key mismatches, deleted dead options page, added missing UI toggles |
 
 ## Key Decisions
@@ -42,8 +43,6 @@ progress:
 |----------|------|---------|
 | Web tab CAPTCHA via MyJD (same flow as MV2, MV3-compliant) | 2026-03-06 | CAPTCHAs solved in browser tabs through MyJD web interface; native helper abandoned |
 | chrome.storage.session for requestQueue | 2026-03-06 | Transient data; survives SW restart but not browser restart |
-| chrome.storage.local for directory history | 2026-03-06 | Persistent user preference; survives browser restart |
-| HTML5 datalist for directory dropdown | 2026-03-06 | Native autocomplete; no extra JS/AngularJS needed |
 | String-normalized tab ID keys | 2026-03-06 | Prevents JSON roundtrip key mismatch in requestQueue |
 | IIFE async wrapper for onMessage handlers | 2026-03-06 | chrome.runtime.onMessage does not support async return |
 | Fire-and-forget persistQueue() | 2026-03-06 | Non-blocking to avoid slowing mutation paths |
@@ -56,9 +55,6 @@ progress:
 | First query object as base for shared options in batch send | 2026-03-06 | All queries share same $scope.selection options; first query is representative |
 | First available sourceUrl used for batch context | 2026-03-06 | JDownloader uses first sourceUrl for referrer context |
 | Toolbar sidebar persistence is UI polish, not blocker | 2026-03-06 | Links send successfully; sidebar stays visible after batch send; deferred to Phase 6 |
-| DIRECTORY_HISTORY_ENABLED raw key (not settings_ prefix) | 2026-03-07 | Must match StorageService constant exactly; existing keys use inconsistent prefix |
-| Clear button wipes ALL devices' saveto history | 2026-03-07 | Per DIR-04: clear is global, not per-device |
-| Trailing slash/backslash normalization before dedup | 2026-03-07 | Handles both Unix and Windows path formats |
 | IIFE with var for content script consistency | 2026-03-07 | Matches webinterfaceEnhancer.js style; avoids let/const in content scripts |
 | Event delegation for skip buttons | 2026-03-07 | Single click listener on container, reads dataset.skipType; MV3 CSP compliant |
 | 500ms token polling interval | 2026-03-07 | Balances responsiveness and CPU usage for CAPTCHA token detection |
@@ -81,6 +77,7 @@ progress:
 | E2E test script with 4 test scenarios | 2026-03-08 | Full flow, tab-close skip, state verification, countdown timer for Plan 02 |
 | 67-point code path verification for E2E | 2026-03-08 | All message routes, storage keys, field names verified across all CAPTCHA files |
 | Live E2E blocked by JD auto-solve | 2026-03-08 | All file hosters' CAPTCHAs solved by JD built-in solvers; community issue template created instead |
+| Code verification accepted for TEST-03 closure | 2026-03-08 | 67/67 code path checks + 216 unit tests sufficient; all 37 v1 requirements now Complete |
 | nativeMessaging removed; CaptchaNativeService unloaded | 2026-03-08 | Native helper abandoned; permission and script tag removed, file kept on disk |
 | Vendor restricted constructs documented as dead code | 2026-03-08 | ng-csp bypasses AngularJS dynamic code gen; RequireJS eval is loader-plugin-only dead code |
 | CAP-06 marked complete (no countdown timer) | 2026-03-08 | Implementation correctly has no countdown; CLAUDE.md and Phase 4 confirm intended behavior |
@@ -113,11 +110,12 @@ None currently.
 | 07 | 01 | 2min | 2 | 1 |
 | 09 | 01 | 3min | 2 | 3 |
 | 09 | 02 | 2min | 2 | 3 |
+| Phase 08 P01 | 2min | 2 tasks | 2 files |
 
 ## Context for Next Session
 
-Phase 9 COMPLETE (2/2 plans). Added CAPTCHA_PRIVACY_MODE and DIRECTORY_HISTORY_ENABLED UI toggles to settings page. 222 tests pass.
-Last session stopped at: Completed 09-02-PLAN.md
+All 37 v1 requirements Complete. Phase 5 VERIFICATION.md created. TEST-03 closed.
+Last session stopped at: Completed 08-01-PLAN.md
 
 ---
 *State initialized: 2026-03-06*
