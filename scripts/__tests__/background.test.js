@@ -501,3 +501,33 @@ describe('Background.js Queue Persistence', () => {
     });
   });
 });
+
+// ==================================================================
+// Storage key consistency audit (Phase 9)
+// ==================================================================
+describe('Background.js Storage Key Consistency (Phase 9)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const backgroundSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'background.js'), 'utf8'
+  );
+
+  it('STORAGE_KEYS values should use uppercase format matching StorageService', () => {
+    expect(backgroundSrc).toMatch(/CLICKNLOAD_ACTIVE:\s*'CLICKNLOAD_ACTIVE'/);
+    expect(backgroundSrc).toMatch(/CONTEXT_MENU_SIMPLE:\s*'CONTEXT_MENU_SIMPLE'/);
+    expect(backgroundSrc).toMatch(/DEFAULT_PREFERRED_JD:\s*'DEFAULT_PREFERRED_JD'/);
+  });
+
+  it('should not contain any lowercase settings_ prefixed storage key strings', () => {
+    expect(backgroundSrc).not.toMatch(/['"]settings_clicknload_active['"]/);
+    expect(backgroundSrc).not.toMatch(/['"]settings_context_menu_simple['"]/);
+    expect(backgroundSrc).not.toMatch(/['"]settings_default_preferred_jd['"]/);
+    expect(backgroundSrc).not.toMatch(/['"]settings_add_links_dialog_active['"]/);
+  });
+
+  it('chrome.storage.local.get for CNL should use ADD_LINKS_DIALOG_ACTIVE', () => {
+    // The CNL handler must use the correct key for add-links dialog check
+    expect(backgroundSrc).toMatch(/chrome\.storage\.local\.get\(\[.*'ADD_LINKS_DIALOG_ACTIVE'/);
+    expect(backgroundSrc).not.toMatch(/chrome\.storage\.local\.get\(\[.*'settings_add_links_dialog_active'/);
+  });
+});
