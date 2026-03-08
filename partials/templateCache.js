@@ -114,6 +114,16 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "            </small>\n" +
     "        </p>\n" +
     "    </div>\n" +
+    "    <div class=\"inlineSettingsContainer\" id=\"directoryHistorySettings\">\n" +
+    "        <label for=\"directory_history_enabled\">\n" +
+    "            <input type=\"checkbox\" id=\"directory_history_enabled\"\n" +
+    "                ng-model=\"settings[settingsKeys.DIRECTORY_HISTORY_ENABLED.key]\" />\n" +
+    "            Directory History</label>\n" +
+    "        <div style=\"clear:both;\"></div>\n" +
+    "        <p class=\"description\">\n" +
+    "            <small>Remember previously used download directories</small>\n" +
+    "        </p>\n" +
+    "    </div>\n" +
     "    <div class=\"inlineSettingsContainer\" id=\"clipboardSettings\" ng-if=\"!clipboardHistorySupported\">\n" +
     "        <label for=\"clipboard_observer_running\">\n" +
     "            <input type=\"checkbox\" id=\"clipboard_observer_running\"\n" +
@@ -274,6 +284,15 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "                <small>{{'ui_settings_enhance_captcha_dialog_description'\n" +
     "                    | translate}}\n" +
     "                </small>\n" +
+    "            </p>\n" +
+    "        </div>\n" +
+    "        <div class=\"inlineSettingsContainer\" id=\"captchaPrivacyModeContainer\">\n" +
+    "            <label for=\"captcha_privacy_mode\"><input type=\"checkbox\" id=\"captcha_privacy_mode\"\n" +
+    "                    ng-model=\"settings[settingsKeys.CAPTCHA_PRIVACY_MODE.key]\" />\n" +
+    "                CAPTCHA Privacy Mode</label>\n" +
+    "            <div style=\"clear:both;\"></div>\n" +
+    "            <p class=\"description\">\n" +
+    "                <small>Solve CAPTCHAs without sending page data to third parties</small>\n" +
     "            </p>\n" +
     "        </div>\n" +
     "    </div>\n" +
