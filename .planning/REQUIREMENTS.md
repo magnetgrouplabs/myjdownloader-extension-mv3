@@ -53,7 +53,7 @@
 - [x] **CWS-01**: Every permission has written justification (`<all_urls>`, `nativeMessaging`, `tabs`, `scripting`, `offscreen`, `declarativeNetRequest`)
 - [x] **CWS-02**: Privacy policy created and hosted, covering credential handling, URL data, storage usage
 - [x] **CWS-03**: RequireJS `eval` path audited — confirmed dead or patched to throw
-- [ ] **CWS-04**: No CSP violation warnings in any extension page console (popup, toolbar, offscreen)
+- [x] **CWS-04**: No CSP violation warnings in any extension page console (popup, toolbar, offscreen)
 - [x] **CWS-05**: Extension description accurately reflects MV3 features including native helper requirement
 - [x] **CWS-06**: At least 2 screenshots showing core features in CWS listing
 - [x] **CWS-07**: `postMessage` wildcard origins replaced with specific origin strings
@@ -125,7 +125,7 @@
 | CWS-01 | Phase 6 | Complete |
 | CWS-02 | Phase 6 | Complete |
 | CWS-03 | Phase 6 | Complete |
-| CWS-04 | Phase 6 | Pending |
+| CWS-04 | Phase 6 | Complete |
 | CWS-05 | Phase 6 | Complete |
 | CWS-06 | Phase 6 | Complete |
 | CWS-07 | Phase 6 | Complete |
