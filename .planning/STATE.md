@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 current_plan: Plan 02 of 2
 status: executing
-last_updated: "2026-03-08T11:41:57.697Z"
+last_updated: "2026-03-08T13:34:12.412Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 11
+  completed_plans: 12
   percent: 100
 ---
 
@@ -31,7 +31,7 @@ progress:
 | 2. Multi-Link Stacking | Complete (2/2 plans) | All LINK requirements verified; sidebar persistence noted |
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
 | 4. Web Tab CAPTCHA | Complete (4/4 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote + service worker handlers + JD protocol callbacks (canClose/loaded/mouse-move) + loginNeeded.html |
-| 5. CAPTCHA E2E Testing | In Progress (1/2 plans) | Plan 01: localhost code review + E2E test script done |
+| 5. CAPTCHA E2E Testing | Complete (2/2 plans) | Code path verification 67/67 PASS; live E2E blocked by JD auto-solve; issue template + README created |
 | 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
 
 ## Key Decisions
@@ -77,6 +77,8 @@ progress:
 | loadedRetries max 10 at 500ms for element detection | 2026-03-07 | 5s total wait sufficient for CAPTCHA widget render |
 | Localhost flow validated via code review | 2026-03-08 | JD on NAS, no local testing possible; 10/10 verification points PASS |
 | E2E test script with 4 test scenarios | 2026-03-08 | Full flow, tab-close skip, state verification, countdown timer for Plan 02 |
+| 67-point code path verification for E2E | 2026-03-08 | All message routes, storage keys, field names verified across all CAPTCHA files |
+| Live E2E blocked by JD auto-solve | 2026-03-08 | All file hosters' CAPTCHAs solved by JD built-in solvers; community issue template created instead |
 
 ## Blockers
 
@@ -98,12 +100,13 @@ None currently.
 | 04 | 03 | 8min | 2 | 8 |
 | 04 | 04 | 2min | 2 | 3 |
 | Phase 05 P01 | 3min | 2 tasks | 2 files |
+| 05 | 02 | 15min | 2 | 4 |
 
 ## Context for Next Session
 
-Phase 5 Plan 01 complete (1/2 plans). Localhost CAPTCHA flow validated via code review (10/10 checks PASS). E2E test script created with 4 test scenarios for Plan 02 live execution. 216 tests still passing.
-Last session stopped at: Completed 05-01-PLAN.md
-Resume file: None
+Phase 5 complete (2/2 plans). 67/67 automated code path checks PASS. Live E2E not possible (JD auto-solves). README rewritten, GitHub issue template created. Ready for Phase 6: MV3 Compliance Audit.
+Last session stopped at: Completed Phase 5
+Resume file: .planning/phases/06-mv3-compliance-audit/06-CONTEXT.md
 
 ---
 *State initialized: 2026-03-06*
