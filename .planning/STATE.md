@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: Plan 02 of 2
+current_plan: Plan 01 of 2
 status: executing
-last_updated: "2026-03-08T13:34:12.412Z"
+last_updated: "2026-03-08T14:13:51.390Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 10
-  completed_plans: 12
+  total_plans: 12
+  completed_plans: 13
   percent: 100
 ---
 
@@ -18,8 +18,8 @@ progress:
 ## Current Position
 
 **Milestone:** v1.0
-**Active Phase:** 05-captcha-e2e-testing
-**Current Plan:** Plan 02 of 2
+**Active Phase:** 06-mv3-compliance-audit
+**Current Plan:** Plan 01 of 2
 **Status:** Executing
 **Progress:** [██████████] 100%
 
@@ -32,7 +32,7 @@ progress:
 | 3. Directory History | Complete (1/1 plans) | MRU dropdown, dedup, clear button, settings toggle |
 | 4. Web Tab CAPTCHA | Complete (4/4 plans) | Dual-flow CAPTCHA: localhost content script + MYJD remote + service worker handlers + JD protocol callbacks (canClose/loaded/mouse-move) + loginNeeded.html |
 | 5. CAPTCHA E2E Testing | Complete (2/2 plans) | Code path verification 67/67 PASS; live E2E blocked by JD auto-solve; issue template + README created |
-| 6. MV3 Compliance Audit | Not started | Depends on all prior phases |
+| 6. MV3 Compliance Audit | In progress (1/2 plans) | Plan 01: manifest cleanup + compliance report + README migration table |
 
 ## Key Decisions
 
@@ -79,6 +79,8 @@ progress:
 | E2E test script with 4 test scenarios | 2026-03-08 | Full flow, tab-close skip, state verification, countdown timer for Plan 02 |
 | 67-point code path verification for E2E | 2026-03-08 | All message routes, storage keys, field names verified across all CAPTCHA files |
 | Live E2E blocked by JD auto-solve | 2026-03-08 | All file hosters' CAPTCHAs solved by JD built-in solvers; community issue template created instead |
+| nativeMessaging removed; CaptchaNativeService unloaded | 2026-03-08 | Native helper abandoned; permission and script tag removed, file kept on disk |
+| Vendor restricted constructs documented as dead code | 2026-03-08 | ng-csp bypasses AngularJS dynamic code gen; RequireJS eval is loader-plugin-only dead code |
 
 ## Blockers
 
@@ -101,12 +103,13 @@ None currently.
 | 04 | 04 | 2min | 2 | 3 |
 | Phase 05 P01 | 3min | 2 tasks | 2 files |
 | 05 | 02 | 15min | 2 | 4 |
+| Phase 06 P01 | 5min | 3 tasks | 4 files |
 
 ## Context for Next Session
 
-Phase 5 complete (2/2 plans). 67/67 automated code path checks PASS. Live E2E not possible (JD auto-solves). README rewritten, GitHub issue template created. Ready for Phase 6: MV3 Compliance Audit.
-Last session stopped at: Completed Phase 5
-Resume file: .planning/phases/06-mv3-compliance-audit/06-CONTEXT.md
+Phase 6 Plan 01 complete (1/2 plans). nativeMessaging removed, 301-line compliance report created, MV2-to-MV3 migration table added to README. All 216 tests pass. Ready for Plan 06-02.
+Last session stopped at: Completed 06-01-PLAN.md
+Resume file: .planning/phases/06-mv3-compliance-audit/06-01-SUMMARY.md
 
 ---
 *State initialized: 2026-03-06*

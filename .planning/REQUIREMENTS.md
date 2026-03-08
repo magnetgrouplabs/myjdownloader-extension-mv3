@@ -50,13 +50,13 @@
 
 ### MV3 Compliance & CWS Submission
 
-- [ ] **CWS-01**: Every permission has written justification (`<all_urls>`, `nativeMessaging`, `tabs`, `scripting`, `offscreen`, `declarativeNetRequest`)
-- [ ] **CWS-02**: Privacy policy created and hosted, covering credential handling, URL data, storage usage
-- [ ] **CWS-03**: RequireJS `eval` path audited — confirmed dead or patched to throw
+- [x] **CWS-01**: Every permission has written justification (`<all_urls>`, `nativeMessaging`, `tabs`, `scripting`, `offscreen`, `declarativeNetRequest`)
+- [x] **CWS-02**: Privacy policy created and hosted, covering credential handling, URL data, storage usage
+- [x] **CWS-03**: RequireJS `eval` path audited — confirmed dead or patched to throw
 - [ ] **CWS-04**: No CSP violation warnings in any extension page console (popup, toolbar, offscreen)
-- [ ] **CWS-05**: Extension description accurately reflects MV3 features including native helper requirement
-- [ ] **CWS-06**: At least 2 screenshots showing core features in CWS listing
-- [ ] **CWS-07**: `postMessage` wildcard origins replaced with specific origin strings
+- [x] **CWS-05**: Extension description accurately reflects MV3 features including native helper requirement
+- [x] **CWS-06**: At least 2 screenshots showing core features in CWS listing
+- [x] **CWS-07**: `postMessage` wildcard origins replaced with specific origin strings
 
 ## v2 Requirements
 
@@ -122,13 +122,13 @@
 | TEST-01 | Phase 5 | Complete |
 | TEST-02 | Phase 5 | Complete |
 | TEST-03 | Phase 5 | Pending |
-| CWS-01 | Phase 6 | Pending |
-| CWS-02 | Phase 6 | Pending |
-| CWS-03 | Phase 6 | Pending |
+| CWS-01 | Phase 6 | Complete |
+| CWS-02 | Phase 6 | Complete |
+| CWS-03 | Phase 6 | Complete |
 | CWS-04 | Phase 6 | Pending |
-| CWS-05 | Phase 6 | Pending |
-| CWS-06 | Phase 6 | Pending |
-| CWS-07 | Phase 6 | Pending |
+| CWS-05 | Phase 6 | Complete |
+| CWS-06 | Phase 6 | Complete |
+| CWS-07 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 35 total
