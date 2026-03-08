@@ -1,5 +1,5 @@
 (function() {
-var clipboardHistorySupported = document.queryCommandSupported('copy') || document.queryCommandSupported('paste');
+var clipboardHistorySupported = true;
 
 if (typeof browser !== 'undefined') { chrome = browser; }
 
