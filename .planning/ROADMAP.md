@@ -59,10 +59,10 @@ Plans:
   2. Directory history survives browser restart
   3. Clear button empties the history; dropdown shows no entries afterward
   4. Duplicate paths (case-insensitive) are collapsed to one entry
-**Plans:** 1 plan
+**Plans:** 1/1 Complete
 
 Plans:
-- [ ] 03-01-PLAN.md — StorageService setting key, AddLinksController history logic (normalization, cap, clear), templateCache UI (conditional datalist, clear button), options page toggle
+- [x] 03-01-PLAN.md — StorageService setting key, AddLinksController history logic (normalization, cap, clear), templateCache UI (conditional datalist, clear button), options page toggle
 
 ### Phase 4: Web Tab CAPTCHA
 **Goal**: CAPTCHA solving works identically to old MV2 extension — both localhost and MyJD flows, MV3-compliant, with independent CAPTCHA detection via API polling
@@ -90,11 +90,11 @@ Plans:
   1. Written test script covers the full CAPTCHA flow for both modes
   2. Manual test confirms JDownloader receives solved token and proceeds with download
   3. Both reCAPTCHA v2 and hCaptcha tested in at least one mode
-**Plans:** 2 plans
+**Plans:** 2/2 Complete
 
 Plans:
-- [ ] 05-01-PLAN.md — Localhost flow code review + E2E test script creation for MYJD remote flow
-- [ ] 05-02-PLAN.md — Live E2E CAPTCHA testing with real JDownloader and user verification
+- [x] 05-01-PLAN.md — Localhost flow code review + E2E test script creation for MYJD remote flow
+- [x] 05-02-PLAN.md — Live E2E CAPTCHA testing with real JDownloader and user verification
 
 ### Phase 6: MV3 Compliance Audit
 **Goal**: Extension passes Chrome Web Store review requirements with no rejections for MV3 violations
@@ -106,11 +106,11 @@ Plans:
   3. RequireJS code path confirmed safe (no runtime CSP violations)
   4. Extension loads cleanly with zero console CSP warnings
   5. postMessage calls use specific origins, not wildcards
-**Plans:** 2 plans
+**Plans:** 2/2 Complete
 
 Plans:
-- [ ] 06-01-PLAN.md — Manifest cleanup (remove nativeMessaging, clean web_accessible_resources) + compliance report + README migration table
-- [ ] 06-02-PLAN.md — CSP runtime verification (checkpoint: load extension, check all page consoles)
+- [x] 06-01-PLAN.md — Manifest cleanup (remove nativeMessaging, clean web_accessible_resources) + compliance report + README migration table
+- [x] 06-02-PLAN.md — CSP runtime verification (checkpoint: load extension, check all page consoles)
 
 ### Phase 7: Requirements & Docs Cleanup
 **Goal**: Correct obsolete requirement text (native helper references, countdown timer) and sync ROADMAP state to reality
@@ -124,7 +124,10 @@ Plans:
   4. CWS-01 justification does not reference nativeMessaging
   5. CWS-05 description does not reference native helper
   6. ROADMAP checkboxes and progress table match actual phase completion state
-**Plans:** 0 plans
+**Plans:** 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md — Fix obsolete requirement text + sync ROADMAP state
 
 ### Phase 8: Phase 5 Verification & TEST-03 Closure
 **Goal**: Create missing Phase 5 VERIFICATION.md and satisfy TEST-03 by verifying CAPTCHA types in web tab mode
@@ -157,10 +160,10 @@ Plans:
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
 | 5. CAPTCHA E2E Testing | 2/2 | Complete | 2026-03-08 |
 | 6. MV3 Compliance Audit | 2/2 | Complete | 2026-03-08 |
-| 7. Requirements & Docs Cleanup | 0/0 | Pending | - |
+| 7. Requirements & Docs Cleanup | 0/1 | In Progress | - |
 | 8. Phase 5 Verification & TEST-03 | 0/0 | Pending | - |
 | 9. Settings Page Audit & Wiring | 0/0 | Pending | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-08 (gap closure phases 7-9 added from milestone audit)*
+*Last updated: 2026-03-08 (Phase 7 planning)*
