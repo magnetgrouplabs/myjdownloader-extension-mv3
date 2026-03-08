@@ -87,10 +87,11 @@ Plans:
   1. Written test script covers the full CAPTCHA flow for both modes
   2. Manual test confirms JDownloader receives solved token and proceeds with download
   3. Both reCAPTCHA v2 and hCaptcha tested in at least one mode
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: E2E test scripts and manual validation
+- [ ] 05-01-PLAN.md — Localhost flow code review + E2E test script creation for MYJD remote flow
+- [ ] 05-02-PLAN.md — Live E2E CAPTCHA testing with real JDownloader and user verification
 
 ### Phase 6: MV3 Compliance Audit
 **Goal**: Extension passes Chrome Web Store review requirements with no rejections for MV3 violations
@@ -116,9 +117,9 @@ Plans:
 | 2. Multi-Link Stacking | 2/2 | Complete   | 2026-03-06 |
 | 3. Directory History | 0/1 | Planning complete | - |
 | 4. Web Tab CAPTCHA | 2/2 | Complete | 2026-03-07 |
-| 5. CAPTCHA E2E Testing | 0/1 | Not started | - |
+| 5. CAPTCHA E2E Testing | 0/2 | Planning complete | - |
 | 6. MV3 Compliance Audit | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-06*
-*Last updated: 2026-03-07 (Phase 4 complete — verified 7/7 success criteria)*
+*Last updated: 2026-03-08 (Phase 5 planning complete — 2 plans in 2 waves)*
