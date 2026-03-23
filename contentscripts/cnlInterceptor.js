@@ -241,6 +241,72 @@
     window.XMLHttpRequest.prototype = OriginalXHR.prototype;
     Object.setPrototypeOf(window.XMLHttpRequest, OriginalXHR);
 
+    // ================================================================
+    // Click interception for direct <a href="...127.0.0.1:9666/flash/add..."> links
+    // In MV2, chrome.webRequest.onBeforeRequest handled this.
+    // In MV3, we must intercept clicks before the browser navigates.
+    // ================================================================
+    function isCnlNavigationUrl(url) {
+        if (!url) return false;
+        return LOCALHOST_PATTERNS.some(pattern => url.includes(pattern)) &&
+               (url.includes('/flash/add') || url.includes('/flash/addcrypted'));
+    }
+
+    function extractQueryParams(url) {
+        try {
+            const urlObj = new URL(url);
+            const params = {};
+            for (const [key, value] of urlObj.searchParams.entries()) {
+                params[key] = value;
+            }
+            return params;
+        } catch(e) {
+            return {};
+        }
+    }
+
+    // Intercept clicks on CNL links (anchors targeting localhost:9666/flash/add*)
+    document.addEventListener('click', function(event) {
+        // Walk up from target to find the nearest <a> element
+        let anchor = event.target;
+        while (anchor && anchor.tagName !== 'A') {
+            anchor = anchor.parentElement;
+        }
+        if (!anchor || !anchor.href) return;
+
+        if (isCnlNavigationUrl(anchor.href)) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const type = getEndpointType(anchor.href);
+            const params = extractQueryParams(anchor.href);
+
+            console.log('[CNL Interceptor] Intercepted link click:', anchor.href, type);
+            sendCnlData(type, anchor.href, params, window.location.href);
+        }
+    }, true); // Capture phase to intercept before other handlers
+
+    // Intercept form submissions targeting CNL endpoints
+    document.addEventListener('submit', function(event) {
+        const form = event.target;
+        if (!form || !form.action) return;
+
+        if (isCnlNavigationUrl(form.action)) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const type = getEndpointType(form.action);
+            const formData = new FormData(form);
+            const data = {};
+            for (const [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+
+            console.log('[CNL Interceptor] Intercepted form submit:', form.action, type);
+            sendCnlData(type, form.action, data, window.location.href);
+        }
+    }, true);
+
     // Listen for extension messages
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'ping-cnl-interceptor') {
