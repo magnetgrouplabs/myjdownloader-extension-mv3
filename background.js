@@ -589,7 +589,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // ============================================================
  if (action === "cnl-captured") {
   console.log("Background: CNL captured:", request.data);
-  handleCnlCaptured(request.data);
+  handleCnlCaptured(request.data, sender.tab);
   sendResponse({ status: 'cnl-received' });
   return true;
  }
@@ -817,56 +817,72 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ============================================================
 // CNL handling
 // ============================================================
-let cnlRequestQueue = [];
 
-async function handleCnlCaptured(cnlData) {
- cnlRequestQueue.push({
-  type: cnlData.type,
-  url: cnlData.url,
-  formData: cnlData.formData,
-  sourceUrl: cnlData.sourceUrl,
-  timestamp: cnlData.timestamp || Date.now()
- });
+async function handleCnlCaptured(cnlData, senderTab) {
+ await queueReady;
 
- try {
-  // Determine preferred device
-  const stored = await chrome.storage.local.get(['DEFAULT_PREFERRED_JD']);
-  const preferredDevice = stored.DEFAULT_PREFERRED_JD;
-  const deviceId = (preferredDevice && preferredDevice.id &&
-   preferredDevice.id !== DEVICE_TYPES.ASK_EVERY_TIME.id &&
-   preferredDevice.id !== DEVICE_TYPES.LAST_USED.id)
-   ? preferredDevice.id : undefined;
-
-  // Send directly to JDownloader via offscreen
-  await processCnlViaOffscreen(cnlData, deviceId);
- } catch(e) {
-  console.error("Background: Failed to handle CNL:", e);
- }
-}
-
-async function processCnlViaOffscreen(cnlData, deviceId) {
- await createOffscreenDocument();
-
- // Extract links from form data — field names depend on endpoint type
- let links = '';
  const fd = cnlData.formData || {};
+ let links = '';
  if (cnlData.type === 'ADD_CRYPTED') {
   links = fd.crypted || fd.urls || '';
  } else {
   links = fd.urls || fd.links || '';
  }
 
- const query = {
-  links: links,
-  sourceUrl: cnlData.sourceUrl || fd.source || '',
-  packageName: fd.package || fd.packageName || '',
-  downloadPassword: fd.passwords || ''
- };
+ if (!links) {
+  console.warn("Background: CNL captured but no links found in formData:", fd);
+  return;
+ }
 
- console.log("Background: Sending CNL to JDownloader:", cnlData.type, "links length:", links.length);
- const result = await sendToOffscreen('offscreen-add-cnl', { deviceId: deviceId, query: query });
- console.log("Background: CNL processed:", result);
- return result;
+ console.log("Background: CNL captured, type:", cnlData.type, "links length:", links.length);
+
+ // Determine the tab to queue on
+ let tabId = senderTab ? senderTab.id : null;
+ if (!tabId) {
+  // Fallback: use the active tab
+  try {
+   const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+   if (activeTab) tabId = activeTab.id;
+  } catch(e) { /* ignore */ }
+ }
+
+ if (!tabId) {
+  console.error("Background: CNL captured but no tab to queue on");
+  return;
+ }
+
+ // Build tab info for the queue entry
+ let tab;
+ try {
+  tab = await chrome.tabs.get(tabId);
+ } catch(e) {
+  tab = { id: tabId, url: cnlData.sourceUrl || '', title: '', favIconUrl: '' };
+ }
+
+ // Split links (newline-separated) and add each to the request queue
+ const linkList = links.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 0);
+ const tabKey = String(tabId);
+
+ if (!requestQueue[tabKey]) {
+  requestQueue[tabKey] = [];
+ }
+
+ let time = Date.now();
+ for (const link of linkList) {
+  let id = "" + tabId + time + Math.floor(Math.random() * 10000);
+  time++;
+  requestQueue[tabKey].push({
+   id: id,
+   time: time,
+   parent: { url: tab.url || cnlData.sourceUrl, title: tab.title || fd.package || '', favIconUrl: tab.favIconUrl || '' },
+   content: link,
+   type: "link"
+  });
+ }
+
+ persistQueue();
+ notifyContentScript(tabId);
+ console.log("Background: CNL queued", linkList.length, "links, toolbar opened on tab", tabId);
 }
 
 // ============================================================
@@ -928,9 +944,11 @@ function isCnlNavigation(url) {
         (url.includes('/flash/add'));
 }
 
-chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
  if (!isCnlNavigation(details.url)) return;
  if (!settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) return;
+ // Only intercept top-level navigations
+ if (details.frameId !== 0) return;
 
  console.log('Background: webNavigation CNL intercept:', details.url);
 
@@ -943,18 +961,23 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 
   const type = details.url.includes('/flash/addcrypted') ? 'ADD_CRYPTED' : 'ADD';
 
+  // Get the opener tab (the tab that had the link)
+  let tab = null;
+  try {
+   tab = await chrome.tabs.get(details.tabId);
+  } catch(e) { /* tab might be closing */ }
+
   handleCnlCaptured({
    type: type,
    url: details.url,
    formData: params,
    sourceUrl: details.url,
    timestamp: Date.now()
-  });
+  }, tab);
 
-  // Redirect the tab back or close it to prevent navigation to dead localhost
+  // Navigate back to prevent showing dead localhost page
   if (details.tabId > 0) {
    chrome.tabs.goBack(details.tabId).catch(() => {
-    // If no history, close the tab
     chrome.tabs.remove(details.tabId).catch(() => {});
    });
   }
