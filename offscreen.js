@@ -2,11 +2,11 @@
 
 console.log('[Offscreen] Starting MyJDownloader offscreen document...');
 
-var api = null;
-var isReady = false;
+let api = null;
+let isReady = false;
 
 // Get absolute path to vendor/js directory
-var scriptPath = chrome.runtime.getURL('vendor/js/');
+const scriptPath = chrome.runtime.getURL('vendor/js/');
 console.log('[Offscreen] Script path:', scriptPath);
 
 // Use RequireJS to load jdapi module
@@ -195,12 +195,19 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             var cnlDeviceId = request.deviceId;
             var cnlQuery = request.query || {};
-            api.setActiveDevice(cnlDeviceId);
-            api.send('/linkgrabberv2/addLinks', {
-                links: cnlQuery.links
-            }).done(function(result) {
+            if (cnlDeviceId) {
+                api.setActiveDevice(cnlDeviceId);
+            }
+            var cnlPayload = { links: cnlQuery.links };
+            if (cnlQuery.packageName) cnlPayload.packageName = cnlQuery.packageName;
+            if (cnlQuery.downloadPassword) cnlPayload.downloadPassword = cnlQuery.downloadPassword;
+            if (cnlQuery.sourceUrl) cnlPayload.sourceUrl = cnlQuery.sourceUrl;
+            console.log('[Offscreen] Sending CNL to linkgrabber:', cnlPayload.links ? cnlPayload.links.substring(0, 100) + '...' : '(empty)');
+            api.send('/linkgrabberv2/addLinks', cnlPayload).done(function(result) {
+                console.log('[Offscreen] CNL addLinks success:', result);
                 sendResponse({ success: true, result: result });
             }).fail(function(err) {
+                console.error('[Offscreen] CNL addLinks failed:', err);
                 sendResponse({ success: false, error: err.message || err });
             });
             return true;

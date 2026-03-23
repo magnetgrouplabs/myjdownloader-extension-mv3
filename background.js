@@ -828,29 +828,43 @@ async function handleCnlCaptured(cnlData) {
   timestamp: cnlData.timestamp || Date.now()
  });
 
- await chrome.storage.local.set({ 'cnl_queue': cnlRequestQueue });
-
  try {
-  const settings = await chrome.storage.local.get(['ADD_LINKS_DIALOG_ACTIVE', 'DEFAULT_PREFERRED_JD']);
-  const shouldOpenPopup = settings.ADD_LINKS_DIALOG_ACTIVE !== false;
+  // Determine preferred device
+  const stored = await chrome.storage.local.get(['DEFAULT_PREFERRED_JD']);
+  const preferredDevice = stored.DEFAULT_PREFERRED_JD;
+  const deviceId = (preferredDevice && preferredDevice.id &&
+   preferredDevice.id !== DEVICE_TYPES.ASK_EVERY_TIME.id &&
+   preferredDevice.id !== DEVICE_TYPES.LAST_USED.id)
+   ? preferredDevice.id : undefined;
 
-  if (shouldOpenPopup) {
-   await chrome.storage.local.set({ 'cnl_pending': true });
-  } else {
-   await processCnlViaOffscreen(cnlData);
-  }
+  // Send directly to JDownloader via offscreen
+  await processCnlViaOffscreen(cnlData, deviceId);
  } catch(e) {
   console.error("Background: Failed to handle CNL:", e);
  }
 }
 
-async function processCnlViaOffscreen(cnlData) {
+async function processCnlViaOffscreen(cnlData, deviceId) {
  await createOffscreenDocument();
+
+ // Extract links from form data — field names depend on endpoint type
+ let links = '';
+ const fd = cnlData.formData || {};
+ if (cnlData.type === 'ADD_CRYPTED') {
+  links = fd.crypted || fd.urls || '';
+ } else {
+  links = fd.urls || fd.links || '';
+ }
+
  const query = {
-  links: cnlData.formData?.crypted || cnlData.formData?.urls || '',
-  sourceUrl: cnlData.sourceUrl
+  links: links,
+  sourceUrl: cnlData.sourceUrl || fd.source || '',
+  packageName: fd.package || fd.packageName || '',
+  downloadPassword: fd.passwords || ''
  };
- const result = await sendToOffscreen('offscreen-add-cnl', { query: query });
+
+ console.log("Background: Sending CNL to JDownloader:", cnlData.type, "links length:", links.length);
+ const result = await sendToOffscreen('offscreen-add-cnl', { deviceId: deviceId, query: query });
  console.log("Background: CNL processed:", result);
  return result;
 }
