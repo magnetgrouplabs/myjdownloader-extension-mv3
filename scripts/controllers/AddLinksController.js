@@ -7,7 +7,6 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
   "$timeout",
   "$interval",
   "RequestQueueEventService",
-  "CnlService",
   "ApiErrorService",
   "StorageService",
   "BackgroundScriptService",
@@ -21,7 +20,6 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
     $timeout,
     $interval,
     requestQueueEventService,
-    cnlService,
     apiErrorService,
     storageService,
     BackgroundScriptService,
@@ -668,33 +666,6 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         });
     }
 
-    function sendCnlQueries(cnlQueries, callback) {
-      if (cnlQueries.length > 0) {
-        var deviceClient = myjdDeviceClientFactory.get($scope.selection.device);
-        var result = deviceClient.sendRequest("/linkgrabberv2/addLinks", JSON.stringify({ links: cnlQueries[0].links }));
-        if (!result || typeof result.done !== 'function') {
-          $timeout(function () {
-            $scope.state.sending.state = $scope.requestStates.ERROR;
-            $scope.state.sending.log = "API not connected";
-          }, 0);
-          return;
-        }
-        result
-          .done(function () {
-            cnlQueries.splice(0, 1);
-            sendCnlQueries(cnlQueries, callback);
-          })
-          .fail(function (e) {
-            $timeout(function () {
-              $scope.state.sending.state = $scope.requestStates.ERROR;
-              $scope.state.sending.log = JSON.stringify(e);
-            }, 0);
-          });
-      } else if (callback) {
-        callback();
-      }
-    }
-
     var successClose = function (idsToRemove) {
       $timeout(function () {
         $scope.state.sending.state = $scope.requestStates.SUCCESS;
@@ -732,7 +703,6 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         }, 0);
 
         var addLinksQueries = [];
-        var cnlQueries = [];
 
         $.each($scope.requests, function (index, request) {
           var query = {};
@@ -836,18 +806,7 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         });
 
         saveOptionsAndHistory(function () {
-          if (addLinksQueries.length > 0 || cnlQueries.length > 0) {
-            var requestsState = {
-              ADD_LINKS:
-                addLinksQueries.length > 0
-                  ? $scope.requestStates.RUNNING
-                  : $scope.requestStates.SUCCESS,
-              CNL:
-                cnlQueries.length > 0
-                  ? $scope.requestStates.RUNNING
-                  : $scope.requestStates.SUCCESS,
-            };
-
+          if (addLinksQueries.length > 0) {
             var donecallback = function () {
               var idsToRemove = [];
               if ($scope.selection.removeAfterSend) {
@@ -859,22 +818,7 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
               successClose(idsToRemove);
             };
 
-            if (cnlQueries.length > 0) {
-              sendCnlQueries(cnlQueries, function () {
-                requestsState.CNL = $scope.requestStates.SUCCESS;
-                if (requestsState.ADD_LINKS !== $scope.requestStates.RUNNING) {
-                  donecallback();
-                }
-              });
-            }
-            if (addLinksQueries.length > 0) {
-              sendAddLinkQueries(addLinksQueries, function () {
-                requestsState.ADD_LINKS = $scope.requestStates.SUCCESS;
-                if (requestsState.CNL !== $scope.requestStates.RUNNING) {
-                  donecallback();
-                }
-              });
-            }
+            sendAddLinkQueries(addLinksQueries, donecallback);
           }
         });
       }
