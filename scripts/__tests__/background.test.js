@@ -53,6 +53,7 @@ describe('Background.js Queue Persistence', () => {
     global.chrome.contextMenus.onClicked._listeners.length = 0;
     global.chrome.alarms.onAlarm._listeners.length = 0;
     global.chrome.storage.onChanged._listeners.length = 0;
+    global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
 
     // Reset module registry so background.js re-executes
     jest.resetModules();
@@ -500,6 +501,52 @@ describe('Background.js Queue Persistence', () => {
       expect(linkInfoViaTabs).toHaveLength(0);
     });
   });
+
+  describe('CNL capture routes through the requestQueue + toolbar flow', () => {
+    it('should queue a captured CNL request as type "cnl" and open the toolbar', async () => {
+      loadBackground();
+
+      const tab = createMockTab(77, 'http://hoster.example/page');
+      const sender = { id: chrome.runtime.id, tab: tab };
+
+      await sendMessage('cnl-captured', {
+        type: 'ADD_CRYPTED',
+        url: 'http://127.0.0.1:9666/flash/addcrypted2',
+        formData: { crypted: 'AAAA', jk: 'function f(){}', source: 'http://hoster.example', passwords: '' },
+        sourceUrl: 'http://hoster.example/page',
+        timestamp: Date.now()
+      }, sender);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const linkInfo = await sendMessage('link-info', String(77));
+      expect(linkInfo.data).toHaveLength(1);
+      expect(linkInfo.data[0].type).toBe('cnl');
+      expect(linkInfo.data[0].content.requestBody.formData.crypted).toBe('AAAA');
+
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        77,
+        expect.objectContaining({ action: 'open-in-page-toolbar' })
+      );
+    });
+
+    it('should drop a captured CNL request that has no tab context', async () => {
+      loadBackground();
+
+      // No sender.tab (e.g. tab already closed) - must not throw and must not queue anything
+      await sendMessage('cnl-captured', {
+        type: 'ADD_CRYPTED',
+        url: 'http://127.0.0.1:9666/flash/addcrypted2',
+        formData: { crypted: 'AAAA' },
+        sourceUrl: 'http://hoster.example/page',
+        timestamp: Date.now()
+      }, { id: chrome.runtime.id });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ==================================================================
@@ -523,11 +570,5 @@ describe('Background.js Storage Key Consistency (Phase 9)', () => {
     expect(backgroundSrc).not.toMatch(/['"]settings_context_menu_simple['"]/);
     expect(backgroundSrc).not.toMatch(/['"]settings_default_preferred_jd['"]/);
     expect(backgroundSrc).not.toMatch(/['"]settings_add_links_dialog_active['"]/);
-  });
-
-  it('chrome.storage.local.get for CNL should use ADD_LINKS_DIALOG_ACTIVE', () => {
-    // The CNL handler must use the correct key for add-links dialog check
-    expect(backgroundSrc).toMatch(/chrome\.storage\.local\.get\(\[.*'ADD_LINKS_DIALOG_ACTIVE'/);
-    expect(backgroundSrc).not.toMatch(/chrome\.storage\.local\.get\(\[.*'settings_add_links_dialog_active'/);
   });
 });

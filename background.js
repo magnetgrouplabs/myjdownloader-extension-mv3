@@ -334,17 +334,158 @@ chrome.storage.onChanged.addListener((changes) => {
 // ============================================================
 // DeclarativeNetRequest for CNL
 // ============================================================
+//
+// IMPORTANT: this extension talks to JDownloader through the MyJDownloader
+// *cloud* API - there is no real JDownloader listening on 127.0.0.1:9666 /
+// localhost:9666 on the user's machine. CNL-enabled hosters commonly point
+// a hidden <iframe> (sub_frame navigation) or a <script> tag directly at
+// that address, which is a raw browser-level network request that content
+// scripts CANNOT intercept by overriding window.fetch/XMLHttpRequest (that
+// only catches JS-initiated calls, not iframe src navigations or classic
+// <script src> loads). A previous version of this file only added an
+// "allow" declarativeNetRequest rule here, which just lets the request
+// proceed to the network unmodified - since nothing is really listening on
+// that port, it fails outright ("Links konnten nicht uebertragen werden").
+//
+// The fix: actually fake the responses at the network layer via
+// declarativeNetRequest "redirect" to data: URLs, which works regardless
+// of whether the request came from fetch/XHR, a <script> tag, or an
+// <iframe> navigation. The CNL payload itself (for add/addcrypted2) is
+// captured separately via a non-blocking webRequest.onBeforeRequest
+// listener below, which can read the URL's query string (GET-style CNL)
+// or the POST body (form-style CNL) before the redirect takes it away.
+const CNL_JD_CHECK_RESPONSE = 'var jdownloader = true;\nvar jdownloaderVersion = "2026.03.08";';
+const CNL_CROSSDOMAIN_RESPONSE = '<?xml version="1.0"?>\n<cross-domain-policy>\n  <site-control permitted-cross-domain-policies="master-only"/>\n  <allow-access-from domain="*"/>\n  <allow-http-request-headers-from domain="*" headers="*"/>\n</cross-domain-policy>';
+const CNL_OK_RESPONSE = 'OK';
+
+function dataUrl(mime, content) {
+ return 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(content);
+}
+
+const CNL_RULE_IDS = [1, 2, 3, 4, 5, 6];
+// Every resource type a hoster's CNL script could plausibly use to reach
+// 127.0.0.1:9666 - <script src>, <iframe src>, fetch/XHR, <img>/ping, etc.
+const CNL_RESOURCE_TYPES = ['sub_frame', 'xmlhttprequest', 'script', 'ping', 'other', 'object', 'media', 'image'];
+
 function removeCnlInterceptor() {
- chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [1, 2] }).catch(() => {});
+ chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: CNL_RULE_IDS }).catch(() => {});
 }
 
 function addCnlInterceptor() {
  const rules = [
-  { id: 1, priority: 1, action: { type: "allow" }, condition: { urlFilter: ".*localhost:9666.*", resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest"] } },
-  { id: 2, priority: 1, action: { type: "allow" }, condition: { urlFilter: ".*127\\.0\\.0\\.1:9666.*", resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest"] } }
+  {
+   id: 1, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/javascript', CNL_JD_CHECK_RESPONSE) } },
+   condition: { urlFilter: '*://localhost:9666/jdcheck.js*', resourceTypes: CNL_RESOURCE_TYPES }
+  },
+  {
+   id: 2, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/javascript', CNL_JD_CHECK_RESPONSE) } },
+   condition: { urlFilter: '*://127.0.0.1:9666/jdcheck.js*', resourceTypes: CNL_RESOURCE_TYPES }
+  },
+  {
+   id: 3, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/xml', CNL_CROSSDOMAIN_RESPONSE) } },
+   condition: { urlFilter: '*://localhost:9666/crossdomain.xml*', resourceTypes: CNL_RESOURCE_TYPES }
+  },
+  {
+   id: 4, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/xml', CNL_CROSSDOMAIN_RESPONSE) } },
+   condition: { urlFilter: '*://127.0.0.1:9666/crossdomain.xml*', resourceTypes: CNL_RESOURCE_TYPES }
+  },
+  {
+   // covers both /flash/add and /flash/addcrypted2
+   id: 5, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/plain', CNL_OK_RESPONSE) } },
+   condition: { urlFilter: '*://localhost:9666/flash/add*', resourceTypes: CNL_RESOURCE_TYPES }
+  },
+  {
+   id: 6, priority: 1,
+   action: { type: 'redirect', redirect: { url: dataUrl('text/plain', CNL_OK_RESPONSE) } },
+   condition: { urlFilter: '*://127.0.0.1:9666/flash/add*', resourceTypes: CNL_RESOURCE_TYPES }
+  }
  ];
- chrome.declarativeNetRequest.updateSessionRules({ addRules: rules }).catch(() => {});
+ chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: CNL_RULE_IDS, addRules: rules }).catch(function(err) {
+  console.error('Background: Failed to add CNL redirect rules:', err);
+ });
 }
+
+// ============================================================
+// webRequest-based CNL payload capture (network layer)
+// ============================================================
+// Fires for every request to /flash/add* on the CNL ports, regardless of
+// whether it was triggered by an <iframe> navigation, a <script> tag, or
+// fetch/XHR. This is purely observational (no "blocking" extraInfoSpec,
+// which MV3 no longer supports for most extensions anyway) - the actual
+// fake-success response is produced by the declarativeNetRequest redirect
+// rules above; this listener's only job is to read the CNL payload before
+// the redirect takes the request away.
+function parseCnlRequestBody(details) {
+ const formData = {};
+
+ if (details.requestBody) {
+  if (details.requestBody.formData) {
+   Object.keys(details.requestBody.formData).forEach(function(key) {
+    formData[key] = details.requestBody.formData[key][0];
+   });
+   return formData;
+  }
+  if (details.requestBody.raw && details.requestBody.raw.length) {
+   try {
+    const decoder = new TextDecoder('utf-8');
+    const rawStr = details.requestBody.raw
+     .map(function(chunk) { return chunk.bytes ? decoder.decode(chunk.bytes) : ''; })
+     .join('');
+    const params = new URLSearchParams(rawStr);
+    let any = false;
+    for (const [key, value] of params.entries()) { formData[key] = value; any = true; }
+    if (any) return formData;
+   } catch (e) {
+    console.error('Background: Failed to decode CNL raw POST body:', e);
+   }
+  }
+ }
+
+ // GET-style CNL: payload lives in the query string
+ try {
+  const urlObj = new URL(details.url);
+  let any = false;
+  for (const [key, value] of urlObj.searchParams.entries()) { formData[key] = value; any = true; }
+  if (any) return formData;
+ } catch (e) {
+  console.error('Background: Failed to parse CNL query string:', e);
+ }
+
+ return null;
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+ function(details) {
+  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE] === false) return;
+
+  const formData = parseCnlRequestBody(details);
+  if (!formData || (!formData.crypted && !formData.dlc && !formData.urls)) return;
+
+  const type = details.url.indexOf('addcrypted2') !== -1 ? 'ADD_CRYPTED' : 'ADD';
+  console.log('Background: CNL payload captured via webRequest:', type, details.url);
+  const cnlPayload = {
+   type: type,
+   url: details.url,
+   formData: formData,
+   sourceUrl: details.documentUrl || details.initiator || '',
+   timestamp: Date.now()
+  };
+
+  if (details.tabId >= 0) {
+   chrome.tabs.get(details.tabId, function(tab) {
+    handleCnlCaptured(cnlPayload, chrome.runtime.lastError ? null : tab);
+   });
+  }
+ },
+ { urls: [ 'http://127.0.0.1:9666/flash/*', 'http://localhost:9666/flash/*' ] },
+ ['requestBody']
+);
+
 
 // ============================================================
 // Message handler — central routing for popup, toolbar, content scripts
@@ -584,7 +725,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // ============================================================
  if (action === "cnl-captured") {
   console.log("Background: CNL captured:", request.data);
-  handleCnlCaptured(request.data);
+  handleCnlCaptured(request.data, sender.tab);
   sendResponse({ status: 'cnl-received' });
   return true;
  }
@@ -805,42 +946,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ============================================================
 // CNL handling
 // ============================================================
-let cnlRequestQueue = [];
+// A real local JDownloader is not reachable from the browser (it commonly
+// runs on a different machine/NAS, e.g. in Docker) - classic ClickNLoad only
+// ever works when browser and JDownloader share the same host. So instead of
+// trying to talk CNL2 over the (unreachable) network, captured CNL requests
+// are routed through the exact same requestQueue + in-page toolbar flow that
+// already works for normal "add link" requests. The toolbar UI's
+// AddLinksController wraps the raw CNL form data into a
+// https://dummycnl.jdownloader.org/#<hex> URL and submits it via the regular
+// /linkgrabberv2/addLinks device API call - JDownloader itself recognizes
+// that URL and decrypts the embedded CNL2 payload locally. This is the same
+// mechanism the official MyJDownloader extension uses for this exact case.
+async function handleCnlCaptured(cnlData, tab) {
+ await queueReady;
 
-async function handleCnlCaptured(cnlData) {
- cnlRequestQueue.push({
-  type: cnlData.type,
-  url: cnlData.url,
-  formData: cnlData.formData,
-  sourceUrl: cnlData.sourceUrl,
-  timestamp: cnlData.timestamp || Date.now()
- });
-
- await chrome.storage.local.set({ 'cnl_queue': cnlRequestQueue });
-
- try {
-  const settings = await chrome.storage.local.get(['ADD_LINKS_DIALOG_ACTIVE', 'DEFAULT_PREFERRED_JD']);
-  const shouldOpenPopup = settings.ADD_LINKS_DIALOG_ACTIVE !== false;
-
-  if (shouldOpenPopup) {
-   await chrome.storage.local.set({ 'cnl_pending': true });
-  } else {
-   await processCnlViaOffscreen(cnlData);
-  }
- } catch(e) {
-  console.error("Background: Failed to handle CNL:", e);
+ if (!tab || tab.id === undefined || tab.id === null) {
+  console.error('Background: CNL captured but no tab context, dropping:', cnlData.url);
+  return;
  }
-}
 
-async function processCnlViaOffscreen(cnlData) {
- await createOffscreenDocument();
- const query = {
-  links: cnlData.formData?.crypted || cnlData.formData?.urls || '',
-  sourceUrl: cnlData.sourceUrl
+ let tabKey = String(tab.id);
+ let time = Date.now();
+ let id = "" + tab.id + time + Math.floor(Math.random() * 10000);
+
+ let newRequest = {
+  id: id,
+  time: time,
+  type: "cnl",
+  parent: { url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl },
+  content: {
+   requestBody: { formData: cnlData.formData || {} },
+   url: cnlData.sourceUrl,
+   source: (cnlData.formData && cnlData.formData.source) || cnlData.sourceUrl
+  }
  };
- const result = await sendToOffscreen('offscreen-add-cnl', { query: query });
- console.log("Background: CNL processed:", result);
- return result;
+
+ if (!requestQueue[tabKey]) {
+  requestQueue[tabKey] = [];
+ }
+ requestQueue[tabKey].push(newRequest);
+ persistQueue();
+ notifyContentScript(tab.id);
 }
 
 // ============================================================
