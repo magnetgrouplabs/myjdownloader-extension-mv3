@@ -87,7 +87,11 @@ global.chrome = {
   },
   tabs: {
     sendMessage: jest.fn(() => Promise.resolve()),
+    get: jest.fn((tabId, callback) => callback({ id: tabId })),
     onRemoved: createEvent()
+  },
+  webRequest: {
+    onBeforeRequest: createEvent()
   },
   action: {
     setBadgeText: jest.fn(() => Promise.resolve()),

@@ -1,247 +1,56 @@
 'use strict';
 
 /**
- * CNL (Click'N'Load) Interceptor for MV3
- * Overrides fetch/XHR to capture CNL requests to localhost:9666
- * and forwards them to the extension for processing.
+ * CNL (Click'N'Load) Interceptor - ISOLATED world bridge.
+ *
+ * The actual fetch/XHR/form interception happens in cnlInterceptorMain.js,
+ * which is injected into the page's MAIN world (see manifest.json) so it
+ * can see the real network calls the page makes. This script runs in the
+ * normal isolated content-script world, which is the only place with
+ * access to chrome.runtime. It just relays what the MAIN-world script
+ * hands it via window.postMessage on to the background service worker.
  */
 
 (function() {
-    // Prevent double-injection
-    if (window.__myjdCnlInterceptorInstalled) return;
-    window.__myjdCnlInterceptorInstalled = true;
+    if (window.__myjdCnlInterceptorBridgeInstalled) return;
+    window.__myjdCnlInterceptorBridgeInstalled = true;
 
-    console.log('[CNL Interceptor] Installed');
+    console.log('[CNL Interceptor/Bridge] Installed');
 
-    const LOCALHOST_PATTERNS = [
-        'localhost:9666',
-        '127.0.0.1:9666'
-    ];
+    const BRIDGE_MARKER = '__myjd_cnl_bridge__';
 
-    const CNL_ENDPOINTS = {
-        JD_CHECK: '/jdcheck.js',
-        CROSSDOMAIN: '/crossdomain.xml',
-        ADD_CRYPTED: '/flash/addcrypted2',
-        ADD: '/flash/add'
-    };
+    window.addEventListener('message', function(event) {
+        // The real security boundary here is event.source === window: only
+        // code running in this exact window (i.e. our own MAIN-world script,
+        // not an iframe, not another tab, not a malicious page) can ever
+        // satisfy that check, since postMessage always sets `source` to the
+        // actual sending window and that cannot be spoofed cross-context.
+        // We additionally check origin where available, but some engines
+        // report an empty origin for same-window self-messaging, so we
+        // don't hard-fail on that alone.
+        if (event.source !== window) return;
+        if (event.origin && event.origin !== window.location.origin) return;
+        const data = event.data;
+        if (!data || data[BRIDGE_MARKER] !== true) return;
 
-    function isCnlUrl(url) {
-        return LOCALHOST_PATTERNS.some(pattern => url.includes(pattern));
-    }
-
-    function getEndpointType(url) {
-        if (url.includes(CNL_ENDPOINTS.JD_CHECK)) return 'JD_CHECK';
-        if (url.includes(CNL_ENDPOINTS.CROSSDOMAIN)) return 'CROSSDOMAIN';
-        if (url.includes(CNL_ENDPOINTS.ADD_CRYPTED)) return 'ADD_CRYPTED';
-        if (url.includes(CNL_ENDPOINTS.ADD)) return 'ADD';
-        return 'UNKNOWN';
-    }
-
-    // Capture form data from various formats
-    function captureFormData(data) {
-        if (!data) return null;
-
-        // If it's already an object, return it
-        if (typeof data === 'object' && !(data instanceof Blob) && !(data instanceof ArrayBuffer)) {
-            return data;
-        }
-
-        // If it's FormData, convert to object
-        if (data instanceof FormData) {
-            const result = {};
-            for (const [key, value] of data.entries()) {
-                result[key] = value;
+        chrome.runtime.sendMessage({
+            name: 'myjd-toolbar',
+            action: 'cnl-captured',
+            data: {
+                type: data.type,
+                url: data.url,
+                formData: data.formData,
+                sourceUrl: data.sourceUrl,
+                timestamp: data.timestamp
             }
-            return result;
-        }
+        }).then(() => {
+            console.log('[CNL Interceptor/Bridge] Forwarded to background:', data.type);
+        }).catch(e => {
+            console.error('[CNL Interceptor/Bridge] Failed to forward:', e);
+        });
+    });
 
-        // If it's URLSearchParams, convert to object
-        if (data instanceof URLSearchParams) {
-            const result = {};
-            for (const [key, value] of data.entries()) {
-                result[key] = value;
-            }
-            return result;
-        }
-
-        // Try to parse as JSON
-        if (typeof data === 'string') {
-            try {
-                return JSON.parse(data);
-            } catch(e) {
-                return { rawData: data };
-            }
-        }
-
-        return { rawData: String(data) };
-    }
-
-    // Send captured CNL data to extension
-    async function sendCnlData(type, url, data, sourceUrl) {
-        try {
-            await chrome.runtime.sendMessage({
-                name: 'myjd-toolbar',
-                action: 'cnl-captured',
-                data: {
-                    type: type,
-                    url: url,
-                    formData: data,
-                    sourceUrl: sourceUrl,
-                    timestamp: Date.now()
-                }
-            });
-            console.log('[CNL Interceptor] Sent to extension:', type);
-        } catch(e) {
-            console.error('[CNL Interceptor] Failed to send:', e);
-        }
-    }
-
-    // Override fetch API
-    const originalFetch = window.fetch;
-    window.fetch = async function(url, options) {
-        const urlString = url.toString();
-
-        if (isCnlUrl(urlString)) {
-            console.log('[CNL Interceptor] Intercepted fetch:', urlString);
-            const type = getEndpointType(urlString);
-
-            if (type === 'JD_CHECK') {
-                // Return mock response for JD check
-                return new Response('var jdownloader = true;', {
-                    status: 200,
-                    headers: { 'Content-Type': 'text/javascript' }
-                });
-            }
-
-            if (type === 'CROSSDOMAIN') {
-                // Return crossdomain.xml
-                const crossdomain = `<?xml version="1.0"?>
-<cross-domain-policy>
-  <site-control permitted-cross-domain-policies="master-only"/>
-  <allow-access-from domain="*"/>
-  <allow-http-request-headers-from domain="*" headers="*"/>
-</cross-domain-policy>`;
-                return new Response(crossdomain, {
-                    status: 200,
-                    headers: { 'Content-Type': 'text/xml' }
-                });
-            }
-
-            // For add/addcrypted, capture the data
-            if (type === 'ADD_CRYPTED' || type === 'ADD') {
-                const formData = captureFormData(options.body);
-                await sendCnlData(type, urlString, formData, window.location.href);
-
-                // Return success response
-                return new Response('OK', { status: 200 });
-            }
-        }
-
-        // Pass through to original fetch
-        return originalFetch.apply(this, arguments);
-    };
-
-    // Override XMLHttpRequest
-    const OriginalXHR = window.XMLHttpRequest;
-
-    window.XMLHttpRequest = function() {
-        const xhr = new OriginalXHR();
-        let requestUrl = '';
-        let capturedMethod = '';
-        let capturedBody = null;
-
-        const originalOpen = xhr.open;
-        xhr.open = function(method, url, async, user, password) {
-            requestUrl = url;
-            capturedMethod = method;
-            return originalOpen.apply(this, arguments);
-        };
-
-        const originalSend = xhr.send;
-        xhr.send = function(body) {
-            capturedBody = body;
-
-            if (isCnlUrl(requestUrl)) {
-                console.log('[CNL Interceptor] Intercepted XHR:', requestUrl);
-                const type = getEndpointType(requestUrl);
-
-                if (type === 'JD_CHECK') {
-                    // Mock response for JD check
-                    Object.defineProperty(xhr, 'responseText', {
-                        get: () => 'var jdownloader = true;'
-                    });
-                    Object.defineProperty(xhr, 'status', {
-                        get: () => 200
-                    });
-                    Object.defineProperty(xhr, 'readyState', {
-                        get: () => 4
-                    });
-
-                    // Trigger onload
-                    if (xhr.onload) {
-                        setTimeout(() => xhr.onload(), 0);
-                    }
-                    return;
-                }
-
-                if (type === 'CROSSDOMAIN') {
-                    const crossdomain = `<?xml version="1.0"?>
-<cross-domain-policy>
-  <site-control permitted-cross-domain-policies="master-only"/>
-  <allow-access-from domain="*"/>
-  <allow-http-request-headers-from domain="*" headers="*"/>
-</cross-domain-policy>`;
-
-                    Object.defineProperty(xhr, 'responseText', {
-                        get: () => crossdomain
-                    });
-                    Object.defineProperty(xhr, 'status', {
-                        get: () => 200
-                    });
-                    Object.defineProperty(xhr, 'readyState', {
-                        get: () => 4
-                    });
-
-                    if (xhr.onload) {
-                        setTimeout(() => xhr.onload(), 0);
-                    }
-                    return;
-                }
-
-                // For add/addcrypted endpoints
-                if (type === 'ADD_CRYPTED' || type === 'ADD') {
-                    const formData = captureFormData(capturedBody);
-                    sendCnlData(type, requestUrl, formData, window.location.href);
-
-                    // Mock success response
-                    Object.defineProperty(xhr, 'responseText', {
-                        get: () => 'OK'
-                    });
-                    Object.defineProperty(xhr, 'status', {
-                        get: () => 200
-                    });
-                    Object.defineProperty(xhr, 'readyState', {
-                        get: () => 4
-                    });
-
-                    if (xhr.onload) {
-                        setTimeout(() => xhr.onload(), 0);
-                    }
-                    return;
-                }
-            }
-
-            return originalSend.apply(this, arguments);
-        };
-
-        return xhr;
-    };
-
-    // Copy prototype and static properties
-    window.XMLHttpRequest.prototype = OriginalXHR.prototype;
-    Object.setPrototypeOf(window.XMLHttpRequest, OriginalXHR);
-
-    // Listen for extension messages
+    // Listen for extension messages (e.g. health checks)
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'ping-cnl-interceptor') {
             sendResponse({ status: 'active', url: window.location.href });
@@ -249,5 +58,5 @@
         }
     });
 
-    console.log('[CNL Interceptor] Ready');
+    console.log('[CNL Interceptor/Bridge] Ready');
 })();
