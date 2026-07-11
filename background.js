@@ -702,18 +702,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // Add CNL
- if (action === "add-cnl") {
-  const device = request.data ? request.data.device : request.device;
-  const query = request.data ? request.data.query : request.query;
-  sendToOffscreen('offscreen-add-cnl', { deviceId: device?.id, query }).then(result => {
-   sendResponse(result);
-  }).catch(err => {
-   sendResponse({ error: err.message });
-  });
-  return true;
- }
-
  // Send feedback
  if (action === "send-feedback") {
   sendResponse({ status: 'ok' });
