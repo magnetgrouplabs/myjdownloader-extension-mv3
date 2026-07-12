@@ -491,6 +491,9 @@ chrome.webRequest.onBeforeRequest.addListener(
 // Message handler — central routing for popup, toolbar, content scripts
 // ============================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+ // Validate message format
+ if (!request || typeof request !== 'object') return false;
+
  // Ignore messages intended for offscreen
  if (request.target === 'offscreen') return false;
 
@@ -498,6 +501,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  if (sender.id !== chrome.runtime.id) return false;
 
  const action = request.action;
+ if (!action || typeof action !== 'string') return false;
+
  console.log("Background message:", action, "from:", sender.tab ? ('tab:' + sender.tab.id) : 'extension');
 
  // --- Offscreen management ---
@@ -853,14 +858,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
    solveRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
    solveRequest.timeout = 10000;
    solveRequest.onload = function() {
-    console.log('Background: CAPTCHA token submitted to JDownloader');
-    if (sender.tab) {
-     setTimeout(function() {
-      chrome.tabs.remove(sender.tab.id, function() {
-       if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
-      });
-     }, 2000);
+    if (solveRequest.status >= 200 && solveRequest.status < 300) {
+     console.log('Background: CAPTCHA token submitted to JDownloader');
+     if (sender.tab) {
+      setTimeout(function() {
+       chrome.tabs.remove(sender.tab.id, function() {
+        if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+       });
+      }, 2000);
+     }
+    } else {
+     console.error('Background: CAPTCHA submission failed, HTTP status:', solveRequest.status);
     }
+   };
+   solveRequest.onerror = function() {
+    console.error('Background: CAPTCHA submission network error for', request.data.callbackUrl);
    };
    solveRequest.ontimeout = function() {
     console.error('Background: CAPTCHA solve request timed out for', request.data.callbackUrl);
