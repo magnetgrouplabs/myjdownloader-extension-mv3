@@ -547,6 +547,35 @@ describe('Background.js Queue Persistence', () => {
       expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
     });
   });
+
+  describe('Message format validation guards', () => {
+    it('ignores malformed (non-object) messages without throwing', () => {
+      loadBackground();
+      const handler = getOnMessageHandler();
+      const sendResponse = jest.fn();
+      const sender = { id: chrome.runtime.id };
+
+      // null / primitives must be rejected before any property access —
+      // request.target on null would otherwise throw inside the listener.
+      expect(handler(null, sender, sendResponse)).toBe(false);
+      expect(handler(undefined, sender, sendResponse)).toBe(false);
+      expect(handler('not-an-object', sender, sendResponse)).toBe(false);
+      expect(handler(42, sender, sendResponse)).toBe(false);
+      expect(sendResponse).not.toHaveBeenCalled();
+    });
+
+    it('ignores messages without a string action', () => {
+      loadBackground();
+      const handler = getOnMessageHandler();
+      const sendResponse = jest.fn();
+      const sender = { id: chrome.runtime.id };
+
+      expect(handler({}, sender, sendResponse)).toBe(false);               // action missing
+      expect(handler({ action: 123 }, sender, sendResponse)).toBe(false);  // action not a string
+      expect(handler({ action: '' }, sender, sendResponse)).toBe(false);   // action empty
+      expect(sendResponse).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ==================================================================

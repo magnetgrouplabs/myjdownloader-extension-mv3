@@ -35,8 +35,8 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
   });
 
   describe('captcha-solved handler (CAP-03, CAP-04)', () => {
-    it('should make HTTP GET with do=solve&response= pattern', () => {
-      expect(bgSource).toMatch(/['"]GET['"]\s*,\s*request\.data\.callbackUrl\s*\+\s*['"]&do=solve&response=['"]\s*\+\s*encodeURIComponent\(request\.data\.token\)/);
+    it('should fetch the do=solve&response= URL (MV3 service worker: no XHR)', () => {
+      expect(bgSource).toMatch(/fetch\(\s*request\.data\.callbackUrl\s*\+\s*['"]&do=solve&response=['"]\s*\+\s*encodeURIComponent\(request\.data\.token\)/);
     });
 
     it('should URI-encode the token with encodeURIComponent', () => {
@@ -61,8 +61,8 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
   });
 
   describe('captcha-skip handler', () => {
-    it('should make HTTP GET with do=skip&skiptype= pattern', () => {
-      expect(bgSource).toMatch(/['"]GET['"]\s*,\s*request\.data\.callbackUrl\s*\+\s*['"]&do=skip&skiptype=['"]\s*\+\s*request\.data\.skipType/);
+    it('should fetch the do=skip&skiptype= URL (MV3 service worker: no XHR)', () => {
+      expect(bgSource).toMatch(/fetch\(\s*request\.data\.callbackUrl\s*\+\s*['"]&do=skip&skiptype=['"]\s*\+\s*request\.data\.skipType/);
     });
 
     it('should close CAPTCHA tab after 2-second delay', () => {
@@ -96,29 +96,33 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
 
     it('should delete activeCaptchaTabs entry before sending skip request', () => {
-      // Verify deletion happens before the HTTP request
-      const onRemovedSection = bgSource.match(/if\s*\(activeCaptchaTabs\[tabId\]\)[\s\S]*?httpRequest\.send\(\)/);
+      // Verify deletion happens before the fetch() skip request
+      const onRemovedSection = bgSource.match(/if\s*\(activeCaptchaTabs\[tabId\]\)[\s\S]*?fetch\(info\.callbackUrl/);
       expect(onRemovedSection).not.toBeNull();
       const code = onRemovedSection[0];
       const deleteIndex = code.indexOf('delete activeCaptchaTabs[tabId]');
-      const sendIndex = code.indexOf('httpRequest.send()');
-      expect(deleteIndex).toBeLessThan(sendIndex);
+      const fetchIndex = code.indexOf('fetch(info.callbackUrl');
+      expect(deleteIndex).toBeLessThan(fetchIndex);
     });
   });
 
   describe('HTTP request configuration', () => {
-    it('all CAPTCHA HTTP requests should set X-Myjd-Appkey header', () => {
-      // Count occurrences of X-Myjd-Appkey in the CAPTCHA section
-      const appkeyMatches = bgSource.match(/setRequestHeader\s*\(\s*['"]X-Myjd-Appkey['"]/g);
+    it('all CAPTCHA fetch requests should set the X-Myjd-Appkey header', () => {
+      // Count occurrences of the X-Myjd-Appkey header (now in the fetch() headers object)
+      const appkeyMatches = bgSource.match(/['"]X-Myjd-Appkey['"]\s*:\s*['"]webextension-['"]/g);
       // At least 3: captcha-solved, captcha-skip, and onRemoved skip
       expect(appkeyMatches).not.toBeNull();
       expect(appkeyMatches.length).toBeGreaterThanOrEqual(3);
     });
 
-    it('should set timeout to 10000ms on CAPTCHA requests', () => {
-      const timeoutMatches = bgSource.match(/\.timeout\s*=\s*10000/g);
+    it('should set a 10000ms timeout via AbortSignal.timeout on CAPTCHA requests', () => {
+      const timeoutMatches = bgSource.match(/AbortSignal\.timeout\(\s*10000\s*\)/g);
       expect(timeoutMatches).not.toBeNull();
       expect(timeoutMatches.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('must not use XMLHttpRequest (unavailable in MV3 service workers)', () => {
+      expect(bgSource).not.toMatch(/new\s+XMLHttpRequest/);
     });
   });
 
