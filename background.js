@@ -491,6 +491,9 @@ chrome.webRequest.onBeforeRequest.addListener(
 // Message handler — central routing for popup, toolbar, content scripts
 // ============================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+ // Validate message format
+ if (!request || typeof request !== 'object') return false;
+
  // Ignore messages intended for offscreen
  if (request.target === 'offscreen') return false;
 
@@ -498,6 +501,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  if (sender.id !== chrome.runtime.id) return false;
 
  const action = request.action;
+ if (!action || typeof action !== 'string') return false;
+
  console.log("Background message:", action, "from:", sender.tab ? ('tab:' + sender.tab.id) : 'extension');
 
  // --- Offscreen management ---
@@ -847,25 +852,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }, 2000);
    }
   } else if (request.data.callbackUrl && request.data.callbackUrl !== 'MYJD') {
-   // Localhost flow: submit token via HTTP GET
-   var solveRequest = new XMLHttpRequest();
-   solveRequest.open('GET', request.data.callbackUrl + '&do=solve&response=' + encodeURIComponent(request.data.token), true);
-   solveRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-   solveRequest.timeout = 10000;
-   solveRequest.onload = function() {
-    console.log('Background: CAPTCHA token submitted to JDownloader');
-    if (sender.tab) {
-     setTimeout(function() {
-      chrome.tabs.remove(sender.tab.id, function() {
-       if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
-      });
-     }, 2000);
+   // Localhost flow: submit token via HTTP GET.
+   // MV3 service workers have no XMLHttpRequest -> use fetch().
+   // AbortSignal.timeout covers ontimeout, the catch covers onerror.
+   (async function() {
+    try {
+     var solveResponse = await fetch(request.data.callbackUrl + '&do=solve&response=' + encodeURIComponent(request.data.token), {
+      headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
+      signal: AbortSignal.timeout(10000)
+     });
+     if (solveResponse.ok) {
+      console.log('Background: CAPTCHA token submitted to JDownloader');
+      if (sender.tab) {
+       setTimeout(function() {
+        chrome.tabs.remove(sender.tab.id, function() {
+         if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+        });
+       }, 2000);
+      }
+     } else {
+      console.error('Background: CAPTCHA submission failed, HTTP status:', solveResponse.status);
+     }
+    } catch (e) {
+     console.error('Background: CAPTCHA submission network error or timeout for', request.data.callbackUrl, e);
     }
-   };
-   solveRequest.ontimeout = function() {
-    console.error('Background: CAPTCHA solve request timed out for', request.data.callbackUrl);
-   };
-   solveRequest.send();
+   })();
   } else {
    console.log('Background: CAPTCHA token captured (no JDownloader callback):', request.data.token.substring(0, 20) + '...');
   }
@@ -902,22 +913,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }, 2000);
    }
   } else if (request.data.callbackUrl && request.data.callbackUrl !== 'MYJD') {
-   // Localhost flow: send skip via HTTP GET
-   var skipRequest = new XMLHttpRequest();
-   skipRequest.open('GET', request.data.callbackUrl + '&do=skip&skiptype=' + request.data.skipType, true);
-   skipRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-   skipRequest.timeout = 10000;
-   skipRequest.onload = function() {
-    console.log('Background: CAPTCHA skip sent to JDownloader, type:', request.data.skipType);
-    if (sender.tab) {
-     setTimeout(function() {
-      chrome.tabs.remove(sender.tab.id, function() {
-       if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
-      });
-     }, 2000);
+   // Localhost flow: send skip via HTTP GET.
+   // MV3 service workers have no XMLHttpRequest -> use fetch().
+   (async function() {
+    try {
+     await fetch(request.data.callbackUrl + '&do=skip&skiptype=' + request.data.skipType, {
+      headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
+      signal: AbortSignal.timeout(10000)
+     });
+     console.log('Background: CAPTCHA skip sent to JDownloader, type:', request.data.skipType);
+     if (sender.tab) {
+      setTimeout(function() {
+       chrome.tabs.remove(sender.tab.id, function() {
+        if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+       });
+      }, 2000);
+     }
+    } catch (e) {
+     console.error('Background: CAPTCHA skip network error or timeout for', request.data.callbackUrl, e);
     }
-   };
-   skipRequest.send();
+   })();
   } else {
    console.log('Background: CAPTCHA skip captured (no JDownloader callback), type:', request.data.skipType);
   }
@@ -1014,11 +1029,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
    });
    console.log('Background: MYJD CAPTCHA tab closed, sent tab-closed for', info.hoster);
   } else if (info.callbackUrl) {
-   var httpRequest = new XMLHttpRequest();
-   httpRequest.open('GET', info.callbackUrl + '&do=skip&skiptype=single', true);
-   httpRequest.setRequestHeader('X-Myjd-Appkey', 'webextension-' + chrome.runtime.getManifest().version);
-   httpRequest.timeout = 10000;
-   httpRequest.send();
+   // MV3 service workers have no XMLHttpRequest -> use fetch() (fire-and-forget).
+   fetch(info.callbackUrl + '&do=skip&skiptype=single', {
+    headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
+    signal: AbortSignal.timeout(10000)
+   }).catch(function(e) {
+    console.error('Background: CAPTCHA tab-close skip network error or timeout for', info.hoster, e);
+   });
    console.log('Background: CAPTCHA tab closed, sent skip(single) for', info.hoster);
   } else {
    console.log('Background: CAPTCHA tab closed (no JDownloader callback) for', info.hoster);
