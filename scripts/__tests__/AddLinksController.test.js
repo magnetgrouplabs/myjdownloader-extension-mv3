@@ -34,7 +34,6 @@ function extractFunction(src, name) {
 }
 
 const sendAddLinkQueriesBody = extractFunction(source, 'sendAddLinkQueries');
-const sendCnlQueriesBody = extractFunction(source, 'sendCnlQueries');
 
 describe('AddLinksController - Batch Send Refactor', () => {
 
@@ -76,11 +75,5 @@ describe('AddLinksController - Batch Send Refactor', () => {
     expect(failContent).not.toMatch(/donecallback\s*\(/);
     // callback() in fail means queue not retained -- should NOT appear
     expect(failContent).not.toMatch(/callback\s*\(/);
-  });
-
-  it('sendCnlQueries should remain as a separate function', () => {
-    // CNL queries must not be merged into the link batch
-    expect(sendCnlQueriesBody).not.toBeNull();
-    expect(sendCnlQueriesBody).toMatch(/sendRequest/);
   });
 });

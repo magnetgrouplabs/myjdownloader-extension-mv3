@@ -35,13 +35,6 @@ angular.module('myjdWebextensionApp')
             });
         }
 
-        function addCnl(device, addCnlQuery) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "add-cnl", {
-                device: device,
-                query: addCnlQuery
-            });
-        }
-
         function onConnectionChanged(callback) {
             return ExtensionMessagingService.addListener("myjd-toolbar", "session-change", callback);
         }
@@ -86,7 +79,6 @@ angular.module('myjdWebextensionApp')
 
         this.getDevices = getDevices;
         this.addLink = addLink;
-        this.addCnl = addCnl;
         this.getSessionInfo = getSessionInfo;
         this.getUsername = getUsername;
         this.logout = logout;

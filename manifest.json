@@ -26,6 +26,12 @@
  },
   "content_scripts": [ {
   "all_frames": true,
+  "js": [ "contentscripts/cnlInterceptorMain.js" ],
+  "matches": [ "*://*/*" ],
+  "run_at": "document_start",
+  "world": "MAIN"
+  }, {
+  "all_frames": true,
   "js": [ "contentscripts/cnlInterceptor.js" ],
   "matches": [ "*://*/*" ],
   "run_at": "document_start"
@@ -71,7 +77,7 @@
  "manifest_version": 3,
  "name": "MyJDownloader MV3",
  "options_ui": { "page": "popup.html#!/settings", "open_in_tab": true },
- "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen" ],
+ "permissions": [ "tabs", "storage", "declarativeNetRequest", "contextMenus", "scripting", "alarms", "offscreen", "webRequest" ],
  "host_permissions": [ "<all_urls>", "http://127.0.0.1:9666/*", "http://localhost:9666/*" ],
  "short_name": "MyJDownloader",
  "update_url": "https://clients2.google.com/service/update2/crx",
