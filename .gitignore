@@ -57,6 +57,3 @@ captcha-test.txt
 captcha-state
 popup-state
 extensions-page
-
-# GitHub issue templates (not part of extension)
-.github/ISSUE_TEMPLATE/
