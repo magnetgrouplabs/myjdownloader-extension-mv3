@@ -118,6 +118,16 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
               ) {
                 $scope.devices.push($scope.SaveForLaterDevice);
               }
+              // The panel is also rendered without a `device` attribute (the
+              // Saved view in the popup passes only `requests`), so
+              // selection.device starts undefined there. loadCachedDevices()
+              // only backfills it when a cached list exists; without this, a
+              // freshly fetched list would leave no device selected and
+              // send() would silently fall back to "Save for later",
+              // re-saving the link instead of sending it.
+              if (!$scope.selection.device && $scope.devices.length > 0) {
+                $scope.selection.device = $scope.devices[0];
+              }
             } else {
               $scope.state.lastDeviceReloadResult =
                 ExtensionI18nService.getMessage(
@@ -684,7 +694,22 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         $scope.selection.device = device;
       }
       if ($scope.selection.device === undefined) {
-        $scope.selection.device = $scope.SaveForLaterDevice;
+        // Only fall back to "Save for later" where that is a legitimate
+        // target, i.e. the captured-request flow that offers it in the device
+        // list. Everywhere else (notably the popup's Saved view, which is
+        // already looking at saved links) this fallback silently re-saved the
+        // link instead of sending it, so Send appeared to do nothing at all.
+        if ($scope.showSaveForLater) {
+          $scope.selection.device = $scope.SaveForLaterDevice;
+        } else {
+          $timeout(function () {
+            $scope.state.sending.state = $scope.requestStates.ERROR;
+            $scope.state.errorMessage = ExtensionI18nService.getMessage(
+              "ui_add_links_refresh_no_jd_found"
+            );
+          }, 0);
+          return;
+        }
       }
       if ($scope.state.sending.state === $scope.requestStates.RUNNING) {
         return;
