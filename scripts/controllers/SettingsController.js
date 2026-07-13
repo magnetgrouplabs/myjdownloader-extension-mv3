@@ -14,6 +14,10 @@ angular.module('myjdWebextensionApp')
                 $timeout(function () {
                     $scope.buildMeta = buildMeta.data;
                 }, 0);
+            }).catch(function () {
+                // buildMeta.json is generated at release time; a dev/unpacked
+                // build may not have it. The version block just stays hidden.
+                console.log('SettingsController: buildMeta.json unavailable, skipping version display');
             });
 
         $scope.priorityValues = storageService.priorityValues;

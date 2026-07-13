@@ -43,15 +43,21 @@ angular.module('myjdWebextensionApp')
                     reject(e);
                 }
             });
-            promise.catch(function (e) {
-                // "Not logged in" is expected state, not an error
+            // Being logged out is a normal state, not a failure. Previously it
+            // rejected and the logger below was attached to a *separate* promise
+            // chain, leaving the original rejection unhandled — which is what
+            // surfaced as "Possibly unhandled rejection: Not logged in" on every
+            // popup open. Resolve those two states with undefined instead (every
+            // caller already guards for an undefined response) and keep genuine
+            // failures rejecting, since those callers have their own .catch.
+            return promise.catch(function (e) {
                 if (e === "Not logged in" || e === "API not initialized") {
                     console.log("ExtensionMessagingService: " + JSON.stringify(e));
-                } else {
-                    console.error("ExtensionMessagingService: Failed to send message " + JSON.stringify(e));
+                    return undefined;
                 }
+                console.error("ExtensionMessagingService: Failed to send message " + JSON.stringify(e));
+                return $q.reject(e);
             });
-            return promise;
         };
 
         this.addListener = function (msgName, msgAction, callback) {
