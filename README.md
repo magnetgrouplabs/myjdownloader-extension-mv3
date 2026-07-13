@@ -11,7 +11,7 @@ This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fu
 - **Right-click to download** — Context menu "Download with JDownloader" on any link
 - **Multi-link stacking** — Right-click multiple links to queue them, then send all at once
 - **In-page toolbar** — Preview and manage queued links before sending
-- **Click'N'Load (CNL)** — Automatic interception of CNL-enabled sites
+- **Click'N'Load (CNL)** — Intercepts CNL requests and routes them through the in-page toolbar to your selected JDownloader device
 - **CAPTCHA solving** — Solves reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help
 - **Session persistence** — Stays logged in across browser restarts
 - **Device selection** — Choose which JDownloader instance receives your downloads
@@ -22,7 +22,7 @@ The extension connects to JDownloader through the MyJDownloader cloud API. JDown
 
 ## CAPTCHA Solving
 
-> **Testing status:** CAPTCHA solving has been verified through code path analysis (67/67 checks passing) and 199 unit tests, but has **not been tested end-to-end with a live JDownloader instance** — JDownloader's built-in solvers handle most CAPTCHAs automatically, making it difficult to trigger the browser extension flow. If you encounter a CAPTCHA that routes to the extension, please [report your experience](../../issues/new?template=captcha-bug-report.yml) whether it works or not. Community testing is how we validate this feature.
+> **Testing status:** CAPTCHA solving has been verified through code path analysis and unit tests, but has **not been tested end-to-end with a live JDownloader instance** — JDownloader's built-in solvers handle most CAPTCHAs automatically, making it difficult to trigger the browser extension flow. If you encounter a CAPTCHA that routes to the extension, please [report your experience](../../issues/new?template=captcha-bug-report.yml) whether it works or not. Community testing is how we validate this feature.
 
 ### How It Should Work
 
@@ -63,31 +63,44 @@ If automatic solvers are enabled, JDownloader will try those first and only fall
 
 ## Installation
 
-1. Download or clone this repository
-2. Open `chrome://extensions/` in Chrome
-3. Enable **Developer mode**
-4. Click **Load unpacked** and select this directory
+**From a release (recommended):**
+
+1. Download the latest `myjdownloader-extension-mv3-*.zip` from the [Releases page](../../releases/latest)
+2. Extract the zip file
+3. Open `chrome://extensions/` in Chrome and enable **Developer mode**
+4. Click **Load unpacked** and select the extracted folder
 5. Log in to your MyJDownloader account via the extension popup
+
+**From source:**
+
+1. Clone this repository
+2. Open `chrome://extensions/` in Chrome and enable **Developer mode**
+3. Click **Load unpacked** and select the repository directory
+4. Log in to your MyJDownloader account via the extension popup
 
 ## Reporting Issues
 
-### CAPTCHA Issues
+All reports must go through an issue template — blank issues are disabled. Every bug report, CAPTCHA or otherwise, **requires**:
 
-CAPTCHA solving depends on the specific file hoster, CAPTCHA provider, and JDownloader's configuration. If you encounter a CAPTCHA that doesn't work:
-
-1. **Use the issue template** — Click [New Issue](../../issues/new?template=captcha-bug-report.yml) and select "CAPTCHA Bug Report"
-2. **Include the file hoster name** and the type of CAPTCHA (reCAPTCHA, hCaptcha, etc.)
-3. **Check the service worker console** — Go to `chrome://extensions`, find MyJDownloader, click "Inspect views: service worker", and include any errors from the Console tab
-4. **Describe what happened** — Did the tab open? Did the widget render? Did the token submit?
-5. **Include your JDownloader CAPTCHA settings** — Which solvers are enabled/disabled
-
-### General Issues
-
-For non-CAPTCHA bugs, please include:
 - Steps to reproduce
 - Browser and extension version
 - JDownloader version and connection status
 - Screenshots if applicable
+
+Issues missing this information cannot be investigated and will be closed with a request to resubmit.
+
+### CAPTCHA Issues
+
+CAPTCHA solving depends on the specific file hoster, CAPTCHA provider, and JDownloader's configuration. Use the [CAPTCHA Bug Report](../../issues/new?template=captcha-bug-report.yml) template, which additionally asks for:
+
+- **The file hoster name** and the type of CAPTCHA (reCAPTCHA, hCaptcha, etc.)
+- **What happened** — Did the tab open? Did the widget render? Did the token submit?
+- **Service worker console errors** — Go to `chrome://extensions`, find MyJDownloader, click "Inspect views: service worker", and copy any errors from the Console tab
+- **Your JDownloader CAPTCHA settings** — Which solvers are enabled/disabled
+
+### General Issues
+
+For everything else, use the [Bug Report](../../issues/new?template=bug-report.yml) template.
 
 ## MV2 to MV3 Migration
 
@@ -100,6 +113,7 @@ This extension was converted from Manifest V2 to Manifest V3. Here is a summary 
 | Inline script injection for CAPTCHAs | External script elements + content scripts | MV3 CSP prohibits inline script execution |
 | `chrome.browserAction` | `chrome.action` | API renamed in MV3 |
 | `localStorage` in background page | `chrome.storage.session` + offscreen document | Service workers have no DOM or localStorage access |
+| CNL interception from the isolated content script | MAIN-world content script (`world: "MAIN"`) + `webRequest` fallback | Isolated-world scripts can't override the page's `fetch`/`XMLHttpRequest` |
 | Unrestricted CSP | Default `script-src 'self'` + `ng-csp` | MV3 enforces strict Content Security Policy |
 
 ## License

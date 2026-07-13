@@ -48,7 +48,7 @@ Web Page → Content Script → Service Worker → Offscreen → MyJDownloader A
 | `scripting` | Dynamic content script injection for toolbar |
 | `alarms` | Service worker keepalive (4-minute periodic wake) |
 | `offscreen` | DOM access for MyJDownloader API (localStorage for session) |
-| `nativeMessaging` | Communication with CAPTCHA native helper |
+| `webRequest` | Observational only (`requestBody`) — captures Click'N'Load payloads posted to localhost:9666 when a page bypasses the fetch/XHR hooks. No blocking, no redirect, no header modification |
 
 ### Host Permissions
 
@@ -108,12 +108,13 @@ default-src 'self'; script-src 'self'; object-src 'self'
 
 2. **Removed `browserSolverEnhancer.js` (XSS via innerHTML)**
    - Original code used `innerHTML` with unescaped user content
-   - Fix: CAPTCHA solving moved to isolated native helper
+   - Fix: CAPTCHA solving moved to browser tabs with the widget rendered by the CAPTCHA provider
 
-3. **Replaced `webRequest` Blocking**
-   - MV2 used `webRequest` for request interception
-   - MV3 uses `declarativeNetRequest` (declarative, no request body access)
-   - Reduced attack surface - extension cannot read/modify request bodies
+3. **Removed `webRequest` Blocking**
+   - MV2 used blocking `webRequest` to intercept and modify requests
+   - MV3 removes blocking entirely; redirects/CORS now go through `declarativeNetRequest`
+   - `webRequest` remains only in its observational form (read `requestBody` on Click'N'Load
+     posts to localhost:9666). The extension cannot block, redirect, or modify any request
 
 4. **Separated Host Permissions**
    - MV2: Permissions and hosts mixed
