@@ -13,8 +13,11 @@
  *
  * This script has NO access to chrome.runtime (MAIN world scripts don't),
  * so captured CNL data is handed off via window.postMessage to
- * cnlInterceptorBridge.js, which runs in the isolated world and forwards
- * it to the background service worker.
+ * cnlInterceptor.js, which runs in the isolated world and forwards it to
+ * the background service worker.
+ *
+ * Because this runs in the MAIN world of EVERY page, every hook it installs
+ * must fail soft: see override() / installHook() below.
  */
 
 (function() {
@@ -36,6 +39,13 @@
     };
 
     const BRIDGE_MARKER = '__myjd_cnl_bridge__';
+
+    const CROSSDOMAIN_XML = `<?xml version="1.0"?>
+<cross-domain-policy>
+  <site-control permitted-cross-domain-policies="master-only"/>
+  <allow-access-from domain="*"/>
+  <allow-http-request-headers-from domain="*" headers="*"/>
+</cross-domain-policy>`;
 
     function isCnlUrl(url) {
         return LOCALHOST_PATTERNS.some(pattern => url.includes(pattern));
@@ -104,112 +114,132 @@
         }
     }
 
-    // ---- fetch override ----
-    const originalFetch = window.fetch;
-    window.fetch = async function(url, options) {
-        const urlString = url.toString();
-
-        if (isCnlUrl(urlString)) {
-            console.log('[CNL Interceptor/MAIN] Intercepted fetch:', urlString);
-            const type = getEndpointType(urlString);
-
-            if (type === 'JD_CHECK') {
-                return new Response('var jdownloader = true;', {
-                    status: 200,
-                    headers: { 'Content-Type': 'text/javascript' }
-                });
-            }
-
-            if (type === 'CROSSDOMAIN') {
-                const crossdomain = `<?xml version="1.0"?>
-<cross-domain-policy>
-  <site-control permitted-cross-domain-policies="master-only"/>
-  <allow-access-from domain="*"/>
-  <allow-http-request-headers-from domain="*" headers="*"/>
-</cross-domain-policy>`;
-                return new Response(crossdomain, {
-                    status: 200,
-                    headers: { 'Content-Type': 'text/xml' }
-                });
-            }
-
-            if (type === 'ADD_CRYPTED' || type === 'ADD') {
-                const formData = captureFormData(options && options.body);
-                sendCnlData(type, urlString, formData, window.location.href);
-                return new Response('OK', { status: 200 });
-            }
+    // Every override below runs on every page we are injected into, so a
+    // failure to install one must never take the host page down with it.
+    function installHook(name, install) {
+        try {
+            install();
+        } catch (e) {
+            console.warn('[CNL Interceptor/MAIN] ' + name + ' hook not installed:', e && e.message);
         }
+    }
 
-        return originalFetch.apply(this, arguments);
-    };
+    // Replace a method with a wrapper, preserving the original property
+    // attributes. Plain assignment is NOT usable here: sites harden
+    // themselves against monkey-patching by redefining these as
+    // non-writable (mega.nz's secureboot.js does exactly this to
+    // XMLHttpRequest.prototype.open/send), and under 'use strict' a [[Set]]
+    // against a non-writable property throws — which is what took mega.nz
+    // down entirely. defineProperty still succeeds as long as the property
+    // is configurable, so the hook installs and the page keeps working.
+    function override(target, prop, makeWrapper) {
+        const original = target[prop];
+        const descriptor = Object.getOwnPropertyDescriptor(target, prop);
+        Object.defineProperty(target, prop, {
+            value: makeWrapper(original),
+            writable: descriptor ? descriptor.writable : true,
+            configurable: descriptor ? descriptor.configurable : true,
+            enumerable: descriptor ? descriptor.enumerable : false
+        });
+        return original;
+    }
+
+    // ---- fetch override ----
+    installHook('fetch', function() {
+        override(window, 'fetch', function(originalFetch) {
+            return async function(url, options) {
+                const urlString = url.toString();
+
+                if (isCnlUrl(urlString)) {
+                    console.log('[CNL Interceptor/MAIN] Intercepted fetch:', urlString);
+                    const type = getEndpointType(urlString);
+
+                    if (type === 'JD_CHECK') {
+                        return new Response('var jdownloader = true;', {
+                            status: 200,
+                            headers: { 'Content-Type': 'text/javascript' }
+                        });
+                    }
+
+                    if (type === 'CROSSDOMAIN') {
+                        return new Response(CROSSDOMAIN_XML, {
+                            status: 200,
+                            headers: { 'Content-Type': 'text/xml' }
+                        });
+                    }
+
+                    if (type === 'ADD_CRYPTED' || type === 'ADD') {
+                        const formData = captureFormData(options && options.body);
+                        sendCnlData(type, urlString, formData, window.location.href);
+                        return new Response('OK', { status: 200 });
+                    }
+                }
+
+                return originalFetch.apply(this, arguments);
+            };
+        });
+    });
 
     // ---- XMLHttpRequest override ----
-    const OriginalXHR = window.XMLHttpRequest;
+    // Patch the prototype methods rather than wrapping the constructor and
+    // assigning per-instance `open`/`send`. Per-instance assignment is a
+    // [[Set]], which consults the prototype chain and throws in strict mode
+    // when the inherited property is non-writable (a frozen prototype). It
+    // also broke `instanceof XMLHttpRequest` for page code.
+    installHook('XMLHttpRequest', function() {
+        const xhrProto = window.XMLHttpRequest.prototype;
 
-    window.XMLHttpRequest = function() {
-        const xhr = new OriginalXHR();
-        let requestUrl = '';
-        let capturedBody = null;
+        // Fake a completed 200 response on an XHR we are short-circuiting.
+        function fakeResponse(xhr, responseText) {
+            Object.defineProperty(xhr, 'responseText', { get: () => responseText, configurable: true });
+            Object.defineProperty(xhr, 'response', { get: () => responseText, configurable: true });
+            Object.defineProperty(xhr, 'status', { get: () => 200, configurable: true });
+            Object.defineProperty(xhr, 'readyState', { get: () => 4, configurable: true });
+            setTimeout(function() {
+                if (xhr.onreadystatechange) xhr.onreadystatechange();
+                if (xhr.onload) xhr.onload();
+                xhr.dispatchEvent(new Event('readystatechange'));
+                xhr.dispatchEvent(new Event('load'));
+                xhr.dispatchEvent(new Event('loadend'));
+            }, 0);
+        }
 
-        const originalOpen = xhr.open;
-        xhr.open = function(method, url) {
-            requestUrl = url;
-            return originalOpen.apply(this, arguments);
-        };
+        override(xhrProto, 'open', function(originalOpen) {
+            return function(method, url) {
+                this.__myjdCnlUrl = url;
+                return originalOpen.apply(this, arguments);
+            };
+        });
 
-        const originalSend = xhr.send;
-        xhr.send = function(body) {
-            capturedBody = body;
+        override(xhrProto, 'send', function(originalSend) {
+            return function(body) {
+                const requestUrl = this.__myjdCnlUrl || '';
 
-            if (isCnlUrl(requestUrl)) {
-                console.log('[CNL Interceptor/MAIN] Intercepted XHR:', requestUrl);
-                const type = getEndpointType(requestUrl);
+                if (isCnlUrl(requestUrl)) {
+                    console.log('[CNL Interceptor/MAIN] Intercepted XHR:', requestUrl);
+                    const type = getEndpointType(requestUrl);
 
-                if (type === 'JD_CHECK') {
-                    Object.defineProperty(xhr, 'responseText', { get: () => 'var jdownloader = true;' });
-                    Object.defineProperty(xhr, 'status', { get: () => 200 });
-                    Object.defineProperty(xhr, 'readyState', { get: () => 4 });
-                    if (xhr.onload) setTimeout(() => xhr.onload(), 0);
-                    if (xhr.onreadystatechange) setTimeout(() => xhr.onreadystatechange(), 0);
-                    return;
+                    if (type === 'JD_CHECK') {
+                        fakeResponse(this, 'var jdownloader = true;');
+                        return;
+                    }
+
+                    if (type === 'CROSSDOMAIN') {
+                        fakeResponse(this, CROSSDOMAIN_XML);
+                        return;
+                    }
+
+                    if (type === 'ADD_CRYPTED' || type === 'ADD') {
+                        sendCnlData(type, requestUrl, captureFormData(body), window.location.href);
+                        fakeResponse(this, 'OK');
+                        return;
+                    }
                 }
 
-                if (type === 'CROSSDOMAIN') {
-                    const crossdomain = `<?xml version="1.0"?>
-<cross-domain-policy>
-  <site-control permitted-cross-domain-policies="master-only"/>
-  <allow-access-from domain="*"/>
-  <allow-http-request-headers-from domain="*" headers="*"/>
-</cross-domain-policy>`;
-                    Object.defineProperty(xhr, 'responseText', { get: () => crossdomain });
-                    Object.defineProperty(xhr, 'status', { get: () => 200 });
-                    Object.defineProperty(xhr, 'readyState', { get: () => 4 });
-                    if (xhr.onload) setTimeout(() => xhr.onload(), 0);
-                    if (xhr.onreadystatechange) setTimeout(() => xhr.onreadystatechange(), 0);
-                    return;
-                }
-
-                if (type === 'ADD_CRYPTED' || type === 'ADD') {
-                    const formData = captureFormData(capturedBody);
-                    sendCnlData(type, requestUrl, formData, window.location.href);
-
-                    Object.defineProperty(xhr, 'responseText', { get: () => 'OK' });
-                    Object.defineProperty(xhr, 'status', { get: () => 200 });
-                    Object.defineProperty(xhr, 'readyState', { get: () => 4 });
-                    if (xhr.onload) setTimeout(() => xhr.onload(), 0);
-                    if (xhr.onreadystatechange) setTimeout(() => xhr.onreadystatechange(), 0);
-                    return;
-                }
-            }
-
-            return originalSend.apply(this, arguments);
-        };
-
-        return xhr;
-    };
-
-    window.XMLHttpRequest.prototype = OriginalXHR.prototype;
-    Object.setPrototypeOf(window.XMLHttpRequest, OriginalXHR);
+                return originalSend.apply(this, arguments);
+            };
+        });
+    });
 
     // ---- classic CNLPOP form submission ----
     // Some hosters still submit CNL via a plain HTML <form target="hidden">
@@ -217,10 +247,15 @@
     // HTMLFormElement.prototype.submit and form "submit" events targeting
     // our localhost endpoints so that path is covered too.
     function handleFormSubmit(form) {
-        if (!form || !form.action) return false;
-        if (!isCnlUrl(form.action)) return false;
+        if (!form) return false;
 
-        const type = getEndpointType(form.action);
+        // form.action is shadowed by any control named "action", so read the
+        // attribute directly rather than the (possibly Element-valued) prop.
+        const action = form.getAttribute && form.getAttribute('action');
+        if (!action || typeof action !== 'string') return false;
+        if (!isCnlUrl(action)) return false;
+
+        const type = getEndpointType(action);
         if (type !== 'ADD_CRYPTED' && type !== 'ADD') return false;
 
         const formData = {};
@@ -228,22 +263,33 @@
             if (el.name) formData[el.name] = el.value;
         });
 
-        sendCnlData(type, form.action, formData, window.location.href);
+        sendCnlData(type, action, formData, window.location.href);
         return true;
     }
 
-    const originalFormSubmit = HTMLFormElement.prototype.submit;
-    HTMLFormElement.prototype.submit = function() {
-        if (handleFormSubmit(this)) return;
-        return originalFormSubmit.apply(this, arguments);
-    };
+    installHook('form submit', function() {
+        override(HTMLFormElement.prototype, 'submit', function(originalFormSubmit) {
+            return function() {
+                try {
+                    if (handleFormSubmit(this)) return;
+                } catch (e) {
+                    console.warn('[CNL Interceptor/MAIN] form submit check failed:', e && e.message);
+                }
+                return originalFormSubmit.apply(this, arguments);
+            };
+        });
 
-    window.addEventListener('submit', function(e) {
-        if (handleFormSubmit(e.target)) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    }, true);
+        window.addEventListener('submit', function(e) {
+            try {
+                if (handleFormSubmit(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            } catch (err) {
+                console.warn('[CNL Interceptor/MAIN] form submit check failed:', err && err.message);
+            }
+        }, true);
+    });
 
     console.log('[CNL Interceptor/MAIN] Ready');
 })();
