@@ -1,8 +1,8 @@
 'use strict';
 
 angular.module('myjdWebextensionApp')
- .controller('ConnectedCtrl', ['$scope', 'MyjdService', 'MyjdDeviceService', 'ApiErrorService', '$timeout', 'StorageService',
- function ($scope, MyjdService, MyjdDeviceService, ApiErrorService, $timeout, StorageService) {
+ .controller('ConnectedCtrl', ['$scope', 'MyjdService', 'MyjdDeviceService', 'ApiErrorService', '$timeout', 'StorageService', 'BackgroundScriptService',
+ function ($scope, MyjdService, MyjdDeviceService, ApiErrorService, $timeout, StorageService, BackgroundScriptService) {
 
  $scope.viewstate = 'JD_LIST';
  $scope.devices = [];
@@ -101,12 +101,62 @@ angular.module('myjdWebextensionApp')
  $scope.viewstate = 'SETTINGS';
  };
 
+ // The "Saved" nav entry (myconnectedpanel.html) has always called
+ // showClipboardHistoryPanel()/isShowingClipboard(), but neither was ever
+ // ported to MV3. Angular silently no-ops an ng-click that resolves to
+ // undefined, so the button did nothing at all.
+ $scope.showClipboardHistoryPanel = function() {
+ $scope.viewstate = 'CLIPBOARD_HISTORY';
+ };
+
  $scope.isShowingJDList = function() {
  return $scope.viewstate === 'JD_LIST';
  };
 
  $scope.isShowingSettings = function() {
  return $scope.viewstate === 'SETTINGS';
+ };
+
+ $scope.isShowingClipboard = function() {
+ return $scope.viewstate === 'CLIPBOARD_HISTORY';
+ };
+
+ // Feedback panel — same story as the Saved entry: the template calls
+ // toggleFeedbackPanel()/isShowingFeedbackPanel() and binds a feedback
+ // model that no controller ever provided.
+ $scope.showFeedbackPanel = false;
+ $scope.feedback = { msg: '', max: 2000, sending: false, success: false };
+
+ $scope.toggleFeedbackPanel = function() {
+ $scope.showFeedbackPanel = !$scope.showFeedbackPanel;
+ };
+
+ $scope.isShowingFeedbackPanel = function() {
+ return $scope.showFeedbackPanel;
+ };
+
+ $scope.clearFeedback = function() {
+ $scope.feedback.msg = '';
+ $scope.feedback.success = false;
+ };
+
+ $scope.sendFeedback = function(message) {
+ if (!message || $scope.feedback.sending) return;
+
+ $scope.feedback.sending = true;
+ BackgroundScriptService.sendFeedback(message).then(function() {
+ $timeout(function() {
+ $scope.feedback.sending = false;
+ $scope.feedback.success = true;
+ $scope.feedback.msg = '';
+ }, 0);
+ }).catch(function(error) {
+ $timeout(function() {
+ $scope.feedback.sending = false;
+ $scope.state.error.message = 'Failed to send feedback. Please try again.';
+ console.error('ConnectedController: Failed to send feedback', error);
+ }, 0);
+ });
  };
 
  // Listen for connection state changes
