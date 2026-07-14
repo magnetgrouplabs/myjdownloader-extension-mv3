@@ -102,6 +102,16 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "        translate}}\n" +
     "        <b>{{username}}</b>\n" +
     "    </div>\n" +
+    "    <div class=\"inlineSettingsContainer\" id=\"themeSettings\">\n" +
+    "        <label for=\"themeMode\">{{'ui_settings_theme' | translate}}</label>\n" +
+    "        <br />\n" +
+    "        <select id=\"themeMode\" ng-model=\"themeMode\" ng-change=\"setThemeMode(themeMode)\">\n" +
+    "            <option value=\"system\">{{'ui_settings_theme_system' | translate}}</option>\n" +
+    "            <option value=\"light\">{{'ui_settings_theme_light' | translate}}</option>\n" +
+    "            <option value=\"dark\">{{'ui_settings_theme_dark' | translate}}</option>\n" +
+    "        </select>\n" +
+    "        <div style=\"clear:both;\"></div>\n" +
+    "    </div>\n" +
     "    <div class=\"inlineSettingsContainer\" id=\"clicknloadSettings\">\n" +
     "        <label for=\"clicknload_active\">\n" +
     "            <input type=\"checkbox\" id=\"clicknload_active\" ng-model=\"settings[settingsKeys.CLICKNLOAD_ACTIVE.key]\" />{{'ui_settings_cnl_via_myjd' |\n" +
