@@ -168,17 +168,28 @@ async function hasOffscreenDocument() {
  return existingContexts.length > 0;
 }
 
+let creatingOffscreenDocument = null;
 async function createOffscreenDocument() {
  if (await hasOffscreenDocument()) {
   return;
  }
- console.log("Background: Creating offscreen document...");
- await chrome.offscreen.createDocument({
-  url: offscreenDocumentPath,
-  justification: 'MyJDownloader API operations require DOM access',
-  reasons: ['LOCAL_STORAGE']
- });
- console.log("Background: Offscreen document created");
+ // Lock: initSettings (warm start) and sendToOffscreen can arrive here almost
+ // simultaneously. Without this shared promise two createDocument() calls run
+ // in parallel → "Only a single offscreen document may be created". The second
+ // caller waits on the first instead.
+ if (!creatingOffscreenDocument) {
+  console.log("Background: Creating offscreen document...");
+  creatingOffscreenDocument = chrome.offscreen.createDocument({
+   url: offscreenDocumentPath,
+   justification: 'MyJDownloader API operations require DOM access',
+   reasons: ['LOCAL_STORAGE']
+  }).then(() => {
+   console.log("Background: Offscreen document created");
+  }).finally(() => {
+   creatingOffscreenDocument = null;
+  });
+ }
+ await creatingOffscreenDocument;
 }
 
 async function closeOffscreenDocument() {
@@ -229,6 +240,18 @@ async function initSettings() {
 
  initMenuItems();
  updateBadge();
+
+ // Proactively spin up the offscreen document after a service-worker start if
+ // a session exists. It restores the session and connects (api.connect),
+ // reports its state back and thereby clears the "!" badge — without the user
+ // having to open the popup first. Without this the connection (and the badge)
+ // stay stuck, and CNL captures hit a backend that is not connected yet.
+ const sess = await chrome.storage.local.get('myjd_session');
+ if (sess.myjd_session) {
+  createOffscreenDocument().catch((e) =>
+   console.warn('Background: warm offscreen failed:', e && e.message)
+  );
+ }
 }
 
 function initMenuItems() {
