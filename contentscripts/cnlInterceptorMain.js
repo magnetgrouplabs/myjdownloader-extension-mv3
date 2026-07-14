@@ -86,6 +86,24 @@
             try {
                 return JSON.parse(data);
             } catch (e) {
+                // Not JSON — the common CNL case is an
+                // application/x-www-form-urlencoded body ("urls=...&source=...").
+                // Without parsing it here everything ended up as
+                // {rawData: "..."}, so the dummycnl URL built from it carried
+                // none of the keys JDownloader looks at (urls/crypted/jk): the
+                // send reported success but nothing arrived in JDownloader.
+                if (data.indexOf('=') !== -1) {
+                    try {
+                        const params = new URLSearchParams(data);
+                        const result = {};
+                        let hasKeys = false;
+                        for (const [key, value] of params.entries()) {
+                            result[key] = value;
+                            hasKeys = true;
+                        }
+                        if (hasKeys) return result;
+                    } catch (e2) { /* fall through to rawData below */ }
+                }
                 return { rawData: data };
             }
         }

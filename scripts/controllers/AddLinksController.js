@@ -771,22 +771,68 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
             ) {
               var data = request.content.requestBody.formData;
 
-              var genericDummyCnl = Object.create(null);
+              var cnlParams = Object.create(null);
               for (const [key, value] of Object.entries(data)) {
                 if (Array.isArray(value) && value[0] !== undefined) {
-                  genericDummyCnl[key] = value[0];
+                  cnlParams[key] = value[0];
                 } else {
-                  genericDummyCnl[key] = value;
+                  cnlParams[key] = value;
                 }
               }
 
-              var hexDummyCnl = CryptoJS.enc.Utf8.parse(
-                JSON.stringify(genericDummyCnl)
-              ).toString(CryptoJS.enc.Hex);
-              var dummyCnlUrl =
-                "https://dummycnl.jdownloader.org/#" +
-                encodeURIComponent(hexDummyCnl);
-              query.links = dummyCnlUrl;
+              // A raw urlencoded body may have arrived as
+              // {rawData: "urls=...&source=..."} — split it into real fields.
+              if (
+                typeof cnlParams.rawData === "string" &&
+                cnlParams.rawData.indexOf("=") !== -1 &&
+                cnlParams.urls === undefined &&
+                cnlParams.crypted === undefined
+              ) {
+                new URLSearchParams(cnlParams.rawData).forEach(function (v, k) {
+                  if (cnlParams[k] === undefined) {
+                    cnlParams[k] = v;
+                  }
+                });
+              }
+
+              if (cnlParams.crypted !== undefined) {
+                // Encrypted CNL2 (/flash/addcrypted2): send as a dummycnl URL,
+                // JDownloader decrypts the package locally (crypted + jk/k).
+                var hexDummyCnl = CryptoJS.enc.Utf8.parse(
+                  JSON.stringify(cnlParams)
+                ).toString(CryptoJS.enc.Hex);
+                query.links =
+                  "https://dummycnl.jdownloader.org/#" +
+                  encodeURIComponent(hexDummyCnl);
+              } else if (cnlParams.urls !== undefined) {
+                // Plain /flash/add: the links are already in cleartext, so send
+                // them directly. The dummycnl detour is only for encrypted
+                // payloads; JDownloader does not evaluate a "urls" field there,
+                // so addLinks reported success (the toolbar closed) but nothing
+                // ended up in JDownloader.
+                query.links = cnlParams.urls;
+              } else {
+                // Unknown field combination: keep the previous behaviour.
+                var hexFallback = CryptoJS.enc.Utf8.parse(
+                  JSON.stringify(cnlParams)
+                ).toString(CryptoJS.enc.Hex);
+                query.links =
+                  "https://dummycnl.jdownloader.org/#" +
+                  encodeURIComponent(hexFallback);
+              }
+
+              if (
+                cnlParams.package !== undefined &&
+                query.packageName === undefined
+              ) {
+                query.packageName = cnlParams.package;
+              }
+              if (
+                cnlParams.passwords !== undefined &&
+                query.downloadPassword === undefined
+              ) {
+                query.downloadPassword = cnlParams.passwords;
+              }
             }
 
             if (request.content.url !== undefined) {
