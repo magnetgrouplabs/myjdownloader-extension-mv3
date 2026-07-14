@@ -138,8 +138,12 @@ angular.module("myjdWebextensionApp").controller("ToolbarCtrl", [
         function (result) {
           $timeout(function () {
             $scope.state.loading = false;
-            $scope.devices =
+            var cachedDevices =
               result[storageService.STORAGE_DEVICE_LIST_KEY] || [];
+            // Whether the cache held real JDs, before the SaveForLater
+            // placeholder is appended.
+            var hadCachedDevices = cachedDevices.length > 0;
+            $scope.devices = cachedDevices;
             $scope.devices.push(storageService.SaveForLaterDevice);
             if (
               !$scope.selection.device &&
@@ -165,7 +169,14 @@ angular.module("myjdWebextensionApp").controller("ToolbarCtrl", [
                       ],
                       storageService.AskEveryTimeDevice
                     );
-                  } else {
+                  } else if (hadCachedDevices) {
+                    // Only adopt a real cached device as the default. With an
+                    // empty cache devices[0] is the SaveForLater placeholder;
+                    // nailing it here would propagate via the device attribute
+                    // into AddLinksController and make the captured request
+                    // silently land in "Save for later". Leave it unset → the
+                    // connection-gated live load in AddLinksController sets the
+                    // real device.
                     $scope.selection.device = $scope.devices[0];
                   }
                 }
