@@ -77,3 +77,28 @@ describe('AddLinksController - Batch Send Refactor', () => {
     expect(failContent).not.toMatch(/callback\s*\(/);
   });
 });
+
+describe('AddLinksController - CNL handoff (cleartext vs. encrypted)', () => {
+
+  it('sends cleartext CNL links (urls) directly instead of as a dummycnl URL', () => {
+    // Plain /flash/add delivers the links in cleartext. Wrapped into a
+    // dummycnl URL JDownloader does NOT evaluate them (dummycnl only carries
+    // crypted + jk/k) — the send reported success but nothing arrived.
+    expect(source).toMatch(/query\.links\s*=\s*cnlParams\.urls/);
+  });
+
+  it('builds the dummycnl URL only behind a crypted guard', () => {
+    expect(source).toMatch(/if\s*\(\s*cnlParams\.crypted\s*!==\s*undefined\s*\)/);
+    // The dummycnl construction must no longer run unconditionally for every formData
+    expect(source).not.toMatch(/genericDummyCnl/);
+  });
+
+  it('re-splits rawData bodies (urlencoded) into CNL fields', () => {
+    expect(source).toMatch(/URLSearchParams\s*\(\s*cnlParams\.rawData\s*\)/);
+  });
+
+  it('forwards package and passwords from the CNL formData to the query', () => {
+    expect(source).toMatch(/query\.packageName\s*=\s*cnlParams\.package/);
+    expect(source).toMatch(/query\.downloadPassword\s*=\s*cnlParams\.passwords/);
+  });
+});
