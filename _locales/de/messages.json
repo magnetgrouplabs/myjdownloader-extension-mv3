@@ -448,6 +448,12 @@
    "ui_settings_general": {
       "message": "Allgemein"
    },
+   "ui_settings_update_available": {
+      "message": "Update verfügbar:"
+   },
+   "ui_settings_update_download": {
+      "message": "Releases-Seite öffnen"
+   },
    "ui_settings_imprint_title": {
       "message": "Impressum"
    },

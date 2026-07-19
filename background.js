@@ -17,7 +17,8 @@ const DEVICE_TYPES = {
 let state = {
  isConnected: false,
  devices: [],
- selectedDevice: null
+ selectedDevice: null,
+ updateAvailable: false
 };
 
 let settings = {};
@@ -222,9 +223,73 @@ async function sendToOffscreen(action, data = {}) {
 // Badge and settings
 // ============================================================
 function updateBadge() {
+ // Connection problems ("!") take precedence over the update hint.
  let text = state.isConnected ? "" : "!";
+ let color = "#f3d435";
+ if (text === "" && state.updateAvailable) {
+  text = "NEW";
+  color = "#4a90d9";
+ }
  chrome.action.setBadgeText({ text: text });
- chrome.action.setBadgeBackgroundColor({ color: "#f3d435" });
+ chrome.action.setBadgeBackgroundColor({ color: color });
+}
+
+// ============================================================
+// Update notifier
+// ============================================================
+//
+// This extension is installed unpacked (Load unpacked from a release zip), so
+// Chrome's auto-update never runs and users have no way to learn that a new
+// release exists. A daily alarm asks the GitHub releases API for the latest
+// tag and, when it is newer than the running version, stores the release info
+// and shows a "NEW" badge plus a banner in the settings view. Only DATA is
+// fetched — no code is downloaded or executed (MV3 remotely-hosted-code
+// policy). The user still updates manually from the releases page.
+const UPDATE_CHECK_ALARM = 'updateCheck';
+const UPDATE_STORAGE_KEY = 'myjd_update_available';
+const RELEASES_API = 'https://api.github.com/repos/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+const RELEASES_PAGE = 'https://github.com/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+
+// Numeric per-component compare so zero-padded tags ("2026.07.20") and the
+// 4th-component re-release scheme ("2026.7.13.1" > "2026.7.13") both order
+// correctly. Returns > 0 when a is newer than b.
+function compareVersions(a, b) {
+ const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+ const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+ const len = Math.max(pa.length, pb.length);
+ for (let i = 0; i < len; i++) {
+  const d = (pa[i] || 0) - (pb[i] || 0);
+  if (d !== 0) return d;
+ }
+ return 0;
+}
+
+async function checkForUpdate() {
+ try {
+  const resp = await fetch(RELEASES_API, {
+   headers: { 'Accept': 'application/vnd.github+json' }
+  });
+  if (!resp.ok) return null;
+  const release = await resp.json();
+  if (!release || typeof release.tag_name !== 'string') return null;
+  const latest = release.tag_name.replace(/^v/, '');
+  const current = chrome.runtime.getManifest().version;
+  if (compareVersions(latest, current) > 0) {
+   const info = { version: latest, url: release.html_url || RELEASES_PAGE };
+   await chrome.storage.local.set({ [UPDATE_STORAGE_KEY]: info });
+   state.updateAvailable = true;
+   updateBadge();
+   return info;
+  }
+  // Up to date (or the user updated in the meantime): clear any stale flag.
+  await chrome.storage.local.remove(UPDATE_STORAGE_KEY);
+  state.updateAvailable = false;
+  updateBadge();
+  return null;
+ } catch (e) {
+  // Offline or rate limited — stay quiet, the next alarm retries.
+  return null;
+ }
 }
 
 async function initSettings() {
@@ -236,6 +301,16 @@ async function initSettings() {
 
  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) {
   addCnlInterceptor();
+ }
+
+ // Restore the update hint across service-worker restarts; drop it once the
+ // running version has caught up with the stored one.
+ const upd = await chrome.storage.local.get(UPDATE_STORAGE_KEY);
+ const updInfo = upd[UPDATE_STORAGE_KEY];
+ if (updInfo && compareVersions(updInfo.version, chrome.runtime.getManifest().version) > 0) {
+  state.updateAvailable = true;
+ } else if (updInfo) {
+  chrome.storage.local.remove(UPDATE_STORAGE_KEY);
  }
 
  initMenuItems();
@@ -544,6 +619,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   state.isConnected = request.data.isConnected;
   updateBadge();
   sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // --- Update notifier (manual check from the settings view) ---
+ if (action === "check-for-update") {
+  checkForUpdate().then((info) => sendResponse({ update: info }));
   return true;
  }
 
@@ -1070,7 +1151,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Keep alive + init
 // ============================================================
 chrome.alarms.create('keepAlive', { periodInMinutes: 4 });
-chrome.alarms.onAlarm.addListener(() => {
+chrome.alarms.create(UPDATE_CHECK_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+ if (alarm && alarm.name === UPDATE_CHECK_ALARM) {
+  checkForUpdate();
+  return;
+ }
  console.log("Background: Keepalive alarm");
 });
 
