@@ -30,6 +30,15 @@ angular.module('myjdWebextensionApp')
 
         $scope.reallyLogoutVisible = false;
 
+        // Update notifier: the background's daily check stores release info
+        // under this key when a newer release exists; show it as a banner.
+        $scope.updateInfo = null;
+        storageService.get('myjd_update_available', function (data) {
+            $timeout(function () {
+                $scope.updateInfo = (data && data.myjd_update_available) || null;
+            }, 0);
+        });
+
         $scope.AskEveryTimeDevice = storageService.AskEveryTimeDevice;
         $scope.devices = [];
         $scope.devices.push(storageService.AskEveryTimeDevice);

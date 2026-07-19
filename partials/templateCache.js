@@ -102,6 +102,12 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "        translate}}\n" +
     "        <b>{{username}}</b>\n" +
     "    </div>\n" +
+    "    <div class=\"inlineSettingsContainer\" id=\"updateBanner\" ng-if=\"updateInfo\">\n" +
+    "        <span>{{'ui_settings_update_available' | translate}} <b>{{updateInfo.version}}</b></span>\n" +
+    "        <br />\n" +
+    "        <a ng-href=\"{{updateInfo.url}}\" target=\"_blank\"><i class=\"fa fa-external-link\"></i>&nbsp;{{'ui_settings_update_download' | translate}}</a>\n" +
+    "        <div style=\"clear:both;\"></div>\n" +
+    "    </div>\n" +
     "    <div class=\"inlineSettingsContainer\" id=\"clicknloadSettings\">\n" +
     "        <label for=\"clicknload_active\">\n" +
     "            <input type=\"checkbox\" id=\"clicknload_active\" ng-model=\"settings[settingsKeys.CLICKNLOAD_ACTIVE.key]\" />{{'ui_settings_cnl_via_myjd' |\n" +
