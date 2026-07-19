@@ -5,6 +5,22 @@ console.log('[Offscreen] Starting MyJDownloader offscreen document...');
 var api = null;
 var isReady = false;
 
+// Report the connection state to the service worker so it can update its
+// internal state.isConnected and the "!" badge. The offscreen document
+// connects on its own at startup; without this message the background would
+// never learn about it.
+function reportConnectionState(connected) {
+    try {
+        chrome.runtime.sendMessage({
+            name: 'myjd-toolbar',
+            action: 'set-connection-state',
+            data: { isConnected: connected }
+        }, function() {
+            void chrome.runtime.lastError;
+        });
+    } catch (e) {}
+}
+
 // Get absolute path to vendor/js directory
 var scriptPath = chrome.runtime.getURL('vendor/js/');
 console.log('[Offscreen] Script path:', scriptPath);
@@ -70,9 +86,11 @@ require(['jdapi'], function(API) {
                             api.connect({}).done(function() {
                                 isReady = true;
                                 console.log('[Offscreen] Connected successfully via restored session');
+                                reportConnectionState(true);
                             }).fail(function(err) {
                                 console.warn('[Offscreen] Session restore connect failed:', err);
                                 isReady = true;
+                                reportConnectionState(false);
                             });
                         } catch(e) {
                             console.error('[Offscreen] Failed to restore session:', e);
@@ -127,8 +145,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 var sessionData = JSON.stringify(api.jdAPICore.options);
                 chrome.storage.local.set({ 'myjd_session': sessionData });
                 localStorage.setItem("jdapi/src/core/core.js", sessionData);
+                reportConnectionState(true);
                 sendResponse({ success: true, data: data });
             }).fail(function(err) {
+                reportConnectionState(false);
                 sendResponse({ success: false, error: err.message || err });
             });
             return true;
@@ -142,6 +162,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 chrome.storage.local.remove('myjd_session');
                 localStorage.removeItem("jdapi/src/core/core.js");
                 api = null;
+                reportConnectionState(false);
                 sendResponse({ success: true });
             });
             return true;
