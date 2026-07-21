@@ -102,3 +102,55 @@ describe('AddLinksController - CNL handoff (cleartext vs. encrypted)', () => {
     expect(source).toMatch(/query\.downloadPassword\s*=\s*cnlParams\.passwords/);
   });
 });
+
+const toolbarSource = fs.readFileSync(
+  path.join(__dirname, '..', 'controllers', 'ToolbarController.js'), 'utf8'
+);
+
+describe('AddLinksController - device selection / connection race', () => {
+
+  it('does not lock selection.device to a cold-cache SaveForLater placeholder', () => {
+    // loadCachedDevices must only adopt a real cached device as the default.
+    expect(source).toMatch(/hadCachedDevices\s*=\s*cachedDevices\.length\s*>\s*0/);
+    expect(source).toMatch(/if\s*\(\s*!\$scope\.selection\.device\s*&&\s*hadCachedDevices\s*\)/);
+  });
+
+  it('gates the live device load on an established connection', () => {
+    expect(source).toMatch(/function whenConnectionSettled/);
+    expect(source).toMatch(/getConnectionObservable\(\)\.subscribe/);
+    expect(source).toMatch(/whenConnectionSettled\(function \(\)/);
+  });
+
+  it('emits DEVICES_RECEIVED only after the live load (not from the cache)', () => {
+    // The cache load must not emit DEVICES_RECEIVED; only the successful live
+    // load does. The cache is display-only — arming the countdown from it
+    // would outrun the real device list.
+    const cacheFn = extractFunction(source, 'loadCachedDevices');
+    expect(cacheFn).not.toBeNull();
+    // No emit call in the cache path (a mentioning comment is fine).
+    expect(cacheFn).not.toMatch(/\$emit\s*\([\s\S]{0,80}DEVICES_RECEIVED/);
+  });
+
+  it('does NOT arm the countdown on a failed device load (no silent Save-for-later)', () => {
+    // The live-load catch branch must not emit DEVICES_RECEIVED. Doing so would
+    // arm the auto-send countdown with no device selected, and send() would
+    // silently fall back to the Save-for-later pseudo-device — re-introducing
+    // exactly the bug this PR fixes. On failure the user stays in manual mode
+    // with the error visible.
+    const loadFn = extractFunction(source, 'whenConnectionSettled');
+    expect(loadFn).not.toBeNull();
+    const catchMatch = source.match(/\.catch\(function\s*\(\)\s*\{[\s\S]*?\}\);/);
+    expect(catchMatch).not.toBeNull();
+    // No DEVICES_RECEIVED emit in the failure path (a mentioning comment is fine).
+    expect(catchMatch[0]).not.toMatch(/\$emit\s*\([\s\S]{0,80}DEVICES_RECEIVED/);
+    // But the error message must still be surfaced.
+    expect(catchMatch[0]).toMatch(/\$scope\.error\s*=/);
+  });
+});
+
+describe('ToolbarController - cold-cache device default', () => {
+  it('does not seed selection.device from an empty cache (SaveForLater)', () => {
+    expect(toolbarSource).toMatch(/hadCachedDevices\s*=\s*cachedDevices\.length\s*>\s*0/);
+    expect(toolbarSource).toMatch(/else if \(hadCachedDevices\)/);
+  });
+});
