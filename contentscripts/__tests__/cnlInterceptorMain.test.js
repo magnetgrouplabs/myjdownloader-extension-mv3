@@ -137,3 +137,96 @@ describe('cnlInterceptorMain — hardened-page safety (issue #9)', () => {
         expect(source).toMatch(/getAttribute\('action'\)/);
     });
 });
+
+/**
+ * Regression coverage for CNL payload capture.
+ *
+ * CNL POSTs to /flash/add send their body — depending on the host page — as
+ * FormData, URLSearchParams OR a raw application/x-www-form-urlencoded string
+ * ("urls=...&source=..."). The string case was only tried as JSON and
+ * otherwise stored as {rawData: "..."}, so the dummycnl URL built from it
+ * carried none of the keys JDownloader looks at (urls/crypted/jk). Result:
+ * the send reported success but nothing arrived in JDownloader.
+ */
+describe('cnlInterceptorMain — CNL payload capture (formData parsing)', () => {
+    function runInterceptor(win) {
+        const fn = new Function(
+            'window', 'HTMLFormElement', 'Response', 'Event', 'setTimeout', 'console',
+            source
+        );
+        fn(win, win.HTMLFormElement, win.Response, win.Event, setTimeout, console);
+    }
+
+    function makeCaptureWindow() {
+        const messages = [];
+        const win = {
+            XMLHttpRequest: class { open() {} send() {} dispatchEvent() {} },
+            HTMLFormElement: class { submit() {} },
+            fetch: function nativeFetch() {},
+            Response: function Response() {},
+            Event: function Event() {},
+            location: { origin: 'https://example.com', href: 'https://example.com/dl' },
+            addEventListener: () => {},
+            postMessage: (msg) => { messages.push(msg); }
+        };
+        return { win, messages };
+    }
+
+    it('parses a urlencoded string body into real CNL fields (no rawData)', async () => {
+        const { win, messages } = makeCaptureWindow();
+        runInterceptor(win);
+
+        await win.fetch('http://127.0.0.1:9666/flash/add', {
+            method: 'POST',
+            body: 'urls=' + encodeURIComponent('https://example.com/file1') +
+                  '&source=' + encodeURIComponent('https://example.com')
+        });
+
+        expect(messages.length).toBe(1);
+        expect(messages[0].type).toBe('ADD');
+        expect(messages[0].formData.rawData).toBeUndefined();
+        expect(messages[0].formData.urls).toBe('https://example.com/file1');
+        expect(messages[0].formData.source).toBe('https://example.com');
+    });
+
+    it('parses a urlencoded addcrypted2 body (crypted/jk preserved)', async () => {
+        const { win, messages } = makeCaptureWindow();
+        runInterceptor(win);
+
+        await win.fetch('http://127.0.0.1:9666/flash/addcrypted2', {
+            method: 'POST',
+            body: 'crypted=QUJD&jk=function f(){ return \'6b\';}&source=x'
+        });
+
+        expect(messages.length).toBe(1);
+        expect(messages[0].type).toBe('ADD_CRYPTED');
+        expect(messages[0].formData.crypted).toBe('QUJD');
+        expect(messages[0].formData.jk).toContain('function');
+    });
+
+    it('keeps URLSearchParams bodies as fields as before', async () => {
+        const { win, messages } = makeCaptureWindow();
+        runInterceptor(win);
+
+        await win.fetch('http://localhost:9666/flash/add', {
+            method: 'POST',
+            body: new URLSearchParams({ urls: 'https://example.com/file2' })
+        });
+
+        expect(messages.length).toBe(1);
+        expect(messages[0].formData.urls).toBe('https://example.com/file2');
+    });
+
+    it('falls back to rawData for an unparseable string body', async () => {
+        const { win, messages } = makeCaptureWindow();
+        runInterceptor(win);
+
+        await win.fetch('http://127.0.0.1:9666/flash/add', {
+            method: 'POST',
+            body: 'not-a-form-body'
+        });
+
+        expect(messages.length).toBe(1);
+        expect(messages[0].formData.rawData).toBe('not-a-form-body');
+    });
+});

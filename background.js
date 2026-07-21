@@ -168,17 +168,28 @@ async function hasOffscreenDocument() {
  return existingContexts.length > 0;
 }
 
+let creatingOffscreenDocument = null;
 async function createOffscreenDocument() {
  if (await hasOffscreenDocument()) {
   return;
  }
- console.log("Background: Creating offscreen document...");
- await chrome.offscreen.createDocument({
-  url: offscreenDocumentPath,
-  justification: 'MyJDownloader API operations require DOM access',
-  reasons: ['LOCAL_STORAGE']
- });
- console.log("Background: Offscreen document created");
+ // Lock: initSettings (warm start) and sendToOffscreen can arrive here almost
+ // simultaneously. Without this shared promise two createDocument() calls run
+ // in parallel → "Only a single offscreen document may be created". The second
+ // caller waits on the first instead.
+ if (!creatingOffscreenDocument) {
+  console.log("Background: Creating offscreen document...");
+  creatingOffscreenDocument = chrome.offscreen.createDocument({
+   url: offscreenDocumentPath,
+   justification: 'MyJDownloader API operations require DOM access',
+   reasons: ['LOCAL_STORAGE']
+  }).then(() => {
+   console.log("Background: Offscreen document created");
+  }).finally(() => {
+   creatingOffscreenDocument = null;
+  });
+ }
+ await creatingOffscreenDocument;
 }
 
 async function closeOffscreenDocument() {
@@ -229,6 +240,35 @@ async function initSettings() {
 
  initMenuItems();
  updateBadge();
+
+ // Warm start: hand the stored session to the offscreen document and set the
+ // badge from its answer, without the user having to open the popup first.
+ // The session travels in the message because an offscreen document created
+ // very early at browser startup can be missing chrome.storage entirely (a
+ // Chromium quirk); its own restore path then cannot read the session, the
+ // connection never happens and the "!" badge stays stuck.
+ const sess = await chrome.storage.local.get('myjd_session');
+ if (sess.myjd_session) {
+  warmStartConnect(sess.myjd_session, false);
+ }
+}
+
+function warmStartConnect(sessionData, isRetry) {
+ sendToOffscreen('offscreen-restore-session', { sessionData: sessionData }).then((resp) => {
+  if (resp && resp.success) {
+   state.isConnected = true;
+   updateBadge();
+   console.log('Background: warm start connected' + (resp.alreadyConnected ? ' (already connected)' : ''));
+  } else {
+   console.warn('Background: warm start restore failed:', (resp && resp.error) || 'no response');
+   // One retry for startup races (network not up yet). Best effort: if the
+   // service worker is suspended before the timer fires, the popup path
+   // still connects as before.
+   if (!isRetry) {
+    setTimeout(() => warmStartConnect(sessionData, true), 15000);
+   }
+  }
+ });
 }
 
 function initMenuItems() {
@@ -734,7 +774,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // ============================================================
  // Selection from content script
  // ============================================================
- if (action === "selection-result") {
+ // onCopyContentscript.js replies to "get-selection" with action
+ // "new-selection" (data: { text, html }). "selection-result" is kept for
+ // compatibility, but nothing ships that name today; handling only it left
+ // the whole right-click-with-a-selection path dead (issue #15).
+ if (action === "new-selection" || action === "selection-result") {
   if (request.data && request.data.text && sender.tab) {
    addLinkToRequestQueue(request.data.text, sender.tab);
   }

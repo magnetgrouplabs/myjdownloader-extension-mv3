@@ -90,7 +90,52 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
 
     var loadingIndicatorTimeout;
 
+    // Wait until MyjdService has actually established the connection before
+    // requesting the device list. After a fresh service-worker start the
+    // toolbar opens while MyjdService.connect() is still handshaking; an
+    // immediate getDeviceList() loses the race against connect(), comes back
+    // empty and leaves no device selected — so the captured-request countdown
+    // silently falls back to "Save for later".
+    function whenConnectionSettled(onSettled) {
+      var done = false;
+      var subscription = null;
+      var safetyTimer = null;
+      function finish() {
+        if (done) return;
+        done = true;
+        try {
+          if (subscription && subscription.dispose) subscription.dispose();
+        } catch (e) {}
+        if (safetyTimer) $timeout.cancel(safetyTimer);
+        onSettled();
+      }
+      if (MyjdService.isConnected()) {
+        finish();
+        return;
+      }
+      chrome.storage.local.get(['myjd_session'], function (result) {
+        if (done) return;
+        // No stored session → there is nothing to wait for.
+        if (!result.myjd_session || MyjdService.isConnected()) {
+          finish();
+          return;
+        }
+        subscription = MyjdService.getConnectionObservable().subscribe(function (v) {
+          var st = v && v.result;
+          if (
+            MyjdService.isConnected() ||
+            st === MyjdService.CONNECTION_STATES.DISCONNECTED
+          ) {
+            finish();
+          }
+        });
+        // Safety net: never block forever if the handshake stalls.
+        safetyTimer = $timeout(finish, 8000);
+      });
+    }
+
     var loadDeviceList = function (callback) {
+      whenConnectionSettled(function () {
       // Use local MyjdService directly instead of routing through background/offscreen
       MyjdService.getDeviceList()
         .then(function (result) {
@@ -145,6 +190,14 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         .catch(function () {
           setLoading(false);
           $timeout(function () {
+            // Deliberately do NOT emit DEVICES_RECEIVED on failure. Doing so
+            // would arm the auto-send countdown (and the immediate-send path)
+            // with no real device selected, so send() would silently fall back
+            // to the "Save for later" pseudo-device and re-save the captured
+            // link instead of sending it — the exact bug this PR fixes. Leaving
+            // initState.devices unset keeps the user in manual mode with the
+            // error below visible; the refresh button lets them retry once the
+            // connection is back.
             $scope.error = ExtensionI18nService.getMessage(
               "ui_add_links_refresh_failed_to_get_jds"
             );
@@ -153,6 +206,7 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
             callback();
           }
         });
+      });
     };
 
     var loadSessionInfo = function (callback) {
@@ -193,23 +247,31 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         storageService.STORAGE_DEVICE_LIST_KEY,
         function (result) {
           $timeout(function () {
-            $scope.devices =
+            var cachedDevices =
               result[storageService.STORAGE_DEVICE_LIST_KEY] || [];
+            // Remember whether the cache held real JDs, before the
+            // SaveForLater placeholder is appended.
+            var hadCachedDevices = cachedDevices.length > 0;
+            $scope.devices = cachedDevices;
             if (
               $scope.showSaveForLater &&
               $scope.devices.indexOf($scope.SaveForLaterDevice) === -1
             ) {
               $scope.devices.push($scope.SaveForLaterDevice);
             }
-            if (!$scope.selection.device) {
+            // Only adopt a real cached device as the default. With an empty
+            // cache the only entry is the SaveForLater placeholder; nailing
+            // selection.device to it here would make the captured-request
+            // countdown silently re-save instead of send, before the live
+            // device pull can supply the real JD. Leave it unset → the
+            // connection-gated live load in loadDeviceList() sets it.
+            if (!$scope.selection.device && hadCachedDevices) {
               $scope.selection.device = $scope.devices[0];
             }
-            $timeout(function () {
-              $scope.$emit(
-                requestQueueEventService.Events.DEVICES_RECEIVED,
-                {}
-              );
-            }, 0);
+            // DEVICES_RECEIVED is deliberately NOT emitted here: the cache is
+            // only for instant display. Readiness (and thus the auto-send
+            // countdown) is signalled by the connection-gated live load in
+            // loadDeviceList(), otherwise the countdown outruns the real device.
             restoreOptionsAndHistory(function () {
               if (callback) {
                 callback();
@@ -771,22 +833,68 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
             ) {
               var data = request.content.requestBody.formData;
 
-              var genericDummyCnl = Object.create(null);
+              var cnlParams = Object.create(null);
               for (const [key, value] of Object.entries(data)) {
                 if (Array.isArray(value) && value[0] !== undefined) {
-                  genericDummyCnl[key] = value[0];
+                  cnlParams[key] = value[0];
                 } else {
-                  genericDummyCnl[key] = value;
+                  cnlParams[key] = value;
                 }
               }
 
-              var hexDummyCnl = CryptoJS.enc.Utf8.parse(
-                JSON.stringify(genericDummyCnl)
-              ).toString(CryptoJS.enc.Hex);
-              var dummyCnlUrl =
-                "https://dummycnl.jdownloader.org/#" +
-                encodeURIComponent(hexDummyCnl);
-              query.links = dummyCnlUrl;
+              // A raw urlencoded body may have arrived as
+              // {rawData: "urls=...&source=..."} — split it into real fields.
+              if (
+                typeof cnlParams.rawData === "string" &&
+                cnlParams.rawData.indexOf("=") !== -1 &&
+                cnlParams.urls === undefined &&
+                cnlParams.crypted === undefined
+              ) {
+                new URLSearchParams(cnlParams.rawData).forEach(function (v, k) {
+                  if (cnlParams[k] === undefined) {
+                    cnlParams[k] = v;
+                  }
+                });
+              }
+
+              if (cnlParams.crypted !== undefined) {
+                // Encrypted CNL2 (/flash/addcrypted2): send as a dummycnl URL,
+                // JDownloader decrypts the package locally (crypted + jk/k).
+                var hexDummyCnl = CryptoJS.enc.Utf8.parse(
+                  JSON.stringify(cnlParams)
+                ).toString(CryptoJS.enc.Hex);
+                query.links =
+                  "https://dummycnl.jdownloader.org/#" +
+                  encodeURIComponent(hexDummyCnl);
+              } else if (cnlParams.urls !== undefined) {
+                // Plain /flash/add: the links are already in cleartext, so send
+                // them directly. The dummycnl detour is only for encrypted
+                // payloads; JDownloader does not evaluate a "urls" field there,
+                // so addLinks reported success (the toolbar closed) but nothing
+                // ended up in JDownloader.
+                query.links = cnlParams.urls;
+              } else {
+                // Unknown field combination: keep the previous behaviour.
+                var hexFallback = CryptoJS.enc.Utf8.parse(
+                  JSON.stringify(cnlParams)
+                ).toString(CryptoJS.enc.Hex);
+                query.links =
+                  "https://dummycnl.jdownloader.org/#" +
+                  encodeURIComponent(hexFallback);
+              }
+
+              if (
+                cnlParams.package !== undefined &&
+                query.packageName === undefined
+              ) {
+                query.packageName = cnlParams.package;
+              }
+              if (
+                cnlParams.passwords !== undefined &&
+                query.downloadPassword === undefined
+              ) {
+                query.downloadPassword = cnlParams.passwords;
+              }
             }
 
             if (request.content.url !== undefined) {
