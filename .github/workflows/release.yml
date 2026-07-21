@@ -23,14 +23,16 @@ jobs:
     - name: Validate Version Format
       run: |
         VERSION=${{ steps.version.outputs.version }}
+        # Scheme (since 2026.7.4): YYYY.M.RELEASE, where RELEASE counts releases
+        # within the month (first release of a month is .1, second is .2, ...).
         # Chrome parses each dot-separated part as an integer and strips leading
-        # zeros, so a padded tag like 2026.07.13 loads as 2026.7.13 and Chrome
+        # zeros, so a padded tag like 2026.07.4 loads as 2026.7.4 and Chrome
         # warns that the version was reparsed. Require the unpadded form that
-        # Chrome will actually use. An optional 4th component allows more than
-        # one release in a day (2026.7.13.1 > 2026.7.13, which a same-day
-        # re-release needs in order to reach users who already auto-updated).
-        if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.([1-9]|1[0-2])\.([1-9]|[12][0-9]|3[01])(\.[0-9]{1,5})?$'; then
-          echo "Invalid version format: $VERSION. Expected YYYY.M.D[.PATCH] with no leading zeros (e.g. 2026.7.13 or 2026.7.13.1, not 2026.07.13)."
+        # Chrome will actually use. Releases before 2026.7.4 used the day of the
+        # month as the third component, so July 2026 ordering is not numeric;
+        # release dates are authoritative there.
+        if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.([1-9]|1[0-2])\.([1-9][0-9]?)$'; then
+          echo "Invalid version format: $VERSION. Expected YYYY.M.RELEASE with no leading zeros, where RELEASE is the Nth release of the month (e.g. 2026.7.4, not 2026.07.4 and no 4th component)."
           exit 1
         fi
 
