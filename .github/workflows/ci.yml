@@ -59,7 +59,7 @@ jobs:
         essential_files=(
           "background.js"
           "popup.html"
-          "popup.js"
+          "scripts/popup.js"
           "toolbar.html"
           "offscreen.html"
           "offscreen.js"
