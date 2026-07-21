@@ -757,7 +757,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // ============================================================
  // Selection from content script
  // ============================================================
- if (action === "selection-result") {
+ // onCopyContentscript.js replies to "get-selection" with action
+ // "new-selection" (data: { text, html }). "selection-result" is kept for
+ // compatibility, but nothing ships that name today; handling only it left
+ // the whole right-click-with-a-selection path dead (issue #15).
+ if (action === "new-selection" || action === "selection-result") {
   if (request.data && request.data.text && sender.tab) {
    addLinkToRequestQueue(request.data.text, sender.tab);
   }
