@@ -1,3 +1,250 @@
+/* ============================================================
+   Theme — theme-bootstrap.js sets html[data-theme] in the popup AND in the
+   in-page toolbar. The toolbar is additionally marked with
+   data-context="toolbar": there the panel/components turn dark while the body
+   backdrop stays transparent (overlay on web pages, no dark box).
+   "System" is resolved to light/dark in JS.
+   ============================================================ */
+html[data-theme="light"] body {
+    background-color: #dbf5fb;
+}
+/* In-page toolbar: keep the backdrop transparent regardless of theme. Higher
+   specificity than the body background rules in the [data-theme] block. */
+html[data-context="toolbar"][data-theme="light"] body,
+html[data-context="toolbar"][data-theme="dark"] body {
+    background-color: transparent;
+}
+
+html[data-theme="dark"] {
+    body {
+        color: #e0e0e0;
+        background-color: #1e1e1e;
+    }
+    #mainPanel {
+        background-color: #252525;
+        color: #e0e0e0;
+    }
+    #popup-header {
+        background-color: #121212;
+    }
+    .lightPanel, .card, .deviceInfo {
+        background-color: #2a2a2a;
+        color: #e0e0e0;
+        border-color: #444;
+        text-shadow: none;
+    }
+    /* Bootstrap panels (device card): come from vendor/bootstrap.css and
+       stay white without these overrides. */
+    .panel, .panel-default {
+        background-color: #2a2a2a;
+        border-color: #444;
+        box-shadow: none;
+    }
+    .panel-body {
+        color: #e0e0e0;
+    }
+    .panel-heading, .panel-default > .panel-heading {
+        background-color: #1f1f1f;
+        color: #e0e0e0;
+        border-color: #444;
+    }
+    .panel-footer {
+        background-color: #1f1f1f;
+        border-top-color: #444;
+        color: #bbb;
+    }
+    .panel-danger {
+        border-color: #7a3a3a;
+    }
+    .panel-danger > .panel-heading {
+        background-color: #3a2020;
+        color: #e0a0a0;
+        border-color: #7a3a3a;
+    }
+    /* Action/play buttons and the device info row inside the card */
+    .btn-default, .actionButton, .btn.btn-sm {
+        background-color: #333;
+        color: #cfe6ea;
+        border-color: #555;
+    }
+    .btn-default:hover, .actionButton:hover, .btn.btn-sm:hover {
+        background-color: #3d3d3d;
+        border-color: #666;
+    }
+    .actionButton.activeAction, .activeAction {
+        background-color: #3a3520;
+        border-color: #c97a00;
+        color: #f0c26a;
+    }
+    .deviceInfoItems, .deviceInfoItems .fa {
+        color: #9fb4b8;
+    }
+    /* Yellow CTA buttons (send to device / Save for later) + link chips:
+       in dark mode use a muted amber instead of neon yellow, so they fit the
+       theme while staying clearly readable as a button. */
+    .sendDeviceButton, .box-yellow {
+        background-color: #7d621d;
+        background-image: linear-gradient(to bottom, #9a7a24, #6b531a);
+        border: 1px solid #b0892e;
+        border-top-color: #c99a34;
+        color: #fff2d6 !important;
+        text-shadow: none;
+    }
+    .sendDeviceButton:hover {
+        background-image: linear-gradient(to bottom, #ac8a2c, #7a611e);
+        border-color: #c99a34;
+    }
+    /* Keep "cancel"/countdown at the top from hugging the edge. */
+    #menubarwrapper {
+        padding: 8px 12px;
+    }
+    a.cancelLink, a.cancelLink:hover {
+        color: #9fb4b8;
+    }
+    .formPanel form input, .formPanel form input[type="submit"] {
+        background-color: #333;
+        color: #e0e0e0;
+        border: 1px solid #555;
+    }
+    input, textarea, select {
+        background-color: #333 !important;
+        color: #e0e0e0 !important;
+        border-color: #555 !important;
+    }
+    a, a:visited {
+        color: #7ab8c4;
+    }
+    .connectInfo, .text-color-green {
+        color: #7ab8c4;
+    }
+    #menubarwrapper {
+        background: #1a1a1a;
+    }
+    #menubar {
+        background-color: #1a1a1a;
+    }
+    .feedbackPanel {
+        background: #3a3520;
+        border-color: #555;
+    }
+    .details {
+        background-color: #3a3520;
+        border-color: #555;
+    }
+    .successMessage {
+        background-color: #2a3520;
+        border-color: #4a7a3a;
+    }
+    .noDeviceConnected, .clipboardEmptyItem,
+    .noDeviceConnected .big-icon, .clipboardEmptyItem .big-icon {
+        color: #5a8a8a;
+    }
+    .deviceStatusValueBox {
+        background-color: #333;
+    }
+    .fillList {
+        color: #5a8a8a;
+    }
+    #settingsContainer h4 {
+        background-color: #1a2a2e;
+    }
+    #settingsContainer h5 {
+        background-color: #2a4a4e;
+    }
+    #settingsContainer hr {
+        border-top-color: #444 !important;
+    }
+    .inlineSettingsContainer .description {
+        color: #bbb;
+    }
+    #reallyLogoutContainer {
+        background-color: #6a4a01;
+        color: #e0e0e0;
+    }
+    .autograbber-listitem, .nav-item, .autograbber-tabs-empty,
+    .no-tab-selected > .description, .autograbber-links-empty {
+        background-color: #2a2a2a;
+        border-color: #444;
+    }
+    .nav-item:hover {
+        background-color: #333;
+    }
+    .nav-item-active {
+        background-color: #3a3520;
+        border-color: #444;
+        border-right-color: #c97a00;
+    }
+    #links > .link-item {
+        background-color: #2a2a2a;
+        border-color: #444;
+    }
+    #links > .link-item.selected {
+        background-color: #333;
+    }
+    .filter-item.active {
+        background-color: #3a3520;
+        border-color: #c97a00;
+    }
+    .filter-item.inactive {
+        background-color: #2a2a2a;
+        border-color: #444;
+    }
+    .filter-item.inactive:hover, .filter-item.active:hover {
+        background-color: #333;
+    }
+    .filter-item.unavailable {
+        background-color: #2a2a2a;
+        border-color: #2a2a2a;
+        color: #666;
+    }
+    .footer-container {
+        background-color: #1e1e1e;
+        border-top-color: #444;
+    }
+    .clipboardItem .meta, .clipboardItem .meta a {
+        color: #888;
+    }
+    .clipboardItem .meta {
+        border-top-color: #444;
+    }
+    #toolbarPopupContainer, .toolbarContainer, #toolbar,
+    #toolbarInPopup, #addlinkspanel {
+        background-color: #252525;
+    }
+    .selectionheader {
+        background-color: #6a5a10;
+    }
+    #undoContainer {
+        background-color: #222;
+    }
+    .box-bluemedium {
+        background-color: #2a4a4e;
+    }
+    .box-grey {
+        background-color: #333;
+        color: #e0e0e0 !important;
+        border-color: #555;
+    }
+    .captchaIncognitoWarning {
+        color: #e0e0e0;
+    }
+    #loginStatus .errorMessage {
+        background-color: #cc3333;
+    }
+    .empty-links-view > .description, .empty-filtered-view > .description,
+    .autograbber-tabs-empty > .description, .no-tab-selected > .description,
+    .autograbber-links-empty > .description,
+    .empty-links-view > .icon, .empty-filtered-view > .icon,
+    .autograbber-tabs-empty > .icon, .no-tab-selected > .icon,
+    .autograbber-links-empty > .icon,
+    .selection-count {
+        color: #666;
+    }
+    .outdatedMessage {
+        background-color: #1a2a2e;
+    }
+}
+
 .browsehappy {
     margin: 0.2em 0;
     background: #ccc;
@@ -81,27 +328,17 @@ body {
     display: inline-block;
     font-family: 'Yanone Kaffeesatz', sans-serif;
     letter-spacing: inherit;
-    font-smoothing: antialiased;
+    -webkit-font-smoothing: antialiased;
     text-decoration: none;
     color: #fff !important;
     border-radius: 3px;
     background-color: #eebb1b;
-    background-image: -webkit-gradient(linear, left top, left bottom, from(#f3d435), to(#e9a201));
-    background-image: -webkit-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -moz-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -ms-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -o-linear-gradient(top, #f3d435, #e9a201);
     background-image: linear-gradient(to bottom, #f3d435, #e9a201);
-    -pie-background: linear-gradient(#f3d435, #e9a201);
     border: 1px solid #cd8000;
     border-top-color: #e99c00;
     text-shadow: 0 1px 1px #c97a00;
     box-shadow: 0 0 2px #fff inset;
     cursor: pointer;
-    -webkit-transition: all .1s linear;
-    -moz-transition: all .1s linear;
-    -ms-transition: all .1s linear;
-    -o-transition: all .1s linear;
     transition: all .1s linear;
     padding: 3px 7px;
     font-size: 1.2em;
@@ -109,18 +346,11 @@ body {
 
 .xbutton[disabled], .xbutton[disabled]:hover, .xbutton.unselected {
     background-color: #b5b5b5;
-    background-image: -webkit-gradient(linear, left top, left bottom, from(#cccccc), to(#a7a7a7));
-    background-image: -webkit-linear-gradient(top, #cccccc, #a7a7a7);
-    background-image: -moz-linear-gradient(top, #cccccc, #a7a7a7);
-    background-image: -ms-linear-gradient(top, #cccccc, #a7a7a7);
-    background-image: -o-linear-gradient(top, #cccccc, #a7a7a7);
     background-image: linear-gradient(to bottom, #cccccc, #a7a7a7);
-    -pie-background: linear-gradient(#cccccc, #a7a7a7);
-    behavior: url(/css/PIE.htc);
     border: solid #868686 1px;
     border-top-color: #a0a0a0;
     text-shadow: 0 1px 1px #8d8d8d;
-    box-shadow: 0 0px 2px white inset;
+    box-shadow: 0 0 2px white inset;
 }
 
 a, a:visited {
@@ -161,8 +391,6 @@ a, a:visited {
     font-weight: bold;
     background-color: #FFFAE7;
     border: 1px solid green;
-    -moz-border-radius: 7px;
-    -webkit-border-radius: 7px;
     border-radius: 7px;
     width: 260px;
     margin: 32px auto 16px;
@@ -172,8 +400,6 @@ a, a:visited {
     padding: 10px;
     background-color: #FFFAE7;
     border: 1px solid #cfcfcf;
-    -moz-border-radius: 3px;
-    -webkit-border-radius: 3px;
     border-radius: 3px;
 }
 
@@ -373,10 +599,6 @@ div.clearfix {
     letter-spacing: 1px;
     margin-left: 8px;
     font-size: 12px;
-    -webkit-transition: background-color 0.2s linear;
-    -moz-transition: background-color 0.2s linear;
-    -ms-transition: background-color 0.2s linear;
-    -o-transition: background-color 0.2s linear;
     transition: background-color 0.2s linear;
 }
 
@@ -388,10 +610,6 @@ div.clearfix {
     letter-spacing: 1px;
     font-size: 12px;
     text-shadow: 0 1px 1px #00181c;
-    -webkit-transition: background-color 0.2s linear;
-    -moz-transition: background-color 0.2s linear;
-    -ms-transition: background-color 0.2s linear;
-    -o-transition: background-color 0.2s linear;
     transition: background-color 0.2s linear;
 }
 
@@ -486,10 +704,6 @@ small.validationError {
 
 .appear.ng-enter,
 .appear.ng-leave {
-    -webkit-transition: 200ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
-    -moz-transition: 200ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
-    -ms-transition: 200ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
-    -o-transition: 200ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
     transition: 200ms cubic-bezier(0.250, 0.250, 0.750, 0.750) all;
     position: relative;
     display: block;
@@ -497,10 +711,6 @@ small.validationError {
 
 .appear.ng-leave.ng-leave-active,
 .appear.ng-enter {
-    -webkit-transform: scaleY(0);
-    -moz-transform: scaleY(0);
-    -ms-transform: scaleY(0);
-    -o-transform: scaleY(0);
     transform: scaleY(0);
     height: 0px;
     opacity: 0;
@@ -508,10 +718,6 @@ small.validationError {
 
 .appear.ng-enter.ng-enter-active,
 .appear.ng-leave {
-    -webkit-transform: scaleY(1);
-    -moz-transform: scaleY(1);
-    -ms-transform: scaleY(1);
-    -o-transform: scaleY(1);
     transform: scaleY(1);
     height: 30px;
     opacity: 1;
@@ -1062,13 +1268,7 @@ input[type=checkbox] {
     width: 100%;
     border-radius: 3px;
     background-color: #eebb1b;
-    background-image: -webkit-gradient(linear, left top, left bottom, from(#f3d435), to(#e9a201));
-    background-image: -webkit-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -moz-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -ms-linear-gradient(top, #f3d435, #e9a201);
-    background-image: -o-linear-gradient(top, #f3d435, #e9a201);
     background-image: linear-gradient(to bottom, #f3d435, #e9a201);
-    -pie-background: linear-gradient(#f3d435, #e9a201);
     border: 1px solid #cd8000;
     border-top-color: #e99c00;
 }
