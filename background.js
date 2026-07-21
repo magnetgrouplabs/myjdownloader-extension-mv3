@@ -241,17 +241,34 @@ async function initSettings() {
  initMenuItems();
  updateBadge();
 
- // Proactively spin up the offscreen document after a service-worker start if
- // a session exists. It restores the session and connects (api.connect),
- // reports its state back and thereby clears the "!" badge — without the user
- // having to open the popup first. Without this the connection (and the badge)
- // stay stuck, and CNL captures hit a backend that is not connected yet.
+ // Warm start: hand the stored session to the offscreen document and set the
+ // badge from its answer, without the user having to open the popup first.
+ // The session travels in the message because an offscreen document created
+ // very early at browser startup can be missing chrome.storage entirely (a
+ // Chromium quirk); its own restore path then cannot read the session, the
+ // connection never happens and the "!" badge stays stuck.
  const sess = await chrome.storage.local.get('myjd_session');
  if (sess.myjd_session) {
-  createOffscreenDocument().catch((e) =>
-   console.warn('Background: warm offscreen failed:', e && e.message)
-  );
+  warmStartConnect(sess.myjd_session, false);
  }
+}
+
+function warmStartConnect(sessionData, isRetry) {
+ sendToOffscreen('offscreen-restore-session', { sessionData: sessionData }).then((resp) => {
+  if (resp && resp.success) {
+   state.isConnected = true;
+   updateBadge();
+   console.log('Background: warm start connected' + (resp.alreadyConnected ? ' (already connected)' : ''));
+  } else {
+   console.warn('Background: warm start restore failed:', (resp && resp.error) || 'no response');
+   // One retry for startup races (network not up yet). Best effort: if the
+   // service worker is suspended before the timer fires, the popup path
+   // still connects as before.
+   if (!isRetry) {
+    setTimeout(() => warmStartConnect(sessionData, true), 15000);
+   }
+  }
+ });
 }
 
 function initMenuItems() {

@@ -21,6 +21,41 @@ function reportConnectionState(connected) {
     } catch (e) {}
 }
 
+// Wait until RequireJS has produced the api object. The onMessage listener
+// below registers synchronously at document load, so a message (e.g. the
+// service worker's warm-start session handoff) can arrive before jdapi
+// finished loading.
+function waitForApi(callback, attempts) {
+    if (api) {
+        callback(true);
+    } else if (attempts > 0) {
+        setTimeout(function() { waitForApi(callback, attempts - 1); }, 250);
+    } else {
+        callback(false);
+    }
+}
+
+// Single connect guard: the startup self-restore and the service worker's
+// restore-session message can both try to connect; they must share one
+// api.connect() instead of racing two handshakes.
+var connectInFlight = null;
+function connectWithSession(sessionData, onDone, onFail) {
+    if (api && api.jdAPICore && api.jdAPICore.options && api.jdAPICore.options.sessiontoken) {
+        onDone(true);
+        return;
+    }
+    if (!connectInFlight) {
+        if (sessionData) {
+            try {
+                localStorage.setItem("jdapi/src/core/core.js", sessionData);
+            } catch (e) {}
+        }
+        connectInFlight = api.connect({});
+        connectInFlight.always(function() { connectInFlight = null; });
+    }
+    connectInFlight.done(function() { onDone(false); }).fail(onFail);
+}
+
 // Get absolute path to vendor/js directory
 var scriptPath = chrome.runtime.getURL('vendor/js/');
 console.log('[Offscreen] Script path:', scriptPath);
@@ -80,30 +115,40 @@ require(['jdapi'], function(API) {
                         return;
                     }
                     if (result.myjd_session) {
-                        try {
-                            localStorage.setItem("jdapi/src/core/core.js", result.myjd_session);
-                            console.log('[Offscreen] Session data placed in localStorage, connecting...');
-                            api.connect({}).done(function() {
-                                isReady = true;
-                                console.log('[Offscreen] Connected successfully via restored session');
-                                reportConnectionState(true);
-                            }).fail(function(err) {
-                                console.warn('[Offscreen] Session restore connect failed:', err);
-                                isReady = true;
-                                reportConnectionState(false);
-                            });
-                        } catch(e) {
-                            console.error('[Offscreen] Failed to restore session:', e);
+                        console.log('[Offscreen] Session data found, connecting...');
+                        connectWithSession(result.myjd_session, function() {
                             isReady = true;
-                        }
+                            console.log('[Offscreen] Connected successfully via restored session');
+                            reportConnectionState(true);
+                        }, function(err) {
+                            console.warn('[Offscreen] Session restore connect failed:', err);
+                            isReady = true;
+                            reportConnectionState(false);
+                        });
                     } else {
                         isReady = true;
                         console.log('[Offscreen] No session to restore');
                     }
                 });
             } else {
+                // chrome.storage can be missing entirely when Chrome creates
+                // the offscreen document very early at browser startup, and it
+                // never appears for that document instance. jdapi reads its
+                // session from localStorage, which persists for the extension
+                // origin, so a previous session can still connect without it.
                 isReady = true;
-                console.log('[Offscreen] No chrome.storage, using localStorage only');
+                if (localStorage.getItem("jdapi/src/core/core.js")) {
+                    console.log('[Offscreen] No chrome.storage, restoring from localStorage session...');
+                    connectWithSession(null, function() {
+                        console.log('[Offscreen] Connected via localStorage session');
+                        reportConnectionState(true);
+                    }, function(err) {
+                        console.warn('[Offscreen] localStorage session connect failed:', err);
+                        reportConnectionState(false);
+                    });
+                } else {
+                    console.log('[Offscreen] No chrome.storage and no localStorage session');
+                }
             }
         } catch(e) {
             console.error('[Offscreen] Failed to create API:', e);
@@ -237,6 +282,26 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             } catch(e) {
                 sendResponse({ success: false, error: e.message });
             }
+            return true;
+
+        case 'offscreen-restore-session':
+            // Warm-start handoff: the service worker (which always has
+            // chrome.storage) reads the stored session itself and delivers it
+            // here, so restore works even in a storage-crippled document. The
+            // response tells the worker directly whether to clear the badge.
+            waitForApi(function(hasApi) {
+                if (!hasApi) {
+                    sendResponse({ success: false, error: 'API not initialized' });
+                    return;
+                }
+                connectWithSession(request.sessionData, function(alreadyConnected) {
+                    reportConnectionState(true);
+                    sendResponse({ success: true, connected: true, alreadyConnected: alreadyConnected });
+                }, function(err) {
+                    reportConnectionState(false);
+                    sendResponse({ success: false, error: (err && err.message) || String(err) });
+                });
+            }, 120);
             return true;
 
         case 'offscreen-ping':
