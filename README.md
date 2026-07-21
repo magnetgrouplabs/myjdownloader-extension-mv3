@@ -116,6 +116,12 @@ This extension was converted from Manifest V2 to Manifest V3. Here is a summary 
 | CNL interception from the isolated content script | MAIN-world content script (`world: "MAIN"`) + `webRequest` fallback | Isolated-world scripts can't override the page's `fetch`/`XMLHttpRequest` |
 | Unrestricted CSP | Default `script-src 'self'` + `ng-csp` | MV3 enforces strict Content Security Policy |
 
+## Contributing
+
+Pull requests are welcome and target the `dev` branch, which is the integration branch for
+changes being tested. `master` always matches the latest published release. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full guidelines.
+
 ## License
 
 This project is based on the original MyJDownloader browser extension by AppWork GmbH.
