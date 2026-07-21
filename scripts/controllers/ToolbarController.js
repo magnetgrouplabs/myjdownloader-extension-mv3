@@ -86,7 +86,14 @@ angular.module("myjdWebextensionApp").controller("ToolbarCtrl", [
       };
 
       $scope.closed = false;
-      $scope.editMode = true;
+      // editMode MUST start false, otherwise the auto-send countdown never
+      // arms: invalidateInitState() only starts the timer under `!editMode`,
+      // and editMode is set to false nowhere else (only true in resetScope,
+      // enterEditMode and autoSelectDevice/AskEveryTime). The result was that
+      // a captured request stayed in the manual panel and was never sent
+      // automatically. Hovering the toolbar calls enterEditMode(), which sets
+      // it back to true and stops the countdown (manual intervention).
+      $scope.editMode = false;
       $scope.selection = {};
       $scope.history = {};
       $scope.subscriptions = [];
