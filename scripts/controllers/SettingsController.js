@@ -39,6 +39,16 @@ angular.module('myjdWebextensionApp')
             }, 0);
         });
 
+        $scope.themeMode = 'system';
+        storageService.get('THEME_MODE', function (data) {
+            $timeout(function () {
+                $scope.themeMode = (data && data.THEME_MODE) || 'system';
+            }, 0);
+        });
+        $scope.setThemeMode = function (mode) {
+            storageService.set('THEME_MODE', mode);
+        };
+
         $scope.AskEveryTimeDevice = storageService.AskEveryTimeDevice;
         $scope.devices = [];
         $scope.devices.push(storageService.AskEveryTimeDevice);

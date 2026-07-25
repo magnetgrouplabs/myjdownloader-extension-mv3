@@ -98,6 +98,45 @@ describe('Background.js Queue Persistence', () => {
       expect(storedQueue[String(42)].length).toBe(1);
       expect(storedQueue[String(42)][0].content).toBe('http://download.com/file.zip');
     });
+
+    it('should handle the "new-selection" action the content script actually sends (issue #15)', async () => {
+      loadBackground();
+
+      const tab = createMockTab(43, 'http://example.com/page');
+      const handler = getOnMessageHandler();
+
+      // Exact shape sent by onCopyContentscript.js sendSelection(): the reply
+      // to the context menu's "get-selection" round trip. Before the fix this
+      // fell through to the "Unhandled action" default and the right-click-
+      // with-a-selection path did nothing.
+      const sender = { id: chrome.runtime.id, tab: tab };
+      const response = await new Promise(resolve => {
+        handler(
+          {
+            name: 'myjd-selection',
+            action: 'new-selection',
+            data: { text: 'http://download.com/selected.zip', html: '<a href="http://download.com/selected.zip">file</a>' }
+          },
+          sender,
+          resolve
+        );
+      });
+
+      // Must not be swallowed by the unhandled-action default
+      expect(response).not.toHaveProperty('forwarded');
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(chrome.storage.session.set).toHaveBeenCalled();
+      const lastCall = chrome.storage.session.set.mock.calls[
+        chrome.storage.session.set.mock.calls.length - 1
+      ];
+      expect(lastCall[0]).toHaveProperty(QUEUE_STORAGE_KEY);
+      const storedQueue = lastCall[0][QUEUE_STORAGE_KEY];
+      expect(storedQueue[String(43)]).toBeDefined();
+      expect(storedQueue[String(43)].length).toBe(1);
+      expect(storedQueue[String(43)][0].content).toBe('http://download.com/selected.zip');
+    });
   });
 
   describe('restoreRequestQueue reads from chrome.storage.session', () => {

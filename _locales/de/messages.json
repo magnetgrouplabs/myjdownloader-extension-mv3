@@ -454,6 +454,18 @@
    "ui_settings_update_download": {
       "message": "Releases-Seite öffnen"
    },
+   "ui_settings_theme": {
+      "message": "Design"
+   },
+   "ui_settings_theme_system": {
+      "message": "System"
+   },
+   "ui_settings_theme_light": {
+      "message": "Hell"
+   },
+   "ui_settings_theme_dark": {
+      "message": "Dunkel"
+   },
    "ui_settings_imprint_title": {
       "message": "Impressum"
    },
