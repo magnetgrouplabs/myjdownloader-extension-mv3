@@ -71,6 +71,7 @@ global.chrome = {
       manifest_version: 3
     })),
     sendMessage: jest.fn(() => Promise.resolve()),
+    getURL: jest.fn((path) => 'chrome-extension://test-extension-id/' + String(path).replace(/^\.*\//, '')),
     getContexts: jest.fn(() => Promise.resolve([])),
     onInstalled: createEvent(),
     onStartup: createEvent(),
