@@ -39,6 +39,30 @@ angular.module('myjdWebextensionApp')
             }, 0);
         });
 
+        // Manual check from the About section, for when the user does not want
+        // to wait up to a day for the alarm. null = not asked yet; the other
+        // states drive the status line under the link.
+        $scope.updateCheckState = null;
+        $scope.checkForUpdate = function () {
+            if ($scope.updateCheckState === 'checking') {
+                return;
+            }
+            $scope.updateCheckState = 'checking';
+            backgroundScriptService.checkForUpdate().then(function (response) {
+                $timeout(function () {
+                    var info = (response && response.update) || null;
+                    $scope.updateInfo = info;
+                    $scope.updateCheckState = info ? 'found' : 'current';
+                }, 0);
+            }).catch(function () {
+                // Offline, rate limited, or the service worker did not answer.
+                // Say so instead of leaving the link looking like it did nothing.
+                $timeout(function () {
+                    $scope.updateCheckState = 'error';
+                }, 0);
+            });
+        };
+
         $scope.themeMode = 'system';
         storageService.get('THEME_MODE', function (data) {
             $timeout(function () {

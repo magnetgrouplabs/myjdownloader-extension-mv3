@@ -69,6 +69,12 @@ angular.module('myjdWebextensionApp')
             });
         }
 
+        // Manual "check now" from the settings view. The background runs the
+        // same check on a daily alarm; this just runs it on demand.
+        function checkForUpdate() {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "check-for-update");
+        }
+
         function sendApiRequest(device, action, params) {
             return ExtensionMessagingService.sendMessage("myjd-toolbar", "send-api-request", {
                 device: device,
@@ -92,4 +98,5 @@ angular.module('myjdWebextensionApp')
         this.devicePoll = devicePoll;
         this.sendFeedback = sendFeedback;
         this.sendApiRequest = sendApiRequest;
+        this.checkForUpdate = checkForUpdate;
     }]);

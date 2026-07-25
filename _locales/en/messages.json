@@ -463,6 +463,18 @@
    "ui_settings_update_download": {
       "message": "Open the releases page"
    },
+   "ui_settings_update_check": {
+      "message": "Check for updates"
+   },
+   "ui_settings_update_checking": {
+      "message": "Checking for updates..."
+   },
+   "ui_settings_update_uptodate": {
+      "message": "You are running the latest version."
+   },
+   "ui_settings_update_failed": {
+      "message": "Could not check for updates. Please try again in a few minutes."
+   },
    "ui_settings_theme": {
       "message": "Theme"
    },
