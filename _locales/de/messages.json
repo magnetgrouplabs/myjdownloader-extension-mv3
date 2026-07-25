@@ -454,6 +454,18 @@
    "ui_settings_update_download": {
       "message": "Releases-Seite öffnen"
    },
+   "ui_settings_update_check": {
+      "message": "Nach Updates suchen"
+   },
+   "ui_settings_update_checking": {
+      "message": "Suche nach Updates..."
+   },
+   "ui_settings_update_uptodate": {
+      "message": "Du benutzt die neueste Version."
+   },
+   "ui_settings_update_failed": {
+      "message": "Die Suche nach Updates ist fehlgeschlagen. Bitte versuche es in ein paar Minuten nochmal."
+   },
    "ui_settings_theme": {
       "message": "Design"
    },

@@ -70,6 +70,9 @@ jobs:
         # Remove test files from package
         find package/myjdownloader-extension -name "__tests__" -type d -exec rm -rf {} + 2>/dev/null || true
         find package/myjdownloader-extension -name "*.test.js" -delete 2>/dev/null || true
+        # scripts/dev holds developer-only probes (npm run test:live). The line
+        # above deletes its contents; drop the now-empty directory too.
+        rm -rf package/myjdownloader-extension/scripts/dev
         cd package
         zip -r "../myjdownloader-extension-mv3-${VERSION}.zip" myjdownloader-extension
 

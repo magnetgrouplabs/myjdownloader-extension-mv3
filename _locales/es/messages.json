@@ -433,6 +433,18 @@
    "ui_settings_update_download": {
       "message": "Abrir la página de versiones"
    },
+   "ui_settings_update_check": {
+      "message": "Buscar actualizaciones"
+   },
+   "ui_settings_update_checking": {
+      "message": "Buscando actualizaciones..."
+   },
+   "ui_settings_update_uptodate": {
+      "message": "Estás usando la versión más reciente."
+   },
+   "ui_settings_update_failed": {
+      "message": "No se pudo buscar actualizaciones. Inténtalo de nuevo en unos minutos."
+   },
    "ui_settings_theme": {
       "message": "Tema"
    },

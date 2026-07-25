@@ -4,7 +4,8 @@
   "description": "MyJDownloader Chrome Extension MV3",
   "scripts": {
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:live": "jest --testMatch \"**/scripts/dev/*.test.js\""
   },
   "devDependencies": {
     "jest": "^27.5.1",

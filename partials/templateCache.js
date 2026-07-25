@@ -307,6 +307,19 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "        <div ng-if=\"buildMeta\">\n" +
     "            <b>Version:</b> {{buildMeta.version}}\n" +
     "        </div>\n" +
+    "        <div class=\"inlineSettingsContainer\" id=\"updateCheckContainer\">\n" +
+    "            <a ng-click=\"checkForUpdate()\"><i class=\"fa fa-refresh\" aria-hidden=\"true\"></i>&nbsp;{{(updateCheckState === 'checking' ? 'ui_settings_update_checking' : 'ui_settings_update_check') | translate}}</a>\n" +
+    "            <div style=\"clear:both;\"></div>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'current'\">\n" +
+    "                <small>{{'ui_settings_update_uptodate' | translate}}</small>\n" +
+    "            </p>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'error'\">\n" +
+    "                <small>{{'ui_settings_update_failed' | translate}}</small>\n" +
+    "            </p>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'found'\">\n" +
+    "                <small>{{'ui_settings_update_available' | translate}} <b>{{updateInfo.version}}</b>&nbsp;<a ng-href=\"{{updateInfo.url}}\" target=\"_blank\"><i class=\"fa fa-external-link\" aria-hidden=\"true\"></i>&nbsp;{{'ui_settings_update_download' | translate}}</a></small>\n" +
+    "            </p>\n" +
+    "        </div>\n" +
     "        <br />\n" +
     "        <div><a href=\"http://jdownloader.org/impressum\" target=\"_blank\"><i class=\"fa fa-external-link\"\n" +
     "                    aria-hidden=\"true\"></i>&nbsp;{{'ui_settings_imprint_title'\n" +
