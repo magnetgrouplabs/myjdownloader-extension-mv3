@@ -457,6 +457,12 @@
    "ui_settings_general": {
       "message": "General"
    },
+   "ui_settings_update_available": {
+      "message": "Update available:"
+   },
+   "ui_settings_update_download": {
+      "message": "Open the releases page"
+   },
    "ui_settings_theme": {
       "message": "Theme"
    },
