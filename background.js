@@ -253,6 +253,14 @@ const RELEASES_PAGE = 'https://github.com/magnetgrouplabs/myjdownloader-extensio
 // Numeric per-component compare so zero-padded tags ("2026.07.20") and the
 // 4th-component re-release scheme ("2026.7.13.1" > "2026.7.13") both order
 // correctly. Returns > 0 when a is newer than b.
+//
+// This is only a FALLBACK for ordering releases. It cannot be trusted on its
+// own: the third component changed meaning on 2026-07-21, from the day of the
+// month to a per-month release counter. Numerically 2026.7.4 < 2026.7.13.1,
+// but 2026.7.4 (the 4th July release, published 2026-07-21) is in fact newer
+// than 2026.7.13.1 (published 2026-07-13). Ordering by publish date instead
+// is what makes the notifier correct across that discontinuity, and keeps it
+// correct if the scheme ever changes again. See isNewerRelease().
 function compareVersions(a, b) {
  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
@@ -264,6 +272,46 @@ function compareVersions(a, b) {
  return 0;
 }
 
+// buildMeta.json is written by the release workflow and ships inside the zip.
+// Its "timestamp" is when this build was cut, which is the only local value
+// that can be compared against a release's publish date. Cached because the
+// file never changes for the life of a build.
+let buildTimestampPromise = null;
+function getBuildTimestamp() {
+ if (!buildTimestampPromise) {
+  buildTimestampPromise = (async () => {
+   try {
+    const resp = await fetch(chrome.runtime.getURL('buildMeta.json'));
+    if (!resp.ok) return 0;
+    const meta = await resp.json();
+    const ts = Number(meta && meta.timestamp);
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+   } catch (e) {
+    // Dev checkout without a generated buildMeta.json.
+    return 0;
+   }
+  })();
+ }
+ return buildTimestampPromise;
+}
+
+// True when the given release is newer than the running build. Prefers publish
+// date over version numbers (see compareVersions), and only falls back to the
+// numeric compare when there is no usable timestamp on one side.
+async function isNewerRelease(version, publishedAt) {
+ const current = chrome.runtime.getManifest().version;
+ // Numeric equality, not string equality: Chrome strips leading zeros, so the
+ // tag "v2026.07.13.1" is the running "2026.7.13.1". Catching that here also
+ // keeps the date compare below from ever seeing the release it is running.
+ if (compareVersions(version, current) === 0) return false;
+ const releasedAt = typeof publishedAt === 'number' ? publishedAt : Date.parse(publishedAt || '');
+ const buildAt = await getBuildTimestamp();
+ if (buildAt > 0 && Number.isFinite(releasedAt) && releasedAt > 0) {
+  return releasedAt > buildAt;
+ }
+ return compareVersions(version, current) > 0;
+}
+
 async function checkForUpdate() {
  try {
   const resp = await fetch(RELEASES_API, {
@@ -273,9 +321,15 @@ async function checkForUpdate() {
   const release = await resp.json();
   if (!release || typeof release.tag_name !== 'string') return null;
   const latest = release.tag_name.replace(/^v/, '');
-  const current = chrome.runtime.getManifest().version;
-  if (compareVersions(latest, current) > 0) {
-   const info = { version: latest, url: release.html_url || RELEASES_PAGE };
+  const publishedAt = Date.parse(release.published_at || '');
+  if (await isNewerRelease(latest, publishedAt)) {
+   const info = {
+    version: latest,
+    url: release.html_url || RELEASES_PAGE,
+    // Persisted so the restore path in initSettings() can re-apply the same
+    // date comparison instead of falling back to the numeric one.
+    publishedAt: Number.isFinite(publishedAt) ? publishedAt : null
+   };
    await chrome.storage.local.set({ [UPDATE_STORAGE_KEY]: info });
    state.updateAvailable = true;
    updateBadge();
@@ -307,7 +361,7 @@ async function initSettings() {
  // running version has caught up with the stored one.
  const upd = await chrome.storage.local.get(UPDATE_STORAGE_KEY);
  const updInfo = upd[UPDATE_STORAGE_KEY];
- if (updInfo && compareVersions(updInfo.version, chrome.runtime.getManifest().version) > 0) {
+ if (updInfo && await isNewerRelease(updInfo.version, updInfo.publishedAt)) {
   state.updateAvailable = true;
  } else if (updInfo) {
   chrome.storage.local.remove(UPDATE_STORAGE_KEY);
