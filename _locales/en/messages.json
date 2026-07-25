@@ -463,6 +463,18 @@
    "ui_settings_update_download": {
       "message": "Open the releases page"
    },
+   "ui_settings_theme": {
+      "message": "Theme"
+   },
+   "ui_settings_theme_system": {
+      "message": "System"
+   },
+   "ui_settings_theme_light": {
+      "message": "Light"
+   },
+   "ui_settings_theme_dark": {
+      "message": "Dark"
+   },
    "ui_settings_imprint_title": {
       "message": "Imprint"
    },

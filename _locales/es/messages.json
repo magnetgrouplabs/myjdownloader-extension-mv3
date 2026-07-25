@@ -433,6 +433,18 @@
    "ui_settings_update_download": {
       "message": "Abrir la página de versiones"
    },
+   "ui_settings_theme": {
+      "message": "Tema"
+   },
+   "ui_settings_theme_system": {
+      "message": "Sistema"
+   },
+   "ui_settings_theme_light": {
+      "message": "Claro"
+   },
+   "ui_settings_theme_dark": {
+      "message": "Oscuro"
+   },
    "ui_settings_imprint_title": {
       "message": "Pie de imprenta"
    },
