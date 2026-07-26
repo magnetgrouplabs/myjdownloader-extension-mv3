@@ -89,6 +89,15 @@ global.chrome = {
   tabs: {
     sendMessage: jest.fn(() => Promise.resolve()),
     get: jest.fn((tabId, callback) => callback({ id: tabId })),
+    update: jest.fn(() => Promise.resolve()),
+    query: jest.fn((queryInfo, callback) => {
+      if (callback) callback([]);
+      return Promise.resolve([]);
+    }),
+    remove: jest.fn((tabId, callback) => {
+      if (callback) callback();
+      return Promise.resolve();
+    }),
     onRemoved: createEvent()
   },
   webRequest: {
@@ -118,6 +127,14 @@ global.chrome = {
     updateSessionRules: jest.fn(() => Promise.resolve())
   }
 };
+
+// jsdom ships an AbortSignal without the static timeout() that Chrome has, and
+// background.js uses AbortSignal.timeout() on every fetch to JDownloader. Left
+// unpatched, those calls throw TypeError in tests and the handler's catch block
+// swallows it, so the whole callback path looks silently inert.
+if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout !== 'function') {
+  AbortSignal.timeout = () => new AbortController().signal;
+}
 
 // Helper to reset all storage between tests
 global.__resetChromeStorage = function() {

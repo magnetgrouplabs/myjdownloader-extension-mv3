@@ -640,3 +640,137 @@ describe('Background.js Storage Key Consistency (Phase 9)', () => {
     expect(backgroundSrc).not.toMatch(/['"]settings_add_links_dialog_active['"]/);
   });
 });
+
+/**
+ * JDownloader's browser solver hands hCaptcha challenges to the extension via
+ * meta tags on its own page (its hcaptcha.html has no widget at all). The
+ * service worker parks the job, sends the tab to the hoster's domain where the
+ * widget may render, and the solved token has to go back to the URL that served
+ * the challenge — not to my.jdownloader.org (issue #5).
+ */
+describe('Background.js JD browser solver hand-off (issue #5)', () => {
+  const JD_CALLBACK = 'http://127.0.0.1:9666/captcha/hcaptcha/ddownload.com?id=42';
+
+  const JOB_DETAILS = {
+    captchaType: 'hcaptcha',
+    siteKey: '10000000-ffff-ffff-ffff-000000000001',
+    siteKeyType: 'NORMAL',
+    v3action: '',
+    hoster: 'ddownload.com',
+    targetUrl: 'https://ddownload.com/file/abc',
+    captchaId: '42'
+  };
+
+  beforeEach(() => {
+    global.__resetChromeStorage();
+    jest.clearAllMocks();
+    global.chrome.runtime.onMessage._listeners.length = 0;
+    global.chrome.runtime.onInstalled._listeners.length = 0;
+    global.chrome.runtime.onStartup._listeners.length = 0;
+    global.chrome.tabs.onRemoved._listeners.length = 0;
+    global.chrome.contextMenus.onClicked._listeners.length = 0;
+    global.chrome.alarms.onAlarm._listeners.length = 0;
+    global.chrome.storage.onChanged._listeners.length = 0;
+    global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, status: 200 }));
+    jest.resetModules();
+    require('../../background.js');
+  });
+
+  function send(message, tabId) {
+    const listeners = global.chrome.runtime.onMessage._listeners;
+    const handler = listeners[listeners.length - 1];
+    return new Promise(resolve => {
+      handler(message, { id: chrome.runtime.id, tab: { id: tabId } }, resolve);
+    });
+  }
+
+  function handOffJob(tabId) {
+    return send({
+      action: 'jd-browser-solver-job',
+      data: { jobDetails: JOB_DETAILS, callbackUrl: JD_CALLBACK }
+    }, tabId);
+  }
+
+  it('parks the job with JDownloader\'s callback and sends the tab to the hoster', async () => {
+    await expect(handOffJob(31)).resolves.toEqual({ status: 'ok' });
+
+    expect(global.__getSessionStore()['myjd_captcha_job']).toEqual(
+      Object.assign({}, JOB_DETAILS, { callbackUrl: JD_CALLBACK })
+    );
+    expect(global.chrome.tabs.update).toHaveBeenCalledWith(31, {
+      url: 'https://ddownload.com/file/abc#rc2jdt'
+    });
+  });
+
+  it('strips CSP for the tab so the hCaptcha widget can load', async () => {
+    await handOffJob(31);
+
+    // The CNL interceptor also installs session rules on startup, so look for
+    // the tab-scoped CSP rule rather than assuming a call order.
+    const cspRule = global.chrome.declarativeNetRequest.updateSessionRules.mock.calls
+      .map(call => call[0])
+      .flatMap(arg => (arg && arg.addRules) || [])
+      .find(rule => rule.condition && rule.condition.tabIds);
+    expect(cspRule).toBeDefined();
+    expect(cspRule.condition.tabIds).toEqual([31]);
+    expect(cspRule.action.responseHeaders.map(h => h.header))
+      .toContain('Content-Security-Policy');
+  });
+
+  it('sends the solved token back to JDownloader, not to my.jdownloader.org', async () => {
+    await handOffJob(31);
+
+    await send({
+      action: 'captcha-solved',
+      data: { token: 'x'.repeat(40), callbackUrl: JD_CALLBACK, captchaId: '42' }
+    }, 31);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [requestedUrl, options] = global.fetch.mock.calls[0];
+    expect(requestedUrl).toBe(JD_CALLBACK + '&do=solve&response=' + 'x'.repeat(40));
+    expect(options.headers['X-Myjd-Appkey']).toMatch(/^webextension-/);
+    // The MYJD relay must not be used for a JDownloader-local callback
+    expect(global.chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('sends a skip back to JDownloader as well', async () => {
+    await handOffJob(31);
+
+    await send({
+      action: 'captcha-skip',
+      data: { callbackUrl: JD_CALLBACK, captchaId: '42', skipType: 'single' }
+    }, 31);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      JD_CALLBACK + '&do=skip&skiptype=single',
+      expect.anything()
+    );
+  });
+
+  it('rejects a hand-off without a sender tab', async () => {
+    const listeners = global.chrome.runtime.onMessage._listeners;
+    const handler = listeners[listeners.length - 1];
+    const response = await new Promise(resolve => {
+      handler(
+        { action: 'jd-browser-solver-job', data: { jobDetails: JOB_DETAILS, callbackUrl: JD_CALLBACK } },
+        { id: chrome.runtime.id },
+        resolve
+      );
+    });
+
+    expect(response).toEqual({ status: 'error', error: 'no sender tab' });
+    expect(global.chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps the MyJDownloader web interface flow on the MYJD marker', async () => {
+    await send({
+      action: 'myjd-prepare-captcha-tab',
+      data: { tabId: 55, jobDetails: JOB_DETAILS }
+    }, 55);
+
+    expect(global.__getSessionStore()['myjd_captcha_job'].callbackUrl).toBe('MYJD');
+  });
+});
