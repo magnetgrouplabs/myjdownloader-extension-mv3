@@ -510,6 +510,34 @@ chrome.webRequest.onBeforeRequest.addListener(
 );
 
 
+// Park a CAPTCHA job for myjdCaptchaSolver.js and send the tab to the hoster's
+// own domain with #rc2jdt, where the widget can legally render. Shared by the
+// MyJDownloader web interface flow and JDownloader's own browser solver; they
+// only differ in where the solved token has to be delivered.
+async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName, sendResponse) {
+ try {
+  // The solver reports the token with the job's callbackUrl, which decides
+  // whether the solution is routed to my.jdownloader.org or to JDownloader's
+  // own callback URL, so it has to travel inside the job.
+  const job = Object.assign({}, jobDetails, { callbackUrl: callbackUrl });
+  await chrome.storage.session.set({ myjd_captcha_job: job });
+  addCspStrippingRule(tabId);
+  chrome.tabs.update(tabId, { url: jobDetails.targetUrl + '#rc2jdt' });
+  activeCaptchaTabs[tabId] = {
+   callbackUrl: callbackUrl,
+   captchaId: jobDetails.captchaId,
+   captchaType: jobDetails.captchaType,
+   hoster: jobDetails.hoster,
+   detectedAt: Date.now()
+  };
+  console.log('Background: ' + flowName + ' CAPTCHA tab prepared:', tabId, jobDetails.hoster);
+  sendResponse({ status: 'ok' });
+ } catch (err) {
+  console.error('Background: Failed to prepare ' + flowName + ' CAPTCHA tab:', err);
+  sendResponse({ status: 'error', error: err.message });
+ }
+}
+
 // ============================================================
 // Message handler — central routing for popup, toolbar, content scripts
 // ============================================================
@@ -771,27 +799,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  // MYJD CAPTCHA: prepare tab (write session storage, add CSP rule, navigate)
  if (action === "myjd-prepare-captcha-tab") {
-  (async () => {
-   try {
-    let tabId = request.data.tabId;
-    let jobDetails = request.data.jobDetails;
-    await chrome.storage.session.set({ myjd_captcha_job: jobDetails });
-    addCspStrippingRule(tabId);
-    chrome.tabs.update(tabId, { url: jobDetails.targetUrl + '#rc2jdt' });
-    activeCaptchaTabs[tabId] = {
-     callbackUrl: 'MYJD',
-     captchaId: jobDetails.captchaId,
-     captchaType: jobDetails.captchaType,
-     hoster: jobDetails.hoster,
-     detectedAt: Date.now()
-    };
-    console.log('Background: MYJD CAPTCHA tab prepared:', tabId, jobDetails.hoster);
-    sendResponse({ status: 'ok' });
-   } catch (err) {
-    console.error('Background: Failed to prepare MYJD CAPTCHA tab:', err);
-    sendResponse({ status: 'error', error: err.message });
-   }
-  })();
+  prepareCaptchaTab(request.data.tabId, request.data.jobDetails, 'MYJD', 'MYJD', sendResponse);
+  return true;
+ }
+
+ // JD BROWSER SOLVER: hand-off from JDownloader's own challenge page.
+ // The solution goes back to the URL that served that page, so the callback
+ // travels with the job instead of the 'MYJD' marker.
+ if (action === "jd-browser-solver-job") {
+  if (!sender.tab) {
+   sendResponse({ status: 'error', error: 'no sender tab' });
+   return true;
+  }
+  prepareCaptchaTab(sender.tab.id, request.data.jobDetails, request.data.callbackUrl, 'JD browser solver', sendResponse);
   return true;
  }
 
