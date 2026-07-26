@@ -6,7 +6,8 @@ console.log("Background: Starting MyJDownloader MV3...");
 const STORAGE_KEYS = {
  CLICKNLOAD_ACTIVE: 'CLICKNLOAD_ACTIVE',
  CONTEXT_MENU_SIMPLE: 'CONTEXT_MENU_SIMPLE',
- DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
+ DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD',
+ ENHANCE_CAPTCHA_DIALOG: 'ENHANCE_CAPTCHA_DIALOG'
 };
 
 const DEVICE_TYPES = {
@@ -233,6 +234,8 @@ async function initSettings() {
  settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE] = result[STORAGE_KEYS.CLICKNLOAD_ACTIVE] ?? true;
  settings[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] = result[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] ?? true;
  settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = result[STORAGE_KEYS.DEFAULT_PREFERRED_JD] || DEVICE_TYPES.ASK_EVERY_TIME;
+ // Mirrors StorageService.settingsKeys.ENHANCE_CAPTCHA_DIALOG.defaultValue
+ settings[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG] = result[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG] ?? true;
 
  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) {
   addCnlInterceptor();
@@ -352,7 +355,32 @@ chrome.storage.onChanged.addListener((changes) => {
  if (changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD]) {
   settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD].newValue;
  }
+ if (changes[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG]) {
+  settings[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG] = changes[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG].newValue;
+  broadcastEnhancerSetting();
+ }
 });
+
+// Push the enhancer setting to open web interface tabs. The enhancer applies it
+// live, so toggling the setting does not require a reload of my.jdownloader.org.
+function broadcastEnhancerSetting() {
+ const active = isEnhancerActive();
+ chrome.tabs.query({ url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*'] }, function(tabs) {
+  if (!tabs) return;
+  for (let i = 0; i < tabs.length; i++) {
+   chrome.tabs.sendMessage(tabs[i].id, {
+    type: 'change',
+    name: 'webinterface-enhancer',
+    action: 'settings',
+    data: { active: active }
+   }, function() { void chrome.runtime.lastError; });
+  }
+ });
+}
+
+function isEnhancerActive() {
+ return settings[STORAGE_KEYS.ENHANCE_CAPTCHA_DIALOG] !== false;
+}
 
 // ============================================================
 // DeclarativeNetRequest for CNL
@@ -573,6 +601,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
    });
   });
+  return true;
+ }
+
+ // --- Web interface enhancer handshake ---
+ // The web interface registers a `message` listener that sets
+ // jd.extensionInstalled = true when it receives {type:'ping', name:'pong'},
+ // then posts {name:'ping'} into its own window exactly once. Our enhancer
+ // content script only answers that ping when it has been told the enhancement
+ // is active — and in MV3 nothing answered this request, because the responder
+ // lived in the MV2 background page's BackgroundCtrl, which never ran under a
+ // service worker. Without an answer the page concludes no extension is
+ // installed and shows "Browser extension required" (see issue #5).
+ if (request.name === "webinterface-enhancer" && action === "settings") {
+  sendResponse({ active: isEnhancerActive() });
   return true;
  }
 
