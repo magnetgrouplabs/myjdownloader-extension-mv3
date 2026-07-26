@@ -61,6 +61,11 @@
   "matches": [ "*://*/*" ],
   "run_at": "document_end"
   }, {
+  "all_frames": false,
+  "js": [ "contentscripts/browserSolverBridge.js" ],
+  "matches": [ "http://127.0.0.1/*", "http://localhost/*" ],
+  "run_at": "document_end"
+  }, {
   "all_frames": true,
   "js": [ "contentscripts/webinterfaceEnhancer.js" ],
   "matches": [ "*://my.jdownloader.org/*" ],
