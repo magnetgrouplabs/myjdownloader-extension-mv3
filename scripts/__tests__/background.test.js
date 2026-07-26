@@ -640,3 +640,94 @@ describe('Background.js Storage Key Consistency (Phase 9)', () => {
     expect(backgroundSrc).not.toMatch(/['"]settings_add_links_dialog_active['"]/);
   });
 });
+
+/**
+ * The web interface enhancer asks the service worker whether the enhancement is
+ * active and only answers my.jdownloader.org's one-shot detection ping when it
+ * gets a "yes". In MV3 nothing answered that request — the responder lived in
+ * the MV2 background page's BackgroundCtrl, which a service worker never runs —
+ * so the page kept showing "Browser extension required" (issue #5).
+ */
+describe('Background.js webinterface-enhancer handshake (issue #5)', () => {
+  beforeEach(() => {
+    global.__resetChromeStorage();
+    jest.clearAllMocks();
+    global.chrome.runtime.onMessage._listeners.length = 0;
+    global.chrome.runtime.onInstalled._listeners.length = 0;
+    global.chrome.runtime.onStartup._listeners.length = 0;
+    global.chrome.tabs.onRemoved._listeners.length = 0;
+    global.chrome.contextMenus.onClicked._listeners.length = 0;
+    global.chrome.alarms.onAlarm._listeners.length = 0;
+    global.chrome.storage.onChanged._listeners.length = 0;
+    global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
+    jest.resetModules();
+  });
+
+  // initSettings() reads chrome.storage.local asynchronously at module load
+  async function loadBackgroundAndSettle() {
+    require('../../background.js');
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  function askSettings() {
+    const listeners = global.chrome.runtime.onMessage._listeners;
+    const handler = listeners[listeners.length - 1];
+    return new Promise(resolve => {
+      handler(
+        { name: 'webinterface-enhancer', action: 'settings' },
+        { id: chrome.runtime.id, tab: { id: 7 } },
+        resolve
+      );
+    });
+  }
+
+  it('answers the settings request with the default (active) when nothing is stored', async () => {
+    await loadBackgroundAndSettle();
+
+    await expect(askSettings()).resolves.toEqual({ active: true });
+  });
+
+  it('answers with active: false when the user switched the enhancement off', async () => {
+    global.__getLocalStore()['ENHANCE_CAPTCHA_DIALOG'] = false;
+    await loadBackgroundAndSettle();
+
+    await expect(askSettings()).resolves.toEqual({ active: false });
+  });
+
+  it('answers with active: true when the user switched the enhancement on', async () => {
+    global.__getLocalStore()['ENHANCE_CAPTCHA_DIALOG'] = true;
+    await loadBackgroundAndSettle();
+
+    await expect(askSettings()).resolves.toEqual({ active: true });
+  });
+
+  it('pushes a setting change to open web interface tabs', async () => {
+    await loadBackgroundAndSettle();
+
+    global.chrome.tabs.query.mockImplementation((queryInfo, callback) => {
+      callback([{ id: 11 }, { id: 12 }]);
+    });
+
+    global.chrome.storage.onChanged._fire({
+      ENHANCE_CAPTCHA_DIALOG: { newValue: false, oldValue: true }
+    });
+
+    const queryInfo = global.chrome.tabs.query.mock.calls[0][0];
+    expect(queryInfo.url).toEqual([
+      'http://my.jdownloader.org/*',
+      'https://my.jdownloader.org/*'
+    ]);
+    expect(global.chrome.tabs.sendMessage).toHaveBeenCalledTimes(2);
+    const [tabId, message] = global.chrome.tabs.sendMessage.mock.calls[0];
+    expect(tabId).toBe(11);
+    expect(message).toMatchObject({
+      type: 'change',
+      name: 'webinterface-enhancer',
+      action: 'settings',
+      data: { active: false }
+    });
+
+    // And the responder reflects the new value for tabs opened afterwards
+    await expect(askSettings()).resolves.toEqual({ active: false });
+  });
+});
