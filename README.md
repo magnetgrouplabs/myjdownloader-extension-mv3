@@ -15,6 +15,7 @@ This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fu
 - **CAPTCHA solving** — Solves reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help
 - **Session persistence** — Stays logged in across browser restarts
 - **Device selection** — Choose which JDownloader instance receives your downloads
+- **Update notifications**: Checks once a day for a new release and flags it with a badge and a banner in Settings. There is also a manual "Check for updates" under Settings > About. This extension is installed unpacked, so Chrome never auto-updates it; you still install new versions yourself from the releases page.
 
 ## How It Works
 

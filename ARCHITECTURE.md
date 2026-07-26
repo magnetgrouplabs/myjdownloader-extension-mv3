@@ -17,6 +17,7 @@ This is a Chrome Extension (Manifest V3) for MyJDownloader - a service that conn
 - Session persistence across popup open/close cycles
 - Options/settings page (via AngularJS route)
 - Captcha solving (RC2) flow
+- Update notifier (daily release check, badge, settings banner, manual check)
 
 ## Architecture
 
@@ -58,7 +59,8 @@ This is a Chrome Extension (Manifest V3) for MyJDownloader - a service that conn
 
 ### Core Extension Files
 - `manifest.json` - MV3 manifest
-- `background.js` - Service worker: context menus, request queue, message routing, DNR rules
+- `buildMeta.json` - Version and build timestamp, generated at release time. The settings page reads it for the version display, and the update notifier compares its `timestamp` against the latest release's publish date
+- `background.js` - Service worker: context menus, request queue, message routing, DNR rules, update notifier
 - `popup.html` / `scripts/popup-app.js` / `scripts/popup.js` - Popup UI
 - `toolbar.html` / `scripts/toolbar.js` - In-page toolbar for add-links dialog
 - `offscreen.html` / `offscreen.js` - API operations when popup closed (CNL only)
@@ -123,6 +125,10 @@ CREDS_STORAGE_KEY = "myjd_creds"               // Saved email only (no password)
 2. Enable Developer Mode
 3. Click "Load unpacked" -> select this directory
 
+### Testing
+- `npx jest` - the full suite. Note that jest cannot exercise MAIN-world content script or service worker semantics, and no test here bootstraps AngularJS, so controller coverage is source-text analysis rather than runtime behavior
+- `npm run test:live` - optional probe that runs the update notifier against the live GitHub releases API. Excluded from the default suite and CI because it needs network access
+
 ### Debugging
 - **Service Worker**: `chrome://extensions/` -> click "service worker" link
 - **Popup**: Click extension icon -> right-click popup -> "Inspect"
@@ -131,5 +137,5 @@ CREDS_STORAGE_KEY = "myjd_creds"               // Saved email only (no password)
 
 ---
 
-**Last Updated**: 2026-02-25
+**Last Updated**: 2026-07-25
 **Migration Status**: COMPLETE

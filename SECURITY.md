@@ -168,17 +168,16 @@ httpRequest.open("GET", callbackUrl + "&do=solve&response=" + token, true);
 
 **Mitigation:** Localhost traffic never leaves the machine; token validity is short-lived.
 
-### 3. Token Not URL-Encoded
+### 3. Token Not URL-Encoded (RESOLVED)
+
+The MV2 implementation concatenated the CAPTCHA token into the callback URL unencoded, so
+special characters could break URL parsing. The MV3 service worker encodes it:
 
 ```javascript
-httpRequest.open("GET", callbackUrl + "&do=solve&response=" + token, true);
+fetch(callbackUrl + '&do=solve&response=' + encodeURIComponent(token), { ... })
 ```
 
-**Risk:** Special characters in CAPTCHA tokens could break URL parsing.
-
-**Why it exists:** Original MV2 implementation; tokens are base64-like strings without special characters in practice.
-
-**Status:** Low risk - tokens are alphanumeric in observed cases.
+**Status:** Resolved. Kept here for history.
 
 ### 4. Broad Host Permission (`<all_urls>`)
 
@@ -213,6 +212,29 @@ var fn = (new Function('$filter', ...
 - `ng-csp` directive disables Angular's use of `eval`/`new Function` for templates
 - RequireJS eval used for module loading from extension package (not remote)
 - These are third-party libraries; no custom code uses `eval()` or `new Function()`
+
+### 6. Vendored AngularJS is End-of-Life
+
+`vendor/js/angular.js` is AngularJS **1.8.2** and ships in the release package. AngularJS 1.x
+reached end of life in January 2022; 1.8.3 was the final release. Published advisories against
+it (cross-site scripting, SVG sanitization, image source restriction bypass) cover `<= 1.8.3`,
+so there is no version to upgrade to.
+
+**Note on tooling:** automated dependency scanning does not see this. The vendored copy is not
+an npm dependency, and the `angular` entry in `package.json` is a devDependency used only by the
+test suite. The project has no production npm dependencies, so `npm audit --omit=dev` reports
+clean while the vulnerable code is the one actually shipping.
+
+**Risk:** Currently not exploitable. The advisories require rendering untrusted content as HTML,
+and the extension has no such sink: no `ng-bind-html`, no `$sce.trustAsHtml`, and no `$sanitize`
+directive use anywhere in extension code. `ngSanitize` is registered as a module but unused. The
+only `innerHTML` references read from the DOM (`contentscripts/onCopyContentscript.js`) rather
+than writing to it.
+
+**Mitigation:** Keep it that way. Values from JDownloader and from web pages (link names, package
+names, hoster names, device names) reach the UI through Angular interpolation, which escapes by
+default. Introducing a single `ng-bind-html` or `trustAsHtml` on any of those paths would make
+this live. Treat that as requiring review.
 
 ---
 
