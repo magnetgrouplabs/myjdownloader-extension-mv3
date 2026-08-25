@@ -63,10 +63,10 @@ describe('MYJD CAPTCHA Solver Content Script', function() {
     it('should create h-captcha div for hCaptcha', function() {
       expect(csSource).toMatch(/h-captcha/);
     });
-    it('should load reCAPTCHA API as external script', function() {
+    it('should know the reCAPTCHA API script URL', function() {
       expect(csSource).toMatch(/google\.com\/recaptcha\/api\.js/);
     });
-    it('should load hCaptcha API as external script', function() {
+    it('should know the hCaptcha API script URL', function() {
       expect(csSource).toMatch(/hcaptcha\.com\/1\/api\.js/);
     });
     it('should handle invisible/v3 with data-size invisible', function() {
@@ -74,6 +74,24 @@ describe('MYJD CAPTCHA Solver Content Script', function() {
     });
     it('should request MAIN world execution for invisible CAPTCHAs', function() {
       expect(csSource).toMatch(/myjd-captcha-execute/);
+    });
+    it('should ask the background service worker to load the API script instead of injecting it itself', function() {
+      // The isolated world's own CSP blocks a remote <script src> appended
+      // directly from the content script, so loading happens in background.js
+      // (MAIN world) instead.
+      expect(csSource).toMatch(/myjd-captcha-load-api/);
+      expect(csSource).not.toMatch(/createElement\(\s*['"]script['"]\s*\)/);
+    });
+    it('should listen for the postMessage bridge from the MAIN world and check event.source', function() {
+      expect(csSource).toMatch(/addEventListener\(\s*['"]message['"]/);
+      expect(csSource).toMatch(/__myjd_captcha_api__/);
+      expect(csSource).toMatch(/event\.source\s*!==\s*window/);
+    });
+    it('should fall back to showApiLoadError on a rejected load-api response or timeout', function() {
+      expect(csSource).toMatch(/function\s+showApiLoadError\s*\(/);
+      expect(csSource).toMatch(/setTimeout\(\s*function\s*\(\)\s*\{\s*settleApi\(false\)/);
+      expect(csSource).toMatch(/response\.status\s*!==\s*['"]ok['"]/);
+      expect(csSource).toMatch(/chrome\.runtime\.lastError/);
     });
   });
 

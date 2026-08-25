@@ -20,14 +20,12 @@
     const BRIDGE_MARKER = '__myjd_cnl_bridge__';
 
     window.addEventListener('message', function(event) {
-        // The real security boundary here is event.source === window: only
-        // code running in this exact window (i.e. our own MAIN-world script,
-        // not an iframe, not another tab, not a malicious page) can ever
-        // satisfy that check, since postMessage always sets `source` to the
-        // actual sending window and that cannot be spoofed cross-context.
-        // We additionally check origin where available, but some engines
-        // report an empty origin for same-window self-messaging, so we
-        // don't hard-fail on that alone.
+        // event.source === window only scopes this listener to senders in
+        // this exact window (filters out other frames/tabs) — it is NOT a
+        // trust boundary: the hosting page runs in this same window and
+        // could send a matching message itself. We additionally check origin
+        // where available, but some engines report an empty origin for
+        // same-window self-messaging, so we don't hard-fail on that alone.
         if (event.source !== window) return;
         if (event.origin && event.origin !== window.location.origin) return;
         const data = event.data;
