@@ -110,7 +110,7 @@ This extension was converted from Manifest V2 to Manifest V3. Here is a summary 
 |-------------|-----------------|-----|
 | Background page (persistent) | Service worker (event-driven) | MV3 requires non-persistent background contexts |
 | `chrome.tabs.executeScript()` | `chrome.scripting.executeScript()` | New API with explicit world targeting (MAIN/ISOLATED) |
-| Inline script injection for CAPTCHAs | External script elements + content scripts | MV3 CSP prohibits inline script execution |
+| Inline script injection for CAPTCHAs | `chrome.scripting.executeScript({world:'MAIN'})` loads the provider's API script | Content scripts run in an isolated world with its own CSP that blocks a remote `<script src>` appended from there, independently of the page's own CSP |
 | `chrome.browserAction` | `chrome.action` | API renamed in MV3 |
 | `localStorage` in background page | `chrome.storage.session` + offscreen document | Service workers have no DOM or localStorage access |
 | CNL interception from the isolated content script | MAIN-world content script (`world: "MAIN"`) + `webRequest` fallback | Isolated-world scripts can't override the page's `fetch`/`XMLHttpRequest` |
