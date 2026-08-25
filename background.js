@@ -89,6 +89,26 @@ function removeCspStrippingRule(tabId) {
  });
 }
 
+// Restrict chrome.scripting-driven script loading to the known CAPTCHA
+// provider API endpoints, so myjd-captcha-load-api can't be used as a
+// general-purpose remote-script loader for an arbitrary tab. Host and path
+// are checked independently, not as a single (host, path) pair, so e.g.
+// https://www.google.com/1/api.js also passes; both allowed hosts only ever
+// serve their own real path in practice, so this is harmless, just laxer
+// than the "allowlist" name might suggest.
+function isCaptchaApiScript(url) {
+ if (!url || typeof url !== 'string') return false;
+ try {
+  var parsed = new URL(url);
+  if (parsed.protocol !== 'https:') return false;
+  if (parsed.pathname !== '/1/api.js' && parsed.pathname !== '/recaptcha/api.js') return false;
+  var allowedHosts = ['hcaptcha.com', 'www.google.com'];
+  return allowedHosts.indexOf(parsed.hostname) !== -1;
+ } catch (err) {
+  return false;
+ }
+}
+
 async function addLinkToRequestQueue(link, tab) {
  await queueReady;
  let tabKey = String(tab.id);
@@ -792,6 +812,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'error', error: err.message });
    }
   })();
+  return true;
+ }
+
+ // MYJD CAPTCHA: load the provider's API script in the page's MAIN world.
+ // The isolated world content scripts run in enforces its own CSP
+ // (script-src 'self' 'wasm-unsafe-eval' ...), which blocks a remote
+ // <script src> appended from the content script regardless of the page's
+ // own (already stripped) CSP header. Loading it via chrome.scripting in the
+ // MAIN world is subject to the page's CSP only, which the existing
+ // addCspStrippingRule() already clears for this tab. The result is handed
+ // back via window.postMessage, same bridge pattern as cnlInterceptorMain.js.
+ // Target origin '*' rather than window.location.origin: on an opaque-origin
+ // document (sandboxed page) location.origin is the string "null", which
+ // postMessage rejects with a SyntaxError instead of sending. Same window,
+ // no secret in the payload, and the receiver already checks
+ // event.source === window, so '*' costs nothing here.
+ if (action === "myjd-captcha-load-api") {
+  if (!sender.tab || !isCaptchaApiScript(request.data && request.data.url)) {
+   console.error('Background: Rejected CAPTCHA API script URL:', request.data && request.data.url);
+   sendResponse({ status: 'error', error: 'url not allowed' });
+   return true;
+  }
+  chrome.scripting.executeScript({
+   target: { tabId: sender.tab.id },
+   world: 'MAIN',
+   args: [request.data.url],
+   func: function(url) {
+    var container = document.getElementById('captchaContainer') || document.head || document.documentElement;
+    var script = document.createElement('script');
+    script.src = url;
+    script.addEventListener('load', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'loaded' }, '*');
+    });
+    script.addEventListener('error', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'error' }, '*');
+    });
+    container.appendChild(script);
+   }
+  }).then(function() {
+   sendResponse({ status: 'ok' });
+  }).catch(function(err) {
+   console.error('Background: Failed to load CAPTCHA API script in MAIN world:', err);
+   sendResponse({ status: 'error', error: err && err.message });
+  });
   return true;
  }
 
