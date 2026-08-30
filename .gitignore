@@ -1,0 +1,58 @@
+# Chrome Extension specific exclusions
+*.crx
+*.pem
+
+# Build artifacts
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Package files
+node_modules/
+yarn.lock
+
+# Development files
+.env
+.env.local
+
+# Extension specific
+_metadata/
+
+# Test coverage
+/coverage/
+
+# AI / planning / Claude
+.claude/
+.planning/
+CLAUDE.md
+
+# Abandoned native helper
+captcha-helper/
+
+# Playwright / browser testing
+.playwright-mcp/
+
+# Dev-only files
+manifest.json.backup
+magilla-build-test.ps1
+test-captcha*.html
+captcha-test.txt
+captcha-state
+popup-state
+extensions-page
