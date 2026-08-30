@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Extract Version
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Validate Version Format
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        # Scheme (since 2026.7.4): YYYY.M.RELEASE, where RELEASE counts releases
+        # within the month (first release of a month is .1, second is .2, ...).
+        # Chrome parses each dot-separated part as an integer and strips leading
+        # zeros, so a padded tag like 2026.07.4 loads as 2026.7.4 and Chrome
+        # warns that the version was reparsed. Require the unpadded form that
+        # Chrome will actually use. Releases before 2026.7.4 used the day of the
+        # month as the third component, so July 2026 ordering is not numeric;
+        # release dates are authoritative there.
+        if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.([1-9]|1[0-2])\.([1-9][0-9]?)$'; then
+          echo "Invalid version format: $VERSION. Expected YYYY.M.RELEASE with no leading zeros, where RELEASE is the Nth release of the month (e.g. 2026.7.4, not 2026.07.4 and no 4th component)."
+          exit 1
+        fi
+
+    - name: Update Manifest Version
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VERSION\"/" manifest.json
+
+    - name: Generate buildMeta.json
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        printf '{\n  "version": "%s",\n  "timestamp": %s\n}\n' "$VERSION" "$(date +%s000)" > buildMeta.json
+        cat buildMeta.json
+
+    - name: Create Release Package
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        mkdir -p package/myjdownloader-extension
+        cp manifest.json package/myjdownloader-extension/
+        cp buildMeta.json package/myjdownloader-extension/
+        cp background.js package/myjdownloader-extension/
+        cp popup.html package/myjdownloader-extension/
+        cp offscreen.html offscreen.js package/myjdownloader-extension/
+        cp loginNeeded.html package/myjdownloader-extension/
+        cp toolbar.html package/myjdownloader-extension/
+        cp autograbber-indicator.html package/myjdownloader-extension/
+        cp README.md LICENSE package/myjdownloader-extension/
+        cp -r scripts package/myjdownloader-extension/
+        cp -r contentscripts package/myjdownloader-extension/
+        cp -r vendor package/myjdownloader-extension/
+        cp -r images package/myjdownloader-extension/
+        cp -r _locales package/myjdownloader-extension/
+        cp -r partials package/myjdownloader-extension/
+        cp -r styles package/myjdownloader-extension/
+        # Remove test files from package
+        find package/myjdownloader-extension -name "__tests__" -type d -exec rm -rf {} + 2>/dev/null || true
+        find package/myjdownloader-extension -name "*.test.js" -delete 2>/dev/null || true
+        # scripts/dev holds developer-only probes (npm run test:live). The line
+        # above deletes its contents; drop the now-empty directory too.
+        rm -rf package/myjdownloader-extension/scripts/dev
+        cd package
+        zip -r "../myjdownloader-extension-mv3-${VERSION}.zip" myjdownloader-extension
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: "MyJDownloader Extension MV3 v${{ steps.version.outputs.version }}"
+        body: |
+          ## MyJDownloader Browser Extension (Manifest V3)
+
+          Full Manifest V3 conversion of the MyJDownloader browser extension, compliant with Chrome Web Store requirements.
+
+          ### What's New
+          - **MV3 conversion** — Service worker, `chrome.scripting`, `chrome.storage.session`, strict CSP compliance
+          - **CAPTCHA solving** — reCAPTCHA v2/v3, Enterprise, and hCaptcha via browser tabs through MyJDownloader API
+          - **Multi-link stacking** — Right-click multiple links and batch send to JDownloader
+          - **Bug fixes** — Queue persistence across service worker restarts, duplicate CAPTCHA prevention, tab cleanup
+          - **MV3 compliance** — Removed deprecated permissions, cleaned manifest, no CSP violations
+
+          > **Note:** CAPTCHA solving has been verified through code path analysis and unit tests but has not been tested end-to-end with a live JDownloader instance. Please [report your experience](../../issues/new?template=captcha-bug-report.yml) if the extension handles a CAPTCHA for you.
+
+          ### Installation
+          1. Download `myjdownloader-extension-mv3-${{ steps.version.outputs.version }}.zip`
+          2. Extract the zip file
+          3. Open `chrome://extensions/` and enable Developer mode
+          4. Click **Load unpacked** and select the extracted folder
+          5. Log in to your MyJDownloader account via the extension popup
+
+          ### Features
+          - Right-click to download with JDownloader
+          - Multi-link stacking with batch send
+          - Click'N'Load (CNL) interception
+          - In-page toolbar for link management
+          - CAPTCHA solving (reCAPTCHA v2/v3, hCaptcha) in browser tabs
+          - Session persistence across browser restarts
+          - Device selection for multiple JDownloader instances
+        files: myjdownloader-extension-mv3-${{ steps.version.outputs.version }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
