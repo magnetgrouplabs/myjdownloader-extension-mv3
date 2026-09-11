@@ -48,9 +48,9 @@ JDownloader's pages. Both reviews are on GitHub under magnetgrouplabs.
   in JD's log. Nobody on our side has ever seen this succeed; Morialkar has, for hCaptcha, on Vivaldi.
 - Update notifier items from the 2026-07-25 block below.
 
-**Not posted yet:** replies on issues #20, #21, #22 and the CAPTCHA tracking issue (Anthony approved
-the idea, text not drafted). The full review report is in the local claude-reports folder, dated
-2026-09-11.
+**Posted 2026-09-11:** fixed-on-dev replies on #20 and #21 (left open until the release), the root-cause reply
+on #22, and the pinned tracker #24 "CAPTCHA status: what works, what is pending, how to help". The full
+review report is in the local claude-reports folder, dated 2026-09-11.
 
 ## Where things stand (2026-07-25)
 
