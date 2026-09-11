@@ -29,12 +29,6 @@ angular.module('myjdWebextensionApp')
             });
         }
 
-        function sendFeedback(message) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "send-feedback", {
-                message: message
-            });
-        }
-
         function onConnectionChanged(callback) {
             return ExtensionMessagingService.addListener("myjd-toolbar", "session-change", callback);
         }
@@ -62,6 +56,5 @@ angular.module('myjdWebextensionApp')
         this.onConnectionChanged = onConnectionChanged;
         this.onApiError = onApiError;
         this.onDeviceListChanged = onDeviceListChanged;
-        this.sendFeedback = sendFeedback;
         this.checkForUpdate = checkForUpdate;
     }]);

@@ -943,12 +943,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // Send feedback
- if (action === "send-feedback") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
  // ============================================================
  // CNL captured from content script
  // ============================================================

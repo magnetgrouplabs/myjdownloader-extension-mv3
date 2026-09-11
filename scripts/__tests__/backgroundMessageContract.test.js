@@ -73,11 +73,6 @@ function workingLines(body) {
         .filter(line => line !== '}' && line !== '{' && line !== '});');
 }
 
-// "send-feedback" is acknowledged and dropped, the same shape of dead path.
-// It belongs to the feedback form, not the device panel, so it is recorded
-// here rather than fixed: the rest of the contract is still enforced.
-const KNOWN_ACK_ONLY = ['send-feedback'];
-
 describe('popup to background message contract', () => {
     const actions = actionsSentByPopup();
 
@@ -93,6 +88,6 @@ describe('popup to background message contract', () => {
         const body = handlerBody(action);
         expect(body).not.toBeNull();
         const worked = workingLines(body).length > 0;
-        expect(worked).toBe(!KNOWN_ACK_ONLY.includes(action));
+        expect(worked).toBe(true);
     });
 });
