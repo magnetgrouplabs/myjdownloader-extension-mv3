@@ -880,21 +880,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  }
 
  // ============================================================
- // Device polling (from popup's DeviceController)
- // ============================================================
- if (action === "device-poll") {
-  // In MV3, device polling happens in the popup's MyjdService directly.
-  // Acknowledge the message to prevent errors.
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- if (action === "device-poll-start" || action === "device-poll-stop") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- // ============================================================
  // API operations — forwarded to offscreen document
  // ============================================================
 
