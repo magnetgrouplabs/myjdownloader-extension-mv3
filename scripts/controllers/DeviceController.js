@@ -1,7 +1,7 @@
 "use strict"
 
 angular.module('myjdWebextensionApp')
-    .controller('DeviceCtrl', ['$scope', '$timeout', '$interval', 'StringUtilsService', 'ApiErrorService', 'BackgroundScriptService', function ($scope, $timeout, $interval, StringUtilsService, ApiErrorService, BackgroundScriptService) {
+    .controller('DeviceCtrl', ['$scope', '$timeout', '$interval', 'StringUtilsService', 'ApiErrorService', 'myjdDeviceClientFactory', function ($scope, $timeout, $interval, StringUtilsService, ApiErrorService, myjdDeviceClientFactory) {
         var deviceCtrl = this;
 
         var states = {
@@ -29,9 +29,22 @@ angular.module('myjdWebextensionApp')
             };
         }
 
-        BackgroundScriptService.onDevicePoll($scope.device.id, function (data) {
+        /*
+         * The panel talks to the device through the same direct cloud client
+         * that loads the device list and sends links. The poll used to be
+         * asked of the background script, which has never done it: the panel
+         * showed "~" for every number and the state stayed IDLE, so Pause and
+         * Stop never even rendered.
+         *
+         * Each panel builds its own client, so two devices do not share one.
+         * The client calls back in process; a chrome.runtime message would
+         * never arrive, because the popup would be both sender and receiver.
+         */
+        var deviceClient = myjdDeviceClientFactory.get($scope.device);
+
+        deviceClient.onStatus(function (data) {
             if (data && data.data && !data.error) {
-                deviceCtrl.rawStatus = data.result;
+                deviceCtrl.rawStatus = data.data;
                 var result = {};
                 if (data.data.eta && data.data.eta > 0) {
                     result.eta = StringUtilsService.createEtaText(data.data.eta);
@@ -68,24 +81,16 @@ angular.module('myjdWebextensionApp')
 
         reset();
 
-        BackgroundScriptService.devicePoll($scope.device);
+        deviceClient.oneTimePoll();
         var intervalPromise = $interval(function () {
-            BackgroundScriptService.devicePoll($scope.device);
-        }, 2000);
+            deviceClient.oneTimePoll();
+        }, 4000);
 
         $scope.start = function () {
             if (!$scope.controlRequestRunning) {
                 $scope.controlRequestRunning = true;
                 $scope.deviceStatus.state = $scope.states.RUNNING;
-                BackgroundScriptService.sendApiRequest($scope.device, "/downloads/start").then(function (result) {
-                    if (result.data && result.data.error) {
-                        handleApiError(result.data.error);
-                    } else {
-                        handleApiRequestDone();
-                    }
-                }).catch(function (error) {
-                    handleApiError(error);
-                });
+                sendControlRequest(deviceClient.sendRequest("/downloads/start"));
             }
         };
 
@@ -93,16 +98,8 @@ angular.module('myjdWebextensionApp')
             if (!$scope.controlRequestRunning) {
                 $scope.controlRequestRunning = true;
                 $scope.deviceStatus.state = pause ? $scope.states.PAUSE : $scope.states.RUNNING;
-
-                BackgroundScriptService.sendApiRequest($scope.device, "/downloadcontroller/pause", (pause | false)).then(function (result) {
-                    if (result.data && result.data.error) {
-                        handleApiError(result.data.error);
-                    } else {
-                        handleApiRequestDone();
-                    }
-                }).catch(function (error) {
-                    handleApiError(error);
-                });
+                // The api takes a boolean. A bitwise or was sending 0 or 1.
+                sendControlRequest(deviceClient.sendRequest("/downloadcontroller/pause", !!pause));
             }
         };
 
@@ -110,16 +107,7 @@ angular.module('myjdWebextensionApp')
             if (!$scope.controlRequestRunning) {
                 $scope.controlRequestRunning = true;
                 $scope.deviceStatus.state = $scope.states.STOPPED_STATE;
-
-                BackgroundScriptService.sendApiRequest($scope.device, "/downloadcontroller/stop").then(function (result) {
-                    if (result.data && result.data.error) {
-                        handleApiError(result.data.error);
-                    } else {
-                        handleApiRequestDone();
-                    }
-                }).catch(function (error) {
-                    handleApiError(error);
-                });
+                sendControlRequest(deviceClient.sendRequest("/downloadcontroller/stop"));
             }
         };
 
@@ -127,10 +115,34 @@ angular.module('myjdWebextensionApp')
             return encodeURIComponent(device.id);
         };
 
+        // A control request that never left the popup must say so. It used to
+        // clear the spinner and look like it had worked while JDownloader
+        // carried on downloading.
+        function sendControlRequest(request) {
+            if (!request || typeof request.done !== 'function') {
+                showError({message: "API not connected. Please log in again."});
+                handleApiRequestDone();
+                return;
+            }
+            request.done(function () {
+                handleApiRequestDone();
+            }).fail(function (error) {
+                handleApiError(error);
+                handleApiRequestDone();
+            });
+        }
+
         function handleApiError(error) {
             var apiError = ApiErrorService.createApiError(error);
-            var readableError = ApiErrorService.createReadableApiError(apiError);
-            $scope.error = readableError;
+            showError(ApiErrorService.createReadableApiError(apiError));
+        }
+
+        // The cloud client resolves outside angular, so the error has to be
+        // set inside a digest to reach the panel.
+        function showError(readableError) {
+            digestNow(function () {
+                $scope.error = readableError;
+            });
         }
 
         function handleApiRequestDone() {
