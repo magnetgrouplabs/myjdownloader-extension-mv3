@@ -54,6 +54,7 @@ describe('Background.js Queue Persistence', () => {
     global.chrome.alarms.onAlarm._listeners.length = 0;
     global.chrome.storage.onChanged._listeners.length = 0;
     global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
+    global.chrome.commands.onCommand._listeners.length = 0;
 
     // Reset module registry so background.js re-executes
     jest.resetModules();
@@ -615,6 +616,145 @@ describe('Background.js Queue Persistence', () => {
       expect(sendResponse).not.toHaveBeenCalled();
     });
   });
+
+  // ==================================================================
+  // Clipboard observer (issue #20)
+  // ==================================================================
+  describe('Clipboard observer', () => {
+    // initSettings() runs at module load and is async, and the queue writes
+    // are fire and forget, so give both a tick before asserting.
+    const settled = () => new Promise(resolve => setTimeout(resolve, 50));
+
+    it('asks the tab for its selection on a copy when the observer is on', async () => {
+      await global.chrome.storage.local.set({ CLIPBOARD_OBSERVER: true });
+      loadBackground();
+      await settled();
+      chrome.tabs.sendMessage.mockClear();
+
+      await sendMessage('new-copy-event', undefined, { id: chrome.runtime.id, tab: createMockTab(7) });
+
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ action: 'get-selection', tabId: 7 })
+      );
+    });
+
+    it('ignores a copy when the observer is off', async () => {
+      loadBackground();
+      await settled();
+      chrome.tabs.sendMessage.mockClear();
+
+      await sendMessage('new-copy-event', undefined, { id: chrome.runtime.id, tab: createMockTab(8) });
+
+      expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('answers a copy instead of letting it fall through to the unhandled default', async () => {
+      loadBackground();
+      await settled();
+
+      const response = await sendMessage('new-copy-event', undefined, { id: chrome.runtime.id, tab: createMockTab(9) });
+
+      expect(response).not.toHaveProperty('forwarded');
+    });
+
+    it('does not queue or open the toolbar for a copied selection with no link in it', async () => {
+      await global.chrome.storage.local.set({ CLIPBOARD_OBSERVER: true });
+      loadBackground();
+      await settled();
+
+      const sender = { id: chrome.runtime.id, tab: createMockTab(11) };
+      await sendMessage('new-copy-event', undefined, sender);
+      chrome.tabs.sendMessage.mockClear();
+      chrome.storage.session.set.mockClear();
+
+      await sendMessage('new-selection', { text: 'just a plain sentence, nothing to download', html: '' }, sender);
+      await settled();
+
+      expect(chrome.storage.session.set).not.toHaveBeenCalled();
+      expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('queues a copied selection that carries a link', async () => {
+      await global.chrome.storage.local.set({ CLIPBOARD_OBSERVER: true });
+      loadBackground();
+      await settled();
+
+      const sender = { id: chrome.runtime.id, tab: createMockTab(12) };
+      await sendMessage('new-copy-event', undefined, sender);
+      chrome.storage.session.set.mockClear();
+
+      const selection = 'grab http://download.com/file.zip please';
+      await sendMessage('new-selection', { text: selection, html: '' }, sender);
+      await settled();
+
+      expect(chrome.storage.session.set).toHaveBeenCalled();
+      const lastCall = chrome.storage.session.set.mock.calls[
+        chrome.storage.session.set.mock.calls.length - 1
+      ];
+      expect(lastCall[0][QUEUE_STORAGE_KEY][String(12)][0].content).toBe(selection);
+    });
+
+    it('queues a copied selection whose link is only in the html', async () => {
+      await global.chrome.storage.local.set({ CLIPBOARD_OBSERVER: true });
+      loadBackground();
+      await settled();
+
+      const sender = { id: chrome.runtime.id, tab: createMockTab(14) };
+      await sendMessage('new-copy-event', undefined, sender);
+      chrome.storage.session.set.mockClear();
+
+      await sendMessage(
+        'new-selection',
+        { text: 'the file', html: '<a href="http://download.com/file.zip">the file</a>' },
+        sender
+      );
+      await settled();
+
+      expect(chrome.storage.session.set).toHaveBeenCalled();
+    });
+
+    it('leaves the context menu selection path unchanged', async () => {
+      loadBackground();
+      await settled();
+      chrome.storage.session.set.mockClear();
+
+      // No copy event preceded this one, so it is the reply to the right-click
+      // "download selection" round trip, which queues whatever it is given.
+      const selection = 'a plain sentence, nothing to download';
+      await sendMessage('new-selection', { text: selection, html: '' }, { id: chrome.runtime.id, tab: createMockTab(13) });
+      await settled();
+
+      expect(chrome.storage.session.set).toHaveBeenCalled();
+      const lastCall = chrome.storage.session.set.mock.calls[
+        chrome.storage.session.set.mock.calls.length - 1
+      ];
+      expect(lastCall[0][QUEUE_STORAGE_KEY][String(13)][0].content).toBe(selection);
+    });
+
+    it('toggles CLIPBOARD_OBSERVER in storage on the keyboard command', async () => {
+      loadBackground();
+      await settled();
+
+      global.chrome.commands.onCommand._fire('toggle-clipboard-observer');
+      await settled();
+      expect(global.__getLocalStore().CLIPBOARD_OBSERVER).toBe(true);
+
+      global.chrome.commands.onCommand._fire('toggle-clipboard-observer');
+      await settled();
+      expect(global.__getLocalStore().CLIPBOARD_OBSERVER).toBe(false);
+    });
+
+    it('ignores a keyboard command it does not own', async () => {
+      loadBackground();
+      await settled();
+
+      global.chrome.commands.onCommand._fire('some-other-command');
+      await settled();
+
+      expect(global.__getLocalStore().CLIPBOARD_OBSERVER).toBeUndefined();
+    });
+  });
 });
 
 // ==================================================================
@@ -630,6 +770,7 @@ describe('Background.js Storage Key Consistency (Phase 9)', () => {
   it('STORAGE_KEYS values should use uppercase format matching StorageService', () => {
     expect(backgroundSrc).toMatch(/CLICKNLOAD_ACTIVE:\s*'CLICKNLOAD_ACTIVE'/);
     expect(backgroundSrc).toMatch(/CONTEXT_MENU_SIMPLE:\s*'CONTEXT_MENU_SIMPLE'/);
+    expect(backgroundSrc).toMatch(/CLIPBOARD_OBSERVER:\s*'CLIPBOARD_OBSERVER'/);
     expect(backgroundSrc).toMatch(/DEFAULT_PREFERRED_JD:\s*'DEFAULT_PREFERRED_JD'/);
   });
 
