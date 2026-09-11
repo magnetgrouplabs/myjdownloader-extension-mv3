@@ -110,6 +110,9 @@ global.chrome = {
     create: jest.fn(),
     onAlarm: createEvent()
   },
+  commands: {
+    onCommand: createEvent()
+  },
   offscreen: {
     createDocument: jest.fn(() => Promise.resolve()),
     closeDocument: jest.fn(() => Promise.resolve())

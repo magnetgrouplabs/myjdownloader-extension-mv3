@@ -6,8 +6,41 @@ console.log("Background: Starting MyJDownloader MV3...");
 const STORAGE_KEYS = {
  CLICKNLOAD_ACTIVE: 'CLICKNLOAD_ACTIVE',
  CONTEXT_MENU_SIMPLE: 'CONTEXT_MENU_SIMPLE',
+ CLIPBOARD_OBSERVER: 'CLIPBOARD_OBSERVER',
  DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
 };
+
+// Clipboard observer
+// A copy in a page arrives as "new-copy-event"; the selection itself comes
+// back a moment later as "new-selection", the same action the right-click
+// "download selection" round trip uses. The two paths must behave
+// differently (a copy only opens the toolbar for a link), so the tab that
+// asked because of a copy is recorded here and consumed when its selection
+// arrives. Nothing is asked of the content script, so it stays unchanged.
+const copySelectionRequests = new Map();
+const COPY_SELECTION_WINDOW_MS = 5000;
+
+function markCopySelectionRequest(tabId) {
+ copySelectionRequests.set(tabId, Date.now());
+}
+
+// True when this tab's selection was asked for by a copy and not by the
+// context menu. Consumes the mark either way, and treats an old mark as
+// absent so a stale entry cannot gate a later right click.
+function takeCopySelectionRequest(tabId) {
+ const askedAt = copySelectionRequests.get(tabId);
+ copySelectionRequests.delete(tabId);
+ return typeof askedAt === 'number' && (Date.now() - askedAt) <= COPY_SELECTION_WINDOW_MS;
+}
+
+// Conservative link detector for the copy path: an http, https or ftp URL,
+// a www. prefixed host, or a bare host with a two to twenty-four letter TLD
+// followed by a path. A plain sentence must not match.
+const LINK_PATTERN = /\b(?:https?|ftp):\/\/\S+|\bwww\.[a-z0-9-]+\.[a-z]{2,24}\b|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\/\S*/i;
+
+function containsLink(value) {
+ return typeof value === 'string' && LINK_PATTERN.test(value);
+}
 
 const DEVICE_TYPES = {
  ASK_EVERY_TIME: { id: 'AskEveryTimeDevice', name: 'Ask every time' },
@@ -371,6 +404,7 @@ async function initSettings() {
 
  settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE] = result[STORAGE_KEYS.CLICKNLOAD_ACTIVE] ?? true;
  settings[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] = result[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] ?? true;
+ settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = result[STORAGE_KEYS.CLIPBOARD_OBSERVER] ?? false;
  settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = result[STORAGE_KEYS.DEFAULT_PREFERRED_JD] || DEVICE_TYPES.ASK_EVERY_TIME;
 
  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) {
@@ -515,10 +549,32 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes[STORAGE_KEYS.CLICKNLOAD_ACTIVE].newValue) addCnlInterceptor();
   else removeCnlInterceptor();
  }
+ if (changes[STORAGE_KEYS.CLIPBOARD_OBSERVER]) {
+  // The popup and the keyboard shortcut both write this key, and the service
+  // worker may have been running with the old value since before either.
+  settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = changes[STORAGE_KEYS.CLIPBOARD_OBSERVER].newValue;
+ }
  if (changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD]) {
   settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD].newValue;
  }
 });
+
+// ============================================================
+// Keyboard shortcut: toggle the clipboard observer
+// ============================================================
+// manifest.json declares "toggle-clipboard-observer" (Ctrl+Shift+X). The new
+// value is written to chrome.storage.local, which the popup reads and the
+// listener above mirrors into settings[], so both contexts stay in step.
+// The guard keeps this harmless where chrome.commands is unavailable.
+if (chrome.commands && chrome.commands.onCommand) {
+ chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "toggle-clipboard-observer") return;
+  const current = await chrome.storage.local.get(STORAGE_KEYS.CLIPBOARD_OBSERVER);
+  const next = current[STORAGE_KEYS.CLIPBOARD_OBSERVER] !== true;
+  await chrome.storage.local.set({ [STORAGE_KEYS.CLIPBOARD_OBSERVER]: next });
+  console.log("Background: Clipboard observer toggled to", next);
+ });
+}
 
 // ============================================================
 // DeclarativeNetRequest for CNL
@@ -934,8 +990,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // compatibility, but nothing ships that name today; handling only it left
  // the whole right-click-with-a-selection path dead (issue #15).
  if (action === "new-selection" || action === "selection-result") {
-  if (request.data && request.data.text && sender.tab) {
-   addLinkToRequestQueue(request.data.text, sender.tab);
+  if (sender.tab) {
+   // Consume the mark even when the selection is empty, so it cannot leak
+   // into the next right click on the same tab.
+   const fromCopy = takeCopySelectionRequest(sender.tab.id);
+   if (request.data && request.data.text) {
+    // A copy fires on every copy on every page, so it only opens the toolbar
+    // when the selection actually carries a link, which is what the setting
+    // description promises. A right click is explicit and stays
+    // unconditional. The html is checked too, because a linked word copies
+    // as plain text with the href only in the markup.
+    const wanted = !fromCopy || containsLink(request.data.text) || containsLink(request.data.html);
+    if (wanted) {
+     addLinkToRequestQueue(request.data.text, sender.tab);
+    }
+   }
+  }
+  sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // ============================================================
+ // Copy in a page (clipboard observer)
+ // ============================================================
+ // onCopyContentscript.js sends this on every trusted copy. When the setting
+ // is on, ask that tab for its selection; the answer arrives as
+ // "new-selection" above. Without this handler the message fell through to
+ // the unhandled-action default and the whole feature did nothing.
+ if (action === "new-copy-event") {
+  if (sender.tab && sender.tab.id !== undefined && settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] === true) {
+   markCopySelectionRequest(sender.tab.id);
+   chrome.tabs.sendMessage(sender.tab.id, { action: "get-selection", tabId: sender.tab.id })
+    .catch(() => {
+     // No content script in that tab, or the frame is already gone.
+    });
   }
   sendResponse({ status: 'ok' });
   return true;
