@@ -22,13 +22,13 @@ Landed on dev today:
   routes Start/Pause/Stop through the direct cloud client. Nothing polled in any MV3 build, and the
   three buttons were dead too (their message had no handler and the ack was mistaken for success).
   Contract test `backgroundMessageContract.test.js` now fails on any popup action background.js only
-  acknowledges; it lists `send-feedback` as a known dead path (feedback form, unfixed).
+  acknowledges (no allowlist left since the feedback form was removed, see below).
 - Issue #20 fix (`fb3412e`): clipboard observer wired (setting read by the service worker, copy event
   handled, Ctrl+Shift+X command listener). Copy path opens the toolbar only when the selection carries
   a link; right-click path unchanged. Never worked in any MV3 build; not Brave-specific.
 - `9f37da6`: dead device-poll stubs removed from background.js.
 
-Suite is 301 tests / 17 suites on dev.
+Suite is 297 tests / 17 suites on dev.
 
 **Root cause of the whole CAPTCHA saga, verified against JDownloader's source (mirror/jdownloader
 master):** recaptcha.html and hcaptcha.html are byte-identical "install the extension" pages with no
@@ -114,7 +114,7 @@ review; both are compliant but scrutiny magnets.
 
 ## Test counts as last recorded
 
-2026-09-11: 301 tests / 17 suites on dev; master is behind at v2026.7.4 with 215 / 12. The count
+2026-09-11: 297 tests / 17 suites on dev; master is behind at v2026.7.4 with 215 / 12. The count
 grows as PRs merge, so treat these as a snapshot and run `npx jest` for the real number.
 
 ## Known-unresolved
@@ -124,8 +124,9 @@ grows as PRs merge, so treat these as a snapshot and run `npx jest` for the real
   awaiting the author's changes. One third-party success report (Morialkar, hCaptcha, Vivaldi).
   Test links: datavaults.co (reCAPTCHA v2, #22), ddownload.com (hCaptcha, #5).
 - **Issues #5 and #22** stay open until #19 lands and someone confirms on the thread.
-- **Feedback form is dead**: popup sends `send-feedback`, background.js acknowledges and drops it.
-  Found by the contract test on 2026-09-11, not fixed.
+- **Feedback form removed** (`cf9c4b7`, merged `7c6897d`): it sent `send-feedback`, which background.js only
+  acknowledged, so nothing ever left the browser. Orphaned `.feedbackPanel` CSS in styles/main.css and the
+  unused `STORAGE_FEEDBACK_MSG_DRAFT` constant remain; harmless.
 - **Update notifier is unverified in a browser.** The logic is proven against the live API
   via `npm run test:live`, but the badge, the settings banner, and storage surviving a
   service-worker restart have not been watched in Chrome. Owed before dev promotes to master.
