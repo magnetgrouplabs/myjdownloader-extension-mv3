@@ -47,40 +47,10 @@ angular.module('myjdWebextensionApp')
             return ExtensionMessagingService.addListener("myjd-toolbar", "devices-change", callback);
         }
 
-        function onDevicePoll(deviceId, callback) {
-            return ExtensionMessagingService.addListener("myjd-toolbar", "device-poll-" + deviceId, callback);
-        }
-
-        function devicePoll(device) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "device-poll", {
-                device: device
-            });
-        }
-
-        function startDevicePoll(device) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "device-poll-start", {
-                device: device
-            });
-        }
-
-        function stopDevicePoll(device) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "device-poll-stop", {
-                device: device
-            });
-        }
-
         // Manual "check now" from the settings view. The background runs the
         // same check on a daily alarm; this just runs it on demand.
         function checkForUpdate() {
             return ExtensionMessagingService.sendMessage("myjd-toolbar", "check-for-update");
-        }
-
-        function sendApiRequest(device, action, params) {
-            return ExtensionMessagingService.sendMessage("myjd-toolbar", "send-api-request", {
-                device: device,
-                action: action,
-                params: params
-            });
         }
 
         this.getDevices = getDevices;
@@ -89,14 +59,9 @@ angular.module('myjdWebextensionApp')
         this.getUsername = getUsername;
         this.logout = logout;
         this.login = login;
-        this.startDevicePoll = startDevicePoll;
-        this.stopDevicePoll = stopDevicePoll;
         this.onConnectionChanged = onConnectionChanged;
         this.onApiError = onApiError;
         this.onDeviceListChanged = onDeviceListChanged;
-        this.onDevicePoll = onDevicePoll;
-        this.devicePoll = devicePoll;
         this.sendFeedback = sendFeedback;
-        this.sendApiRequest = sendApiRequest;
         this.checkForUpdate = checkForUpdate;
     }]);
