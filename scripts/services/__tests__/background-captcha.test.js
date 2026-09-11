@@ -173,11 +173,16 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
 
     it('should track tab in activeCaptchaTabs with MYJD callbackUrl', () => {
-      // The handler stores callbackUrl: 'MYJD' in activeCaptchaTabs
+      // The handler hands the MYJD marker to prepareCaptchaTab, which is shared
+      // with JDownloader's browser solver flow and records activeCaptchaTabs.
+      // Behavioural coverage lives in scripts/__tests__/background.test.js.
       const section = bgSource.match(/myjd-prepare-captcha-tab[\s\S]*?return\s+true/);
       expect(section).not.toBeNull();
-      expect(section[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
-      expect(section[0]).toMatch(/callbackUrl:\s*['"]MYJD['"]/);
+      expect(section[0]).toMatch(/prepareCaptchaTab\([^)]*['"]MYJD['"]/);
+      const prepare = bgSource.match(/async function prepareCaptchaTab[\s\S]*?\n\}/);
+      expect(prepare).not.toBeNull();
+      expect(prepare[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
+      expect(prepare[0]).toMatch(/callbackUrl:\s*callbackUrl/);
     });
   });
 
