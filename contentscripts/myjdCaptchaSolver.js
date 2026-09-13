@@ -111,38 +111,89 @@ function renderCaptchaWidget(job) {
     captchaContainer.style.marginBottom = '20px';
     body.appendChild(captchaContainer);
 
-    // Determine CAPTCHA type and create widget + script
+    // Determine CAPTCHA type and create the widget div
     var isHcaptcha = job.captchaType && (job.captchaType.toLowerCase().indexOf('hcaptcha') !== -1);
     var widgetDiv = document.createElement('div');
-    var script = document.createElement('script');
+    var apiScriptUrl;
 
     if (isHcaptcha) {
         widgetDiv.className = 'h-captcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
-        script.src = 'https://hcaptcha.com/1/api.js';
+        apiScriptUrl = 'https://hcaptcha.com/1/api.js';
     } else {
         widgetDiv.className = 'g-recaptcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
         if (job.siteKeyType === 'INVISIBLE') {
             widgetDiv.setAttribute('data-size', 'invisible');
         }
-        script.src = 'https://www.google.com/recaptcha/api.js';
+        apiScriptUrl = 'https://www.google.com/recaptcha/api.js';
     }
 
     captchaContainer.appendChild(widgetDiv);
 
-    // For invisible/v3 CAPTCHAs, request MAIN world execution after script loads
-    if (job.siteKeyType === 'INVISIBLE') {
-        script.addEventListener('load', function() {
-            chrome.runtime.sendMessage({
-                action: 'myjd-captcha-execute',
-                data: { siteKey: job.siteKey, v3action: job.v3action || '' }
-            });
-        });
+    // The provider's API script is loaded by the background service worker in
+    // the page's MAIN world, not injected here: the isolated world content
+    // scripts run in has its own CSP (script-src 'self' 'wasm-unsafe-eval'
+    // ...), which blocks a remote <script src> appended from here regardless
+    // of the page's own (already stripped) CSP header.
+    var apiSettled = false;
+    var apiTimeoutHandle;
+
+    function settleApi(loaded) {
+        if (apiSettled) return;
+        apiSettled = true;
+        window.removeEventListener('message', onApiMessage);
+        clearTimeout(apiTimeoutHandle);
+        if (loaded) {
+            // For invisible/v3 CAPTCHAs, request MAIN world execution now that the API is ready
+            if (job.siteKeyType === 'INVISIBLE') {
+                chrome.runtime.sendMessage({
+                    action: 'myjd-captcha-execute',
+                    data: { siteKey: job.siteKey, v3action: job.v3action || '' }
+                });
+            }
+        } else {
+            showApiLoadError();
+        }
     }
 
-    // Load CAPTCHA API script as external element (MV3 CSP compliant)
-    captchaContainer.appendChild(script);
+    function onApiMessage(event) {
+        // event.source === window only scopes this listener to senders in
+        // this exact window (filters out other frames/tabs) — it is NOT a
+        // trust boundary: the hosting page runs in this same window (the tab
+        // was navigated to job.targetUrl, whose own scripts keep running)
+        // and could send a matching message itself. The status value we
+        // read here carries no privilege though: it only steers this tab's
+        // own CAPTCHA-loading UI, so a spoofed message can at worst confuse
+        // this flow, not escalate into anything else. We use the same
+        // window.postMessage bridge as cnlInterceptor.js purely for
+        // consistency with the existing MAIN<->isolated world plumbing in
+        // this codebase, not for its trust properties.
+        if (event.source !== window) return;
+        if (event.origin && event.origin !== window.location.origin) return;
+        var data = event.data;
+        if (!data || data.__myjd_captcha_api__ !== true) return;
+        settleApi(data.status === 'loaded');
+    }
+    window.addEventListener('message', onApiMessage);
+
+    // Fallback: if the background service worker rejects/fails to inject the
+    // script, or the injected script never fires load/error at all, don't
+    // leave the widget blank until the 5-minute countdown skips it. (The
+    // background side posts with target origin '*', not
+    // window.location.origin, specifically so an opaque-origin page — where
+    // location.origin is the string "null" — can't turn this into a thrown
+    // SyntaxError that silently drops the message.)
+    apiTimeoutHandle = setTimeout(function() { settleApi(false); }, 15000);
+
+    chrome.runtime.sendMessage({
+        action: 'myjd-captcha-load-api',
+        data: { url: apiScriptUrl }
+    }, function(response) {
+        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+            settleApi(false);
+        }
+    });
 
     // --- Skip buttons ---
     injectSkipButtons(job);
@@ -152,6 +203,22 @@ function renderCaptchaWidget(job) {
 
     // --- Token polling ---
     pollingHandle = startTokenPolling(job);
+}
+
+/**
+ * Show an error message in the CAPTCHA container when the provider's API
+ * script fails to load, instead of leaving a blank widget until the
+ * 5-minute countdown auto-skips. The skip buttons stay usable.
+ */
+function showApiLoadError() {
+    var container = document.getElementById('captchaContainer');
+    if (!container) return;
+    var errMsg = document.createElement('div');
+    errMsg.textContent = 'Failed to load the CAPTCHA widget. Use a skip button below or try again.';
+    errMsg.style.color = '#f44336';
+    errMsg.style.fontSize = '14px';
+    errMsg.style.marginTop = '12px';
+    container.appendChild(errMsg);
 }
 
 /**

@@ -118,9 +118,6 @@
    "menu_entry_saved": {
       "message": "gespeichert"
    },
-   "menu_entry_send_feedback": {
-      "message": "Enviar comentarios"
-   },
    "menu_entry_settings": {
       "message": "Configuración"
    },
@@ -279,15 +276,6 @@
    },
    "ui_clipboard_history_still_empty": {
       "message": "Aún vacío. Agregue algunos links para comenzar! Haz clic con el botón derecho, luego elige \"Descargar con JDownloader\"."
-   },
-   "ui_feedback_button_send": {
-      "message": "Enviar"
-   },
-   "ui_feedback_chars_left": {
-      "message": "sobrante"
-   },
-   "ui_feedback_thank_you": {
-      "message": "Muchas gracias"
    },
    "ui_loading_connecting": {
       "message": "Conectar con su JDownloader"
