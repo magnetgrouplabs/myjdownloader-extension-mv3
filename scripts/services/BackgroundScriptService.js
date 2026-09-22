@@ -1,0 +1,60 @@
+"use strict";
+
+angular.module('myjdWebextensionApp')
+    .service('BackgroundScriptService', ['$q', 'ExtensionMessagingService', function ($q, ExtensionMessagingService) {
+        function getSessionInfo(targetId) {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "session-info", targetId);
+        }
+
+        function getUsername() {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "whoami");
+        }
+
+        function logout() {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "logout");
+        }
+
+        function login(credentials) {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "login", credentials);
+        }
+
+        function getDevices(targetId) {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "devices-pull", targetId);
+        }
+
+        function addLink(device, addLinkQuery) {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "add-link", {
+                device: device,
+                query: addLinkQuery
+            });
+        }
+
+        function onConnectionChanged(callback) {
+            return ExtensionMessagingService.addListener("myjd-toolbar", "session-change", callback);
+        }
+
+        function onApiError(callback) {
+            return ExtensionMessagingService.addListener("myjd-toolbar", "api-error", callback);
+        }
+
+        function onDeviceListChanged(callback) {
+            return ExtensionMessagingService.addListener("myjd-toolbar", "devices-change", callback);
+        }
+
+        // Manual "check now" from the settings view. The background runs the
+        // same check on a daily alarm; this just runs it on demand.
+        function checkForUpdate() {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "check-for-update");
+        }
+
+        this.getDevices = getDevices;
+        this.addLink = addLink;
+        this.getSessionInfo = getSessionInfo;
+        this.getUsername = getUsername;
+        this.logout = logout;
+        this.login = login;
+        this.onConnectionChanged = onConnectionChanged;
+        this.onApiError = onApiError;
+        this.onDeviceListChanged = onDeviceListChanged;
+        this.checkForUpdate = checkForUpdate;
+    }]);

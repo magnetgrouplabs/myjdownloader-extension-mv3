@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a bug in the MyJDownloader browser extension (for CAPTCHA problems, use the CAPTCHA Bug Report template instead).
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please fill out the details below — issues missing this information cannot be investigated and may be closed.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the issue you experienced.
+      placeholder: |
+        e.g., Clicking "Add to JDownloader" on a link does nothing and no download appears in JDownloader.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the issue?
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser and version
+      description: Which browser and version are you using?
+      placeholder: e.g., Chrome 138.0.7204.100
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Find this on `chrome://extensions` under MyJDownloader.
+      placeholder: e.g., 2026.07.13
+    validations:
+      required: true
+
+  - type: input
+    id: jdownloader-version
+    attributes:
+      label: JDownloader version
+      description: Find this in JDownloader under Help > About.
+      placeholder: e.g., JDownloader 2 (build 2025-06-30)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection-status
+    attributes:
+      label: JDownloader connection status
+      description: Is the extension connected to your MyJDownloader account, and does your JDownloader instance show as online?
+      options:
+        - Connected — JDownloader instance shows online
+        - Connected — but JDownloader instance shows offline
+        - Not connected / login fails
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Attach screenshots if applicable.
+      placeholder: Drag and drop images here.
+    validations:
+      required: false

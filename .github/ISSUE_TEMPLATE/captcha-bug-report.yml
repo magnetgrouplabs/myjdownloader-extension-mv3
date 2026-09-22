@@ -1,0 +1,158 @@
+name: CAPTCHA Bug Report
+description: Report an issue with CAPTCHA solving in the MyJDownloader browser extension.
+title: "[CAPTCHA] "
+labels: ["bug", "captcha"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a CAPTCHA issue. This extension solves CAPTCHAs by opening a browser tab with the CAPTCHA widget when JDownloader encounters one it can't solve automatically. Please fill out the details below to help us diagnose the problem.
+
+  - type: dropdown
+    id: captcha-type
+    attributes:
+      label: CAPTCHA Type
+      description: What type of CAPTCHA was involved?
+      options:
+        - reCAPTCHA v2 (checkbox)
+        - reCAPTCHA v3 (invisible)
+        - hCaptcha
+        - Cloudflare Turnstile
+        - Other / Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: file-hoster
+    attributes:
+      label: File Hoster
+      description: Which file hoster or website triggered the CAPTCHA?
+      placeholder: e.g., Rapidgator, Nitroflare, Mega, 1fichier
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the issue you experienced.
+      placeholder: |
+        e.g., The CAPTCHA tab opened but the widget never loaded. The page showed a blank white screen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+      placeholder: |
+        e.g., The CAPTCHA widget should have rendered and allowed me to solve it, then the tab should have auto-closed and JDownloader should have continued the download.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the issue?
+      value: |
+        1. Add [paste link here] to JDownloader
+        2. Wait for CAPTCHA job to appear
+        3. Observe what happens in the browser
+        4.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: extension-behavior
+    attributes:
+      label: Extension behavior
+      description: Check each step that worked correctly. Leave unchecked if it failed or you're unsure.
+      options:
+        - label: CAPTCHA tab opened in the browser
+        - label: CAPTCHA widget rendered correctly on the page
+        - label: Token was submitted after solving the CAPTCHA
+        - label: Tab auto-closed after solving
+        - label: JDownloader received the token
+        - label: JDownloader continued the download
+
+  - type: textarea
+    id: service-worker-errors
+    attributes:
+      label: Service Worker console errors
+      description: |
+        Open `chrome://extensions`, find MyJDownloader, click **Inspect views: service worker**, and check the Console tab for errors. Paste any relevant errors here.
+      render: text
+      placeholder: |
+        e.g., Error in event handler: TypeError: Cannot read properties of undefined (reading 'tabId')
+    validations:
+      required: false
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser and version
+      description: Which browser and version are you using?
+      placeholder: e.g., Chrome 138.0.7204.100
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Find this on `chrome://extensions` under MyJDownloader.
+      placeholder: e.g., 2026.07.13
+    validations:
+      required: true
+
+  - type: input
+    id: jdownloader-version
+    attributes:
+      label: JDownloader version
+      description: Find this in JDownloader under Help > About.
+      placeholder: e.g., JDownloader 2 (build 2026-06-30)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection-status
+    attributes:
+      label: JDownloader connection status
+      description: Is the extension connected to your MyJDownloader account, and does your JDownloader instance show as online?
+      options:
+        - Connected — JDownloader instance shows online
+        - Connected — but JDownloader instance shows offline
+        - Not connected / login fails
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g., Windows 11
+    validations:
+      required: false
+
+  - type: textarea
+    id: captcha-settings
+    attributes:
+      label: JDownloader CAPTCHA settings
+      description: |
+        In JDownloader, go to Settings > Captcha. Describe which solver services are enabled/disabled (e.g., built-in solver, Browser Solver, 9kw, DeathByCaptcha, etc.).
+      placeholder: |
+        e.g., Browser Solver enabled, all other solvers disabled. "Ask the user to solve" is checked.
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots-logs
+    attributes:
+      label: Screenshots or logs
+      description: Attach screenshots of the CAPTCHA tab, JDownloader logs, or anything else that might help.
+      placeholder: Drag and drop images here, or paste log output.
+    validations:
+      required: false

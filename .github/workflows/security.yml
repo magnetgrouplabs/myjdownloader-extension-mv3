@@ -1,0 +1,57 @@
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - dev
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || true
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  trufflehog:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        # Pinned to an immutable commit SHA, not @main and not a tag. A branch
+        # ref runs whatever is on upstream's main at the moment CI fires, and a
+        # tag can be repointed at new code, so either lets an upstream
+        # compromise execute here with repo credentials in scope. This SHA is
+        # v3.95.9; bump both together.
+        uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55 # v3.95.9
+        with:
+          extra_args: --results=verified
