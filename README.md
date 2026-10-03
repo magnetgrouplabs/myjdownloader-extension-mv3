@@ -15,6 +15,7 @@ This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fu
 - **CAPTCHA solving** — Solves reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help
 - **Session persistence** — Stays logged in across browser restarts
 - **Device selection** — Choose which JDownloader instance receives your downloads
+- **Update notifications**: Checks once a day for a new release and flags it with a badge and a banner in Settings. There is also a manual "Check for updates" under Settings > About. This extension is installed unpacked, so Chrome never auto-updates it; you still install new versions yourself from the releases page.
 
 ## How It Works
 
@@ -110,7 +111,7 @@ This extension was converted from Manifest V2 to Manifest V3. Here is a summary 
 |-------------|-----------------|-----|
 | Background page (persistent) | Service worker (event-driven) | MV3 requires non-persistent background contexts |
 | `chrome.tabs.executeScript()` | `chrome.scripting.executeScript()` | New API with explicit world targeting (MAIN/ISOLATED) |
-| Inline script injection for CAPTCHAs | External script elements + content scripts | MV3 CSP prohibits inline script execution |
+| Inline script injection for CAPTCHAs | `chrome.scripting.executeScript({world:'MAIN'})` loads the provider's API script | Content scripts run in an isolated world with its own CSP that blocks a remote `<script src>` appended from there, independently of the page's own CSP |
 | `chrome.browserAction` | `chrome.action` | API renamed in MV3 |
 | `localStorage` in background page | `chrome.storage.session` + offscreen document | Service workers have no DOM or localStorage access |
 | CNL interception from the isolated content script | MAIN-world content script (`world: "MAIN"`) + `webRequest` fallback | Isolated-world scripts can't override the page's `fetch`/`XMLHttpRequest` |
