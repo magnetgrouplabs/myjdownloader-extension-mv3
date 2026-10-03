@@ -1,56 +1,63 @@
 # MyJDownloader Browser Extension (Manifest V3)
 
-A Chrome Extension that integrates with [JDownloader](https://jdownloader.org/) through the [MyJDownloader](https://my.jdownloader.org/) cloud API. Right-click any link to send it to JDownloader, intercept Click'N'Load requests, and solve CAPTCHAs directly in your browser.
+A Chrome Extension that integrates with [JDownloader](https://jdownloader.org/) through the [MyJDownloader](https://my.jdownloader.org/) cloud API. Right-click any link to send it to JDownloader and intercept Click'N'Load requests. CAPTCHA solving in the browser is in progress (see [issue #24](../../issues/24)).
 
-This is a Manifest V3 conversion of the original MV2 MyJDownloader extension, fully compliant with Chrome Web Store requirements.
+This is a Manifest V3 conversion of the original MV2 MyJDownloader extension.
 
 ---
 
 ## Features
 
-- **Right-click to download** — Context menu "Download with JDownloader" on any link
-- **Multi-link stacking** — Right-click multiple links to queue them, then send all at once
-- **In-page toolbar** — Preview and manage queued links before sending
-- **Click'N'Load (CNL)** — Intercepts CNL requests and routes them through the in-page toolbar to your selected JDownloader device
-- **CAPTCHA solving** — Solves reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help
-- **Session persistence** — Stays logged in across browser restarts
-- **Device selection** — Choose which JDownloader instance receives your downloads
+- **Right-click to download**: Context menu "Download with JDownloader" on any link
+- **Multi-link stacking**: Right-click multiple links to queue them, then send all at once
+- **In-page toolbar**: Preview and manage queued links before sending
+- **Click'N'Load (CNL)**: Intercepts CNL requests and routes them through the in-page toolbar to your selected JDownloader device
+- **CAPTCHA solving (in progress)**: Solving reCAPTCHA v2/v3 and hCaptcha in browser tabs when JDownloader needs help is not finished yet. See [issue #24](../../issues/24) for status.
+- **Session persistence**: Stays logged in across browser restarts
+- **Device selection**: Choose which JDownloader instance receives your downloads
 - **Update notifications**: Checks once a day for a new release and flags it with a badge and a banner in Settings. There is also a manual "Check for updates" under Settings > About. This extension is installed unpacked, so Chrome never auto-updates it; you still install new versions yourself from the releases page.
 
 ## How It Works
 
-The extension connects to JDownloader through the MyJDownloader cloud API. JDownloader can run anywhere — your NAS, a server, or your local machine. As long as it's connected to MyJDownloader, the extension can send links and solve CAPTCHAs for it.
+The extension connects to JDownloader through the MyJDownloader cloud API. JDownloader can run anywhere: your NAS, a server, or your local machine. As long as it's connected to MyJDownloader, the extension can send links to it. CAPTCHA solving for it is still in progress (see [issue #24](../../issues/24)).
 
 ## CAPTCHA Solving
 
-> **Testing status:** CAPTCHA solving has been verified through code path analysis and unit tests, but has **not been tested end-to-end with a live JDownloader instance** — JDownloader's built-in solvers handle most CAPTCHAs automatically, making it difficult to trigger the browser extension flow. If you encounter a CAPTCHA that routes to the extension, please [report your experience](../../issues/new?template=captcha-bug-report.yml) whether it works or not. Community testing is how we validate this feature.
+> **Status: in progress.** CAPTCHA solving has never been verified end to end by the maintainers of this fork. One contributor reported a full hCaptcha solve reaching JDownloader (Vivaldi, macOS) using PR #19 plus the #23 change.
+>
+> JDownloader's browser-solver pages for reCAPTCHA and hCaptcha (the tab JDownloader opens on `http://127.0.0.1`) carry no widget. They expect the extension to read the challenge from the page and open the hoster's site, where the widget can render. The MV2 extension did that; the MV3 port does not yet. This is not browser-specific.
+>
+> - Released in v2026.10.1: #23, which loads the captcha provider's script in the page's main world (before this the widget never rendered).
+> - Pending: #19, the hand-off from JDownloader's page to the hoster's page (fix for #5, #22, #25).
+> - Under review: #26, solving captchas from the my.jdownloader.org web interface (a separate path).
+>
+> Status and how to help: [issue #24](../../issues/24). If you hit a CAPTCHA that routes to the extension, please [report your experience](../../issues/new?template=captcha-bug-report.yml) whether it works or not.
 
 ### How It Should Work
 
-When JDownloader encounters a CAPTCHA it can't solve automatically, the extension opens a browser tab with the CAPTCHA widget. You solve it, and the token is sent back to JDownloader through MyJDownloader.
+When JDownloader encounters a CAPTCHA it can't solve automatically, the extension opens a browser tab with the CAPTCHA widget. You solve it, and the token is sent back to JDownloader. This is the intended behavior and is still in progress (see [issue #24](../../issues/24)).
 
 ### Supported CAPTCHA Types
 
-| Type | Support |
-|------|---------|
-| reCAPTCHA v2 | Full (checkbox) |
-| reCAPTCHA v3 | Full (invisible, MAIN world execution) |
-| reCAPTCHA Enterprise | Full |
-| hCaptcha | Full |
+| Type | Status |
+|------|--------|
+| reCAPTCHA v2 | In progress (see [#24](../../issues/24)) |
+| reCAPTCHA v3 | In progress (see [#24](../../issues/24)) |
+| reCAPTCHA Enterprise | In progress (see [#24](../../issues/24)) |
+| hCaptcha | In progress (see [#24](../../issues/24)) |
 
-### CAPTCHA Flow
+### CAPTCHA Flow (intended)
 
-1. JDownloader encounters a CAPTCHA on a file hoster
-2. The extension detects the pending CAPTCHA job via MyJDownloader API
-3. A browser tab opens on the target domain with the CAPTCHA widget
-4. You solve the CAPTCHA
-5. The token is sent back to JDownloader, which continues the download
-6. The tab auto-closes after ~2 seconds
+1. JDownloader opens its browser-solver tab on `http://127.0.0.1`
+2. The extension reads the challenge from that page and hands it to the hoster's page, where the widget can render (this hand-off is the part pending in #19)
+3. You solve the CAPTCHA
+4. The token is sent back to JDownloader, which continues the download
+5. The tab auto-closes after ~2 seconds
 
 ### CAPTCHA Tab Features
 
-- **Skip buttons** — Skip this CAPTCHA, skip the hoster, skip the package, or skip all
-- **Tab close = skip** — Closing the tab sends a skip signal to JDownloader
+- **Skip buttons**: Skip this CAPTCHA, skip the hoster, skip the package, or skip all
+- **Tab close = skip**: Closing the tab sends a skip signal to JDownloader
 
 ### JDownloader CAPTCHA Settings
 
@@ -81,7 +88,7 @@ If automatic solvers are enabled, JDownloader will try those first and only fall
 
 ## Reporting Issues
 
-All reports must go through an issue template — blank issues are disabled. Every bug report, CAPTCHA or otherwise, **requires**:
+All reports must go through an issue template, and blank issues are disabled. Every bug report, CAPTCHA or otherwise, **requires**:
 
 - Steps to reproduce
 - Browser and extension version
@@ -95,9 +102,9 @@ Issues missing this information cannot be investigated and will be closed with a
 CAPTCHA solving depends on the specific file hoster, CAPTCHA provider, and JDownloader's configuration. Use the [CAPTCHA Bug Report](../../issues/new?template=captcha-bug-report.yml) template, which additionally asks for:
 
 - **The file hoster name** and the type of CAPTCHA (reCAPTCHA, hCaptcha, etc.)
-- **What happened** — Did the tab open? Did the widget render? Did the token submit?
-- **Service worker console errors** — Go to `chrome://extensions`, find MyJDownloader, click "Inspect views: service worker", and copy any errors from the Console tab
-- **Your JDownloader CAPTCHA settings** — Which solvers are enabled/disabled
+- **What happened**: Did the tab open? Did the widget render? Did the token submit?
+- **Service worker console errors**: Go to `chrome://extensions`, find MyJDownloader, click "Inspect views: service worker", and copy any errors from the Console tab
+- **Your JDownloader CAPTCHA settings**: Which solvers are enabled/disabled
 
 ### General Issues
 
