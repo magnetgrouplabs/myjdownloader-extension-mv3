@@ -1,6 +1,10 @@
 (function() {
 'use strict';
 
+// Remote MyJD captcha tabs (#rc2jdt) are owned by myjdCaptchaSolver.js.
+// Bail out so we do not overwrite activeCaptchaTabs / steal the token with a null callbackUrl.
+if (location.hash && location.hash.indexOf('#rc2jdt') === 0) return;
+
 // CAP-01: Detect CAPTCHA pages — JDownloader localhost or any site with widgets
 var captchaPathPattern = /\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//;
 var isJdLocalhost = /^http:\/\/127\.0\.0\.1/.test(window.location.href) && captchaPathPattern.test(window.location.pathname);

@@ -36,11 +36,11 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
 
   describe('captcha-solved handler (CAP-03, CAP-04)', () => {
     it('should fetch the do=solve&response= URL (MV3 service worker: no XHR)', () => {
-      expect(bgSource).toMatch(/fetch\(\s*request\.data\.callbackUrl\s*\+\s*['"]&do=solve&response=['"]\s*\+\s*encodeURIComponent\(request\.data\.token\)/);
+      expect(bgSource).toMatch(/fetch\(callbackUrl\s*\+\s*['"]&do=solve&response=['"]\s*\+\s*encodeURIComponent\(token\)/);
     });
 
     it('should URI-encode the token with encodeURIComponent', () => {
-      expect(bgSource).toMatch(/encodeURIComponent\(request\.data\.token\)/);
+      expect(bgSource).toMatch(/encodeURIComponent\(token\)/);
     });
 
     it('should call chrome.tabs.remove with setTimeout 2-second delay', () => {
@@ -169,15 +169,22 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
 
     it('should navigate tab with #rc2jdt hash', () => {
-      expect(bgSource).toMatch(/chrome\.tabs\.update.*#rc2jdt/);
+      expect(bgSource).toMatch(/buildCaptchaTabUrl/);
+      expect(bgSource).toMatch(/u\.hash = 'rc2jdt'/);
+      expect(bgSource).toMatch(/chrome\.tabs\.update\(tabId,\s*\{\s*url:\s*captchaUrl\s*\}\)/);
     });
 
     it('should track tab in activeCaptchaTabs with MYJD callbackUrl', () => {
-      // The handler stores callbackUrl: 'MYJD' in activeCaptchaTabs
+      // The handler hands the MYJD marker to prepareCaptchaTab, which is shared
+      // with JDownloader's browser solver flow and records activeCaptchaTabs.
+      // Behavioural coverage lives in scripts/__tests__/background.test.js.
       const section = bgSource.match(/myjd-prepare-captcha-tab[\s\S]*?return\s+true/);
       expect(section).not.toBeNull();
-      expect(section[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
-      expect(section[0]).toMatch(/callbackUrl:\s*['"]MYJD['"]/);
+      expect(section[0]).toMatch(/prepareCaptchaTab\([^)]*['"]MYJD['"]/);
+      const prepare = bgSource.match(/async function prepareCaptchaTab[\s\S]*?\n\}/);
+      expect(prepare).not.toBeNull();
+      expect(prepare[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
+      expect(prepare[0]).toMatch(/callbackUrl:\s*callbackUrl/);
     });
   });
 
@@ -213,6 +220,7 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
 
     it('allows the known hCaptcha and reCAPTCHA API endpoints', () => {
       expect(isCaptchaApiScript('https://hcaptcha.com/1/api.js')).toBe(true);
+      expect(isCaptchaApiScript('https://js.hcaptcha.com/1/api.js')).toBe(false);
       expect(isCaptchaApiScript('https://www.google.com/recaptcha/api.js')).toBe(true);
     });
 
@@ -261,27 +269,25 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
       expect(section[0]).toMatch(/isCaptchaApiScript\(/);
     });
 
-    it('should load the script in the MAIN world via chrome.scripting.executeScript', () => {
-      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
+    it('should load the script in the MAIN world via direct executeScript (9aeddea path)', () => {
+      // Match through the final return true of the handler (not the early reject).
+      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?Failed to load CAPTCHA API script[\s\S]*?return\s+true;/);
       expect(section).not.toBeNull();
       expect(section[0]).toMatch(/chrome\.scripting\.executeScript/);
       expect(section[0]).toMatch(/world:\s*['"]MAIN['"]/);
+      expect(section[0]).toMatch(/getElementById\(['"]captchaContainer['"]\)/);
+      expect(section[0]).toMatch(/document\.head/);
+      expect(section[0]).toMatch(/document\.documentElement/);
+      expect(bgSource).not.toMatch(/function\s+injectCaptchaApiScript\s*\(/);
+      expect(bgSource).not.toMatch(/function\s+isTransientFrameError\s*\(/);
     });
 
     it('should report load/error back via window.postMessage with target origin \'*\'', () => {
-      // Not window.location.origin: on an opaque-origin document that's the
-      // string "null", which postMessage rejects with a SyntaxError instead
-      // of sending (S7). Same window, no secret in the payload, and the
-      // receiver already checks event.source === window.
-      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
-      expect(section).not.toBeNull();
-      const postMessageCalls = section[0].match(/window\.postMessage\([^)]*\)/g);
-      expect(postMessageCalls).not.toBeNull();
-      expect(postMessageCalls.length).toBeGreaterThanOrEqual(2);
-      postMessageCalls.forEach(function(call) {
-        expect(call).toMatch(/__myjd_captcha_api__/);
-        expect(call).toMatch(/,\s*'\*'\s*\)$/);
-      });
+      // Assert against the load-api inject func body (avoid early return true truncating the match).
+      expect(bgSource).toMatch(/action\s*===\s*["']myjd-captcha-load-api["']/);
+      expect(bgSource).toMatch(/window\.postMessage\(\{\s*__myjd_captcha_api__:\s*true,\s*status:\s*'loaded'/);
+      expect(bgSource).toMatch(/window\.postMessage\(\{\s*__myjd_captcha_api__:\s*true,\s*status:\s*'error'/);
+      expect(bgSource).toMatch(/postMessage\([^\)]*,\s*'\*'\s*\)/);
     });
 
     it('should respond with status:error when the URL is rejected or injection fails', () => {
