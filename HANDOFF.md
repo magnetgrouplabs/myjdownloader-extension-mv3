@@ -4,9 +4,58 @@ Start every session here, then `CLAUDE.md` for the branching, versioning, landmi
 rules that do not change with the week. Moved out of `CLAUDE.md` on 2026-09-02 so that dated state
 stops loading at every session launch.
 
-Newest block first. The 2026-07-21 block is kept for history and is superseded by the 2026-07-25
-block above it; issue #5 and the update-notifier item are restated in "Known-unresolved" at the
-bottom, which is the list to work from.
+Newest block first. Every block below the 2026-10-03 one is kept for history and is superseded by
+it; the open items are restated in "Known-unresolved" at the bottom, which is the list to work from.
+
+## Where things stand (2026-10-03)
+
+**v2026.10.1 released 2026-10-03.** dev was merged into master as `e740632` (tree identical to dev
+`9767fcf`), tagged `v2026.10.1`; the release workflow was green and the zip is published. Release notes
+were rewritten by hand after publish (as for v2026.7.4). CI green on master. `master..dev` is now empty.
+
+Contents: update notifier (#16), PR #23 (CAPTCHA provider script in the MAIN world), issue #20 clipboard
+fix, issue #21 device panel fix, feedback form removal. The notes call out the Start/Pause/Stop behavior
+change and point CAPTCHA to tracker #24 as in progress.
+
+**Released without the owed browser pass, Anthony's call.** Never watched in a real browser: the clipboard
+observer, the update notifier's badge, settings banner and storage across a worker restart. The device
+panel was confirmed on dev by the #21 reporter (matand77, 2026-09-22). Issues #20 and #21 are closed with
+"shipped in v2026.10.1" comments.
+
+**PR #26 (daailouivan, first-time contributor): consumer for the my.jdownloader.org web-interface captcha
+path.** CI runs were approved by us: 331/331, 20 suites, security clean. MV3 clean by reading. Review
+verdict HOLD, three must-fix:
+- (a) It answers the web interface's ping by default, which makes the site hand reCAPTCHA v2 jobs to a
+  "Solve Captcha" button that opens `hoster#rc2jdt?k=..&c=<id>`, a tab nothing in #26 serves.
+- (b) `captcha-solved` adopts the parked session job when callbackUrl is missing (`background.js:1250-1253`
+  at `8f0e1bb`), so a token from any unrelated captcha page can be sent to JD.
+- (c) One shared `myjd_captcha_job` session slot, so two pending captchas can cross.
+
+Nothing posted on #26 yet. #26 does not replace #18's handshake fixes (remembered early ping,
+content-script fallback, live setting push, behavioral tests).
+
+**PR #19** unchanged since 2026-07-26; Anthony chose to leave it for now (no nudge posted). Remaining:
+widen the `browserSolverBridge.js:30` gate to recaptchav2/v3; suppress the duplicate solver UI on the
+#rc2jdt tab (#26's early return does this); awaiting the CSP rule before navigating would help (inferred).
+dev+19 merges clean alone; #19 and #26 together conflict in 5 files, all mechanical.
+
+**PR #18** still held; it now conflicts with dev in one STORAGE_KEYS hunk.
+
+**Issue #25** (2026-09-11, uploady.io, reCAPTCHA v2, Vivaldi, v2026.7.4) is the same root cause as #22;
+not yet replied to.
+
+**Web Store policy, found 2026-10-03:** the Chrome Web Store MV3 remote-code policy prohibits "Including a
+<script> tag that points to a resource that is not within the extension's package", exempting contexts
+isolated from extension APIs such as iframes and sandboxed pages; it does not say whether a page's main
+world counts. PR #23 (now released) does that. Matters only if Web Store publication unparks.
+
+**Dependabot:** the master push reported 19 alerts on the default branch (9 high); the July count was 15,
+all development scope. Not re-checked.
+
+**Tracker #24** body updated 2026-10-03: #23 marked released in v2026.10.1, #26 listed as under review
+(separate web-interface path, not the fix for #5, #22 or #25), #25 added to Related.
+
+Full review: the local claude-reports folder, dated 2026-10-03.
 
 ## Where things stand (2026-09-11)
 
@@ -47,6 +96,9 @@ JDownloader's pages. Both reviews are on GitHub under magnetgrouplabs.
   and a ddownload.com link (hCaptcha, issue #5) with the browser solver on, and watch for `do=solve`
   in JD's log. Nobody on our side has ever seen this succeed; Morialkar has, for hCaptcha, on Vivaldi.
 - Update notifier items from the 2026-07-25 block below.
+
+History: this pass was skipped and v2026.10.1 shipped on 2026-10-03 (see the block above). The CAPTCHA
+end to end item is carried in "Known-unresolved".
 
 **Posted 2026-09-11:** fixed-on-dev replies on #20 and #21 (left open until the release), the root-cause reply
 on #22, and the pinned tracker #24 "CAPTCHA status: what works, what is pending, how to help". The full
@@ -114,19 +166,27 @@ review; both are compliant but scrutiny magnets.
 
 ## Test counts as last recorded
 
+2026-10-03: master and dev have identical content at the release; 297 tests / 17 suites as last
+recorded on 2026-09-11 (not re-run locally; CI green on master `e740632`).
+
 2026-09-11: 297 tests / 17 suites on dev; master is behind at v2026.7.4 with 215 / 12. The count
 grows as PRs merge, so treat these as a snapshot and run `npx jest` for the real number.
 
 ## Known-unresolved
 
 - **CAPTCHA has never been confirmed end-to-end by us.** Root cause known since 2026-09-11 (JD's
-  solver pages need the extension to take the challenge over; MV3 never did). PR #23 merged, PR #19
-  awaiting the author's changes. One third-party success report (Morialkar, hCaptcha, Vivaldi).
-  Test links: datavaults.co (reCAPTCHA v2, #22), ddownload.com (hCaptcha, #5).
-- **Issues #5 and #22** stay open until #19 lands and someone confirms on the thread.
+  solver pages need the extension to take the challenge over; MV3 never did). PR #19 waiting on its
+  author, PR #26 held with three must-fix items, one third-party success report (Morialkar, hCaptcha,
+  Vivaldi). Test links: datavaults.co (reCAPTCHA v2, #22), ddownload.com (hCaptcha, #5).
+- **Issues #5, #22 and #25** stay open until #19 lands and someone confirms on the thread.
+- **Open question before any live loopback test:** whether the Docker JDownloader can open a
+  browser-solver tab in Chrome on the Windows desktop at all. If not, the test needs a desktop
+  JDownloader on the same PC.
 - **Feedback form removed** (`cf9c4b7`, merged `7c6897d`): it sent `send-feedback`, which background.js only
   acknowledged, so nothing ever left the browser. Orphaned `.feedbackPanel` CSS in styles/main.css and the
   unused `STORAGE_FEEDBACK_MSG_DRAFT` constant remain; harmless.
-- **Update notifier is unverified in a browser.** The logic is proven against the live API
-  via `npm run test:live`, but the badge, the settings banner, and storage surviving a
-  service-worker restart have not been watched in Chrome. Owed before dev promotes to master.
+- **Update notifier and clipboard observer: released, never watched in a real browser.** The notifier
+  logic is proven against the live API via `npm run test:live`, but the badge, the settings banner, and
+  storage surviving a service-worker restart have not been watched in Chrome.
+- **Pre-existing dead branch:** the `webinterfaceEnhancer.js` 'captcha-done' branch is unreachable
+  (identical condition above it). Not fixed.
