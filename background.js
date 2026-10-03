@@ -6,8 +6,41 @@ console.log("Background: Starting MyJDownloader MV3...");
 const STORAGE_KEYS = {
  CLICKNLOAD_ACTIVE: 'CLICKNLOAD_ACTIVE',
  CONTEXT_MENU_SIMPLE: 'CONTEXT_MENU_SIMPLE',
+ CLIPBOARD_OBSERVER: 'CLIPBOARD_OBSERVER',
  DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
 };
+
+// Clipboard observer
+// A copy in a page arrives as "new-copy-event"; the selection itself comes
+// back a moment later as "new-selection", the same action the right-click
+// "download selection" round trip uses. The two paths must behave
+// differently (a copy only opens the toolbar for a link), so the tab that
+// asked because of a copy is recorded here and consumed when its selection
+// arrives. Nothing is asked of the content script, so it stays unchanged.
+const copySelectionRequests = new Map();
+const COPY_SELECTION_WINDOW_MS = 5000;
+
+function markCopySelectionRequest(tabId) {
+ copySelectionRequests.set(tabId, Date.now());
+}
+
+// True when this tab's selection was asked for by a copy and not by the
+// context menu. Consumes the mark either way, and treats an old mark as
+// absent so a stale entry cannot gate a later right click.
+function takeCopySelectionRequest(tabId) {
+ const askedAt = copySelectionRequests.get(tabId);
+ copySelectionRequests.delete(tabId);
+ return typeof askedAt === 'number' && (Date.now() - askedAt) <= COPY_SELECTION_WINDOW_MS;
+}
+
+// Conservative link detector for the copy path: an http, https or ftp URL,
+// a www. prefixed host, or a bare host with a two to twenty-four letter TLD
+// followed by a path. A plain sentence must not match.
+const LINK_PATTERN = /\b(?:https?|ftp):\/\/\S+|\bwww\.[a-z0-9-]+\.[a-z]{2,24}\b|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\/\S*/i;
+
+function containsLink(value) {
+ return typeof value === 'string' && LINK_PATTERN.test(value);
+}
 
 const DEVICE_TYPES = {
  ASK_EVERY_TIME: { id: 'AskEveryTimeDevice', name: 'Ask every time' },
@@ -17,7 +50,8 @@ const DEVICE_TYPES = {
 let state = {
  isConnected: false,
  devices: [],
- selectedDevice: null
+ selectedDevice: null,
+ updateAvailable: false
 };
 
 let settings = {};
@@ -87,6 +121,26 @@ function removeCspStrippingRule(tabId) {
  }).catch(function(err) {
   console.error('Background: Failed to remove CSP stripping rule for tab', tabId, err);
  });
+}
+
+// Restrict chrome.scripting-driven script loading to the known CAPTCHA
+// provider API endpoints, so myjd-captcha-load-api can't be used as a
+// general-purpose remote-script loader for an arbitrary tab. Host and path
+// are checked independently, not as a single (host, path) pair, so e.g.
+// https://www.google.com/1/api.js also passes; both allowed hosts only ever
+// serve their own real path in practice, so this is harmless, just laxer
+// than the "allowlist" name might suggest.
+function isCaptchaApiScript(url) {
+ if (!url || typeof url !== 'string') return false;
+ try {
+  var parsed = new URL(url);
+  if (parsed.protocol !== 'https:') return false;
+  if (parsed.pathname !== '/1/api.js' && parsed.pathname !== '/recaptcha/api.js') return false;
+  var allowedHosts = ['hcaptcha.com', 'www.google.com'];
+  return allowedHosts.indexOf(parsed.hostname) !== -1;
+ } catch (err) {
+  return false;
+ }
 }
 
 async function addLinkToRequestQueue(link, tab) {
@@ -222,9 +276,127 @@ async function sendToOffscreen(action, data = {}) {
 // Badge and settings
 // ============================================================
 function updateBadge() {
+ // Connection problems ("!") take precedence over the update hint.
  let text = state.isConnected ? "" : "!";
+ let color = "#f3d435";
+ if (text === "" && state.updateAvailable) {
+  text = "NEW";
+  color = "#4a90d9";
+ }
  chrome.action.setBadgeText({ text: text });
- chrome.action.setBadgeBackgroundColor({ color: "#f3d435" });
+ chrome.action.setBadgeBackgroundColor({ color: color });
+}
+
+// ============================================================
+// Update notifier
+// ============================================================
+//
+// This extension is installed unpacked (Load unpacked from a release zip), so
+// Chrome's auto-update never runs and users have no way to learn that a new
+// release exists. A daily alarm asks the GitHub releases API for the latest
+// tag and, when it is newer than the running version, stores the release info
+// and shows a "NEW" badge plus a banner in the settings view. Only DATA is
+// fetched — no code is downloaded or executed (MV3 remotely-hosted-code
+// policy). The user still updates manually from the releases page.
+const UPDATE_CHECK_ALARM = 'updateCheck';
+const UPDATE_STORAGE_KEY = 'myjd_update_available';
+const RELEASES_API = 'https://api.github.com/repos/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+const RELEASES_PAGE = 'https://github.com/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+
+// Numeric per-component compare so zero-padded tags ("2026.07.20") and the
+// 4th-component re-release scheme ("2026.7.13.1" > "2026.7.13") both order
+// correctly. Returns > 0 when a is newer than b.
+//
+// This is only a FALLBACK for ordering releases. It cannot be trusted on its
+// own: the third component changed meaning on 2026-07-21, from the day of the
+// month to a per-month release counter. Numerically 2026.7.4 < 2026.7.13.1,
+// but 2026.7.4 (the 4th July release, published 2026-07-21) is in fact newer
+// than 2026.7.13.1 (published 2026-07-13). Ordering by publish date instead
+// is what makes the notifier correct across that discontinuity, and keeps it
+// correct if the scheme ever changes again. See isNewerRelease().
+function compareVersions(a, b) {
+ const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+ const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+ const len = Math.max(pa.length, pb.length);
+ for (let i = 0; i < len; i++) {
+  const d = (pa[i] || 0) - (pb[i] || 0);
+  if (d !== 0) return d;
+ }
+ return 0;
+}
+
+// buildMeta.json is written by the release workflow and ships inside the zip.
+// Its "timestamp" is when this build was cut, which is the only local value
+// that can be compared against a release's publish date. Cached because the
+// file never changes for the life of a build.
+let buildTimestampPromise = null;
+function getBuildTimestamp() {
+ if (!buildTimestampPromise) {
+  buildTimestampPromise = (async () => {
+   try {
+    const resp = await fetch(chrome.runtime.getURL('buildMeta.json'));
+    if (!resp.ok) return 0;
+    const meta = await resp.json();
+    const ts = Number(meta && meta.timestamp);
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+   } catch (e) {
+    // Dev checkout without a generated buildMeta.json.
+    return 0;
+   }
+  })();
+ }
+ return buildTimestampPromise;
+}
+
+// True when the given release is newer than the running build. Prefers publish
+// date over version numbers (see compareVersions), and only falls back to the
+// numeric compare when there is no usable timestamp on one side.
+async function isNewerRelease(version, publishedAt) {
+ const current = chrome.runtime.getManifest().version;
+ // Numeric equality, not string equality: Chrome strips leading zeros, so the
+ // tag "v2026.07.13.1" is the running "2026.7.13.1". Catching that here also
+ // keeps the date compare below from ever seeing the release it is running.
+ if (compareVersions(version, current) === 0) return false;
+ const releasedAt = typeof publishedAt === 'number' ? publishedAt : Date.parse(publishedAt || '');
+ const buildAt = await getBuildTimestamp();
+ if (buildAt > 0 && Number.isFinite(releasedAt) && releasedAt > 0) {
+  return releasedAt > buildAt;
+ }
+ return compareVersions(version, current) > 0;
+}
+
+async function checkForUpdate() {
+ try {
+  const resp = await fetch(RELEASES_API, {
+   headers: { 'Accept': 'application/vnd.github+json' }
+  });
+  if (!resp.ok) return null;
+  const release = await resp.json();
+  if (!release || typeof release.tag_name !== 'string') return null;
+  const latest = release.tag_name.replace(/^v/, '');
+  const publishedAt = Date.parse(release.published_at || '');
+  if (await isNewerRelease(latest, publishedAt)) {
+   const info = {
+    version: latest,
+    url: release.html_url || RELEASES_PAGE,
+    // Persisted so the restore path in initSettings() can re-apply the same
+    // date comparison instead of falling back to the numeric one.
+    publishedAt: Number.isFinite(publishedAt) ? publishedAt : null
+   };
+   await chrome.storage.local.set({ [UPDATE_STORAGE_KEY]: info });
+   state.updateAvailable = true;
+   updateBadge();
+   return info;
+  }
+  // Up to date (or the user updated in the meantime): clear any stale flag.
+  await chrome.storage.local.remove(UPDATE_STORAGE_KEY);
+  state.updateAvailable = false;
+  updateBadge();
+  return null;
+ } catch (e) {
+  // Offline or rate limited — stay quiet, the next alarm retries.
+  return null;
+ }
 }
 
 async function initSettings() {
@@ -232,10 +404,21 @@ async function initSettings() {
 
  settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE] = result[STORAGE_KEYS.CLICKNLOAD_ACTIVE] ?? true;
  settings[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] = result[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] ?? true;
+ settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = result[STORAGE_KEYS.CLIPBOARD_OBSERVER] ?? false;
  settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = result[STORAGE_KEYS.DEFAULT_PREFERRED_JD] || DEVICE_TYPES.ASK_EVERY_TIME;
 
  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) {
   addCnlInterceptor();
+ }
+
+ // Restore the update hint across service-worker restarts; drop it once the
+ // running version has caught up with the stored one.
+ const upd = await chrome.storage.local.get(UPDATE_STORAGE_KEY);
+ const updInfo = upd[UPDATE_STORAGE_KEY];
+ if (updInfo && await isNewerRelease(updInfo.version, updInfo.publishedAt)) {
+  state.updateAvailable = true;
+ } else if (updInfo) {
+  chrome.storage.local.remove(UPDATE_STORAGE_KEY);
  }
 
  initMenuItems();
@@ -366,10 +549,32 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes[STORAGE_KEYS.CLICKNLOAD_ACTIVE].newValue) addCnlInterceptor();
   else removeCnlInterceptor();
  }
+ if (changes[STORAGE_KEYS.CLIPBOARD_OBSERVER]) {
+  // The popup and the keyboard shortcut both write this key, and the service
+  // worker may have been running with the old value since before either.
+  settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = changes[STORAGE_KEYS.CLIPBOARD_OBSERVER].newValue;
+ }
  if (changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD]) {
   settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD].newValue;
  }
 });
+
+// ============================================================
+// Keyboard shortcut: toggle the clipboard observer
+// ============================================================
+// manifest.json declares "toggle-clipboard-observer" (Ctrl+Shift+X). The new
+// value is written to chrome.storage.local, which the popup reads and the
+// listener above mirrors into settings[], so both contexts stay in step.
+// The guard keeps this harmless where chrome.commands is unavailable.
+if (chrome.commands && chrome.commands.onCommand) {
+ chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "toggle-clipboard-observer") return;
+  const current = await chrome.storage.local.get(STORAGE_KEYS.CLIPBOARD_OBSERVER);
+  const next = current[STORAGE_KEYS.CLIPBOARD_OBSERVER] !== true;
+  await chrome.storage.local.set({ [STORAGE_KEYS.CLIPBOARD_OBSERVER]: next });
+  console.log("Background: Clipboard observer toggled to", next);
+ });
+}
 
 // ============================================================
 // DeclarativeNetRequest for CNL
@@ -564,6 +769,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
+ // --- Update notifier (manual check from the settings view) ---
+ if (action === "check-for-update") {
+  checkForUpdate().then((info) => sendResponse({ update: info }));
+  return true;
+ }
+
  // --- Badge update (from popup, which can't access chrome.action) ---
  if (action === "update-badge") {
   try {
@@ -669,21 +880,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  }
 
  // ============================================================
- // Device polling (from popup's DeviceController)
- // ============================================================
- if (action === "device-poll") {
-  // In MV3, device polling happens in the popup's MyjdService directly.
-  // Acknowledge the message to prevent errors.
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- if (action === "device-poll-start" || action === "device-poll-stop") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- // ============================================================
  // API operations — forwarded to offscreen document
  // ============================================================
 
@@ -747,12 +943,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // Send feedback
- if (action === "send-feedback") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
  // ============================================================
  // CNL captured from content script
  // ============================================================
@@ -779,8 +969,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // compatibility, but nothing ships that name today; handling only it left
  // the whole right-click-with-a-selection path dead (issue #15).
  if (action === "new-selection" || action === "selection-result") {
-  if (request.data && request.data.text && sender.tab) {
-   addLinkToRequestQueue(request.data.text, sender.tab);
+  if (sender.tab) {
+   // Consume the mark even when the selection is empty, so it cannot leak
+   // into the next right click on the same tab.
+   const fromCopy = takeCopySelectionRequest(sender.tab.id);
+   if (request.data && request.data.text) {
+    // A copy fires on every copy on every page, so it only opens the toolbar
+    // when the selection actually carries a link, which is what the setting
+    // description promises. A right click is explicit and stays
+    // unconditional. The html is checked too, because a linked word copies
+    // as plain text with the href only in the markup.
+    const wanted = !fromCopy || containsLink(request.data.text) || containsLink(request.data.html);
+    if (wanted) {
+     addLinkToRequestQueue(request.data.text, sender.tab);
+    }
+   }
+  }
+  sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // ============================================================
+ // Copy in a page (clipboard observer)
+ // ============================================================
+ // onCopyContentscript.js sends this on every trusted copy. When the setting
+ // is on, ask that tab for its selection; the answer arrives as
+ // "new-selection" above. Without this handler the message fell through to
+ // the unhandled-action default and the whole feature did nothing.
+ if (action === "new-copy-event") {
+  if (sender.tab && sender.tab.id !== undefined && settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] === true) {
+   markCopySelectionRequest(sender.tab.id);
+   chrome.tabs.sendMessage(sender.tab.id, { action: "get-selection", tabId: sender.tab.id })
+    .catch(() => {
+     // No content script in that tab, or the frame is already gone.
+    });
   }
   sendResponse({ status: 'ok' });
   return true;
@@ -813,6 +1035,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'error', error: err.message });
    }
   })();
+  return true;
+ }
+
+ // MYJD CAPTCHA: load the provider's API script in the page's MAIN world.
+ // The isolated world content scripts run in enforces its own CSP
+ // (script-src 'self' 'wasm-unsafe-eval' ...), which blocks a remote
+ // <script src> appended from the content script regardless of the page's
+ // own (already stripped) CSP header. Loading it via chrome.scripting in the
+ // MAIN world is subject to the page's CSP only, which the existing
+ // addCspStrippingRule() already clears for this tab. The result is handed
+ // back via window.postMessage, same bridge pattern as cnlInterceptorMain.js.
+ // Target origin '*' rather than window.location.origin: on an opaque-origin
+ // document (sandboxed page) location.origin is the string "null", which
+ // postMessage rejects with a SyntaxError instead of sending. Same window,
+ // no secret in the payload, and the receiver already checks
+ // event.source === window, so '*' costs nothing here.
+ if (action === "myjd-captcha-load-api") {
+  if (!sender.tab || !isCaptchaApiScript(request.data && request.data.url)) {
+   console.error('Background: Rejected CAPTCHA API script URL:', request.data && request.data.url);
+   sendResponse({ status: 'error', error: 'url not allowed' });
+   return true;
+  }
+  chrome.scripting.executeScript({
+   target: { tabId: sender.tab.id },
+   world: 'MAIN',
+   args: [request.data.url],
+   func: function(url) {
+    var container = document.getElementById('captchaContainer') || document.head || document.documentElement;
+    var script = document.createElement('script');
+    script.src = url;
+    script.addEventListener('load', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'loaded' }, '*');
+    });
+    script.addEventListener('error', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'error' }, '*');
+    });
+    container.appendChild(script);
+   }
+  }).then(function() {
+   sendResponse({ status: 'ok' });
+  }).catch(function(err) {
+   console.error('Background: Failed to load CAPTCHA API script in MAIN world:', err);
+   sendResponse({ status: 'error', error: err && err.message });
+  });
   return true;
  }
 
@@ -1091,7 +1357,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Keep alive + init
 // ============================================================
 chrome.alarms.create('keepAlive', { periodInMinutes: 4 });
-chrome.alarms.onAlarm.addListener(() => {
+chrome.alarms.create(UPDATE_CHECK_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+ if (alarm && alarm.name === UPDATE_CHECK_ALARM) {
+  checkForUpdate();
+  return;
+ }
  console.log("Background: Keepalive alarm");
 });
 

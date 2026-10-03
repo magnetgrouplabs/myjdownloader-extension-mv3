@@ -1,13 +1,15 @@
 'use strict';
 
 angular.module('myjdWebextensionApp')
-    .service('MyjdDeviceService', ['$timeout', 'myjdClientFactory', 'ApiErrorService', 'ExtensionMessagingService',
-        function ($timeout, myjdClientFactory, apiErrorService, ExtensionMessagingService) {
+    .service('MyjdDeviceService', ['$timeout', 'myjdClientFactory', 'ApiErrorService',
+        function ($timeout, myjdClientFactory, apiErrorService) {
             this.MyJDDeviceService = function (device) {
                 this.device = device;
                 var subjects = {};
                 var runningPoll;
                 var runningEventsLongPoll;
+                var statusCallbacks = [];
+                var pollInFlight = false;
 
                 this.setDevice = function (device) {
                     this.device = device;
@@ -55,16 +57,72 @@ angular.module('myjdWebextensionApp')
                     return subjects.eventsListen;
                 };
 
-                var publishAggregatedNumbers = function (stats) {
-                    if (stats.data && stats.data[0] && stats.data[1]) {
-                        var deviceStatus = {};
-                        deviceStatus.state = stats.data[0].eventData.data;
-                        deviceStatus.eta = stats.data[1].eventData.data.eta;
-                        deviceStatus.speed = stats.data[1].eventData.data.downloadSpeed;
-                        deviceStatus.done = stats.data[1].eventData.data.loadedBytes;
-                        deviceStatus.total = stats.data[1].eventData.data.totalBytes;
-                        ExtensionMessagingService.sendMessage("myjd-toolbar", "device-poll-" + device.id, deviceStatus);
+                /*
+                 * Status delivery.
+                 *
+                 * Callers register with onStatus() and are called back in
+                 * process. The poll result used to go out over
+                 * chrome.runtime.sendMessage, which works only when the
+                 * publisher and the subscriber sit in different contexts. The
+                 * poll now runs in the popup, the same frame that renders the
+                 * panel, and Chrome never delivers a runtime message back to
+                 * the frame that sent it.
+                 *
+                 * The message handed to a callback has exactly one of two
+                 * shapes:
+                 *   {data: {eta, speed, done, total, state}}  a poll result
+                 *   {error: <api error>}                      a failed poll
+                 */
+                this.onStatus = function (callback) {
+                    if (typeof callback === 'function') {
+                        statusCallbacks.push(callback);
                     }
+                };
+
+                var notifyStatus = function (message) {
+                    statusCallbacks.forEach(function (callback) {
+                        try {
+                            callback(message);
+                        } catch (e) {
+                            console.error("MyjdDeviceService: status callback failed", e);
+                        }
+                    });
+                };
+
+                // The poll response carries one entry per subscribed event.
+                // Match on the event name, and fall back to the historic
+                // positional order (jdState first, aggregatedNumbers second)
+                // when the field is absent, so an unnamed envelope still
+                // fills the panel.
+                var pickEvent = function (entries, eventName, fallbackIndex) {
+                    if (!entries) {
+                        return undefined;
+                    }
+                    for (var i = 0; i < entries.length; i++) {
+                        if (entries[i] && entries[i].eventName === eventName) {
+                            return entries[i];
+                        }
+                    }
+                    return entries[fallbackIndex];
+                };
+
+                var publishAggregatedNumbers = function (stats) {
+                    var entries = stats ? stats.data : undefined;
+                    var jdState = pickEvent(entries, "jdState", 0);
+                    var aggregated = pickEvent(entries, "aggregatedNumbers", 1);
+                    if (!jdState || !jdState.eventData || !aggregated || !aggregated.eventData) {
+                        return;
+                    }
+                    var numbers = aggregated.eventData.data || {};
+                    notifyStatus({
+                        data: {
+                            state: jdState.eventData.data,
+                            eta: numbers.eta,
+                            speed: numbers.downloadSpeed,
+                            done: numbers.loadedBytes,
+                            total: numbers.totalBytes
+                        }
+                    });
                 };
 
                 function pollRequest(thisService, interval) {
@@ -82,10 +140,27 @@ angular.module('myjdWebextensionApp')
                 }
 
                 this.oneTimePoll = function () {
-                    this.getAggregatedNumbers().done(function (stats) {
+                    // A slow cloud round trip must not stack up requests
+                    // behind a caller that polls on a fixed interval.
+                    if (pollInFlight) {
+                        return;
+                    }
+
+                    var request = this.getAggregatedNumbers();
+                    if (!request || typeof request.done !== 'function') {
+                        // MyjdService.send() returns undefined until the
+                        // session has been restored from storage.
+                        notifyStatus({error: "API not connected"});
+                        return;
+                    }
+
+                    pollInFlight = true;
+                    request.done(function (stats) {
+                        pollInFlight = false;
                         publishAggregatedNumbers(stats);
                     }).fail(function (error) {
-                        ExtensionMessagingService.sendMessage("myjd-toolbar", "device-poll-" + device.id, {error: error});
+                        pollInFlight = false;
+                        notifyStatus({error: error});
                     });
                 };
 

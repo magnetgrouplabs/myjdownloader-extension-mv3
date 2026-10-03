@@ -181,6 +181,118 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
   });
 
+  describe('isCaptchaApiScript allowlist (real function, not just source regex)', () => {
+    // Regex-on-source-text assertions can't catch a rewrite that still
+    // contains the right substrings (e.g. `url.includes('hcaptcha.com')`
+    // would pass a naive check). Extract the actual function body and run it
+    // against known-good URLs and plausible bypass shapes instead.
+    // Naive brace counting: breaks on a '{' or '}' inside a string or
+    // comment within the function body. Fails loudly (missing/garbled
+    // match makes new Function(...) throw or the assertions below fail),
+    // not silently, so a mismatch turns the suite red instead of leaving a
+    // quiet coverage hole.
+    function extractFunctionSource(source, name) {
+      const startMatch = source.match(new RegExp('function\\s+' + name + '\\s*\\([^)]*\\)\\s*\\{'));
+      if (!startMatch) throw new Error('function not found in source: ' + name);
+      const start = startMatch.index;
+      let depth = 0;
+      let i = start;
+      for (; i < source.length; i++) {
+        if (source[i] === '{') depth++;
+        else if (source[i] === '}') {
+          depth--;
+          if (depth === 0) { i++; break; }
+        }
+      }
+      return source.slice(start, i);
+    }
+
+    const isCaptchaApiScript = new Function(
+      'return (' + extractFunctionSource(bgSource, 'isCaptchaApiScript') + ');'
+    )();
+
+    it('allows the known hCaptcha and reCAPTCHA API endpoints', () => {
+      expect(isCaptchaApiScript('https://hcaptcha.com/1/api.js')).toBe(true);
+      expect(isCaptchaApiScript('https://www.google.com/recaptcha/api.js')).toBe(true);
+    });
+
+    it('rejects non-https URLs', () => {
+      expect(isCaptchaApiScript('http://hcaptcha.com/1/api.js')).toBe(false);
+    });
+
+    it('rejects lookalike hostnames (subdomain/prefix/suffix attacks)', () => {
+      expect(isCaptchaApiScript('https://hcaptcha.com.evil.tld/1/api.js')).toBe(false);
+      expect(isCaptchaApiScript('https://evil-hcaptcha.com/1/api.js')).toBe(false);
+      expect(isCaptchaApiScript('https://notgoogle.com/recaptcha/api.js')).toBe(false);
+    });
+
+    it('rejects query-string smuggling of an allowed URL', () => {
+      expect(isCaptchaApiScript('https://evil.tld/?x=https://hcaptcha.com/1/api.js')).toBe(false);
+    });
+
+    it('rejects userinfo smuggling (allowed host as username, not hostname)', () => {
+      expect(isCaptchaApiScript('https://hcaptcha.com@evil.tld/1/api.js')).toBe(false);
+    });
+
+    it('rejects percent-encoded path smuggling', () => {
+      expect(isCaptchaApiScript('https://hcaptcha.com/1/%61pi.js')).toBe(false);
+    });
+
+    it('rejects unrelated paths on an allowed host', () => {
+      expect(isCaptchaApiScript('https://hcaptcha.com/evil.js')).toBe(false);
+    });
+
+    it('rejects non-string, empty, and malformed input', () => {
+      expect(isCaptchaApiScript(undefined)).toBe(false);
+      expect(isCaptchaApiScript(null)).toBe(false);
+      expect(isCaptchaApiScript('')).toBe(false);
+      expect(isCaptchaApiScript('not a url')).toBe(false);
+    });
+  });
+
+  describe('myjd-captcha-load-api handler', () => {
+    it('should handle myjd-captcha-load-api action', () => {
+      expect(bgSource).toMatch(/myjd-captcha-load-api/);
+    });
+
+    it('should validate the URL with isCaptchaApiScript before injecting', () => {
+      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
+      expect(section).not.toBeNull();
+      expect(section[0]).toMatch(/isCaptchaApiScript\(/);
+    });
+
+    it('should load the script in the MAIN world via chrome.scripting.executeScript', () => {
+      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
+      expect(section).not.toBeNull();
+      expect(section[0]).toMatch(/chrome\.scripting\.executeScript/);
+      expect(section[0]).toMatch(/world:\s*['"]MAIN['"]/);
+    });
+
+    it('should report load/error back via window.postMessage with target origin \'*\'', () => {
+      // Not window.location.origin: on an opaque-origin document that's the
+      // string "null", which postMessage rejects with a SyntaxError instead
+      // of sending (S7). Same window, no secret in the payload, and the
+      // receiver already checks event.source === window.
+      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
+      expect(section).not.toBeNull();
+      const postMessageCalls = section[0].match(/window\.postMessage\([^)]*\)/g);
+      expect(postMessageCalls).not.toBeNull();
+      expect(postMessageCalls.length).toBeGreaterThanOrEqual(2);
+      postMessageCalls.forEach(function(call) {
+        expect(call).toMatch(/__myjd_captcha_api__/);
+        expect(call).toMatch(/,\s*'\*'\s*\)$/);
+      });
+    });
+
+    it('should respond with status:error when the URL is rejected or injection fails', () => {
+      const section = bgSource.match(/action\s*===\s*["']myjd-captcha-load-api["'][\s\S]*?\n \}/);
+      expect(section).not.toBeNull();
+      const errorResponses = section[0].match(/status:\s*['"]error['"]/g);
+      expect(errorResponses).not.toBeNull();
+      expect(errorResponses.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
   describe('myjd-captcha-execute handler', () => {
     it('should handle myjd-captcha-execute action', () => {
       expect(bgSource).toMatch(/myjd-captcha-execute/);

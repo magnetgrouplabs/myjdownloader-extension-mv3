@@ -16,8 +16,7 @@ const templateCache = fs.readFileSync(
  * "Saved" nav entry to showClipboardHistoryPanel() / isShowingClipboard(),
  * but neither was ever ported to MV3. Angular silently no-ops an ng-click
  * whose expression resolves to undefined, so the button did nothing and the
- * panel could never be reached. The feedback entry was dead for the same
- * reason.
+ * panel could never be reached.
  *
  * Rather than pin the two known names, extract every handler the connected
  * panel actually calls and assert the controller defines all of them, so a
@@ -58,7 +57,7 @@ describe('ConnectedController — popup nav handlers (issue #4)', () => {
 
         // Pre-existing dead template code, deliberately not wired up here.
         // Both sit inside blocks that cannot render today, so unlike the
-        // Saved/feedback entries they are not reachable dead buttons:
+        // Saved entry they are not reachable dead buttons:
         //   stopAutoGrabber -> gated on ng-if="autoGrabberState.isActive",
         //     and autoGrabberState is never set on any scope, so the whole
         //     grabber-running-container never renders.
@@ -78,24 +77,8 @@ describe('ConnectedController — popup nav handlers (issue #4)', () => {
         expect(controller).toMatch(/\$scope\.isShowingClipboard\s*=/);
     });
 
-    it('defines the feedback nav handlers specifically', () => {
-        expect(controller).toMatch(/\$scope\.toggleFeedbackPanel\s*=/);
-        expect(controller).toMatch(/\$scope\.isShowingFeedbackPanel\s*=/);
-    });
-
     it('routes the Saved view through a distinct viewstate', () => {
         expect(controller).toMatch(/viewstate\s*=\s*'CLIPBOARD_HISTORY'/);
         expect(controller).toMatch(/viewstate\s*===\s*'CLIPBOARD_HISTORY'/);
-    });
-
-    it('injects BackgroundScriptService for feedback submission', () => {
-        // A DI array that misses the dependency throws on controller
-        // instantiation, which would blank the whole popup.
-        const diMatch = controller.match(/\.controller\('ConnectedCtrl',\s*\[([^\]]*)\]/);
-        expect(diMatch).not.toBeNull();
-        expect(diMatch[1]).toMatch(/BackgroundScriptService/);
-
-        const fnMatch = controller.match(/function\s*\(([^)]*)\)/);
-        expect(fnMatch[1]).toMatch(/BackgroundScriptService/);
     });
 });

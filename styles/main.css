@@ -1179,6 +1179,12 @@ a.expandOptionalValuesLink:hover {
     line-height: normal;
 }
 
+/* The manual update check is an ng-click with no href, so it needs the
+   pointer it would otherwise get from being a real link. */
+#updateCheckContainer > a {
+    cursor: pointer;
+}
+
 #optionalValuesContainer .addLinksOptionsCheckbox input[type=checkbox] {
     width: 34px;
 }

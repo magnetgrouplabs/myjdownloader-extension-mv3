@@ -102,6 +102,12 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "        translate}}\n" +
     "        <b>{{username}}</b>\n" +
     "    </div>\n" +
+    "    <div class=\"inlineSettingsContainer\" id=\"updateBanner\" ng-if=\"updateInfo\">\n" +
+    "        <span>{{'ui_settings_update_available' | translate}} <b>{{updateInfo.version}}</b></span>\n" +
+    "        <br />\n" +
+    "        <a ng-href=\"{{updateInfo.url}}\" target=\"_blank\"><i class=\"fa fa-external-link\"></i>&nbsp;{{'ui_settings_update_download' | translate}}</a>\n" +
+    "        <div style=\"clear:both;\"></div>\n" +
+    "    </div>\n" +
     "    <div class=\"inlineSettingsContainer\" id=\"themeSettings\">\n" +
     "        <label for=\"themeMode\">{{'ui_settings_theme' | translate}}</label>\n" +
     "        <br />\n" +
@@ -300,6 +306,19 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "    <div id=\"aboutContainer\">\n" +
     "        <div ng-if=\"buildMeta\">\n" +
     "            <b>Version:</b> {{buildMeta.version}}\n" +
+    "        </div>\n" +
+    "        <div class=\"inlineSettingsContainer\" id=\"updateCheckContainer\">\n" +
+    "            <a ng-click=\"checkForUpdate()\"><i class=\"fa fa-refresh\" aria-hidden=\"true\"></i>&nbsp;{{(updateCheckState === 'checking' ? 'ui_settings_update_checking' : 'ui_settings_update_check') | translate}}</a>\n" +
+    "            <div style=\"clear:both;\"></div>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'current'\">\n" +
+    "                <small>{{'ui_settings_update_uptodate' | translate}}</small>\n" +
+    "            </p>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'error'\">\n" +
+    "                <small>{{'ui_settings_update_failed' | translate}}</small>\n" +
+    "            </p>\n" +
+    "            <p class=\"description\" ng-if=\"updateCheckState === 'found'\">\n" +
+    "                <small>{{'ui_settings_update_available' | translate}} <b>{{updateInfo.version}}</b>&nbsp;<a ng-href=\"{{updateInfo.url}}\" target=\"_blank\"><i class=\"fa fa-external-link\" aria-hidden=\"true\"></i>&nbsp;{{'ui_settings_update_download' | translate}}</a></small>\n" +
+    "            </p>\n" +
     "        </div>\n" +
     "        <br />\n" +
     "        <div><a href=\"http://jdownloader.org/impressum\" target=\"_blank\"><i class=\"fa fa-external-link\"\n" +
@@ -753,11 +772,6 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "            | translate}}\"\n" +
     "               ng-class=\"{'selected': isShowingSettings()}\"><i\n" +
     "                class=\"fa fa-cog\" aria-hidden=\"true\"></i></a></li>\n" +
-    "        <li><a ng-click=\"toggleFeedbackPanel()\" ng-class=\"{'selected': isShowingFeedbackPanel()}\" title=\"{{'menu_entry_send_feedback'\n" +
-    "            | translate}}\"><i\n" +
-    "                class=\"fa fa-envelope\"\n" +
-    "                aria-hidden=\"true\"></i></a>\n" +
-    "        </li>\n" +
     "        <li><a title=\"Logout\" ng-click=\"reallyLogout()\"><i class=\"fa fa-sign-out\" aria-hidden=\"true\"></i></a></li>\n" +
     "    </ul>\n" +
     "</div>\n" +
@@ -770,32 +784,6 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "            <div class=\"loadingMessage\"><b>{{'ui_loading_connecting' | translate}}</b></div>\n" +
     "        </div>\n" +
     "        <div class=\"clearfix\"></div>\n" +
-    "        <form name=\"feedbackForm\" class=\"container feedbackPanel appear card\" ng-if=\"showFeedbackPanel\" novalidate>\n" +
-    "\n" +
-    "            <div class=\"header\"><b>Feedback:</b><a\n" +
-    "                    ng-click=\"toggleFeedbackPanel()\"><i\n" +
-    "                    class=\"fa fa-times\"\n" +
-    "                    aria-hidden=\"true\"></i></a><a class=\"clearAction\" ng-if=\"!feedback.sending\"\n" +
-    "                                                  ng-click=\"clearFeedback()\"><i\n" +
-    "                    class=\"fa fa-trash\"\n" +
-    "                    aria-hidden=\"true\"></i>&nbsp;{{'ui_feedback_clear' | translate}}</a></div>\n" +
-    "            <div class=\"clearfix\"></div>\n" +
-    "            <textarea ng-disabled=\"feedback.sending || feedback.success\" ng-model=\"feedback.msg\" name=\"feedback\"\n" +
-    "                      ng-maxlength=\"feedback.max\"\n" +
-    "                      required></textarea>\n" +
-    "            <small class=\"charleftCounter\" ng-class=\"{'error':feedbackForm.feedback.$error.maxlength}\">{{feedback.msg\n" +
-    "                ? (feedback.max - feedback.msg.length) : (feedbackForm.feedback.$error.maxlength ? 0 : feedback.max)}}\n" +
-    "                {{'ui_feedback_chars_left' | translate}}\n" +
-    "            </small>\n" +
-    "            <div class=\"actions\">\n" +
-    "                <button ng-click=\"sendFeedback(feedback.msg)\"\n" +
-    "                        ng-disabled=\"feedback.sending || feedback.success || !feedbackForm.$valid\"\n" +
-    "                        class=\"xbutton\">{{'ui_feedback_button_send' | translate}}\n" +
-    "                </button>\n" +
-    "            </div>\n" +
-    "            <span class=\"feedbackRequestStatus\" ng-if=\"feedback.success\" class=\"appear\"><b>{{'ui_feedback_thank_you' | translate}}</b></span>\n" +
-    "            <span class=\"feedbackRequestStatus\" ng-if=\"feedback.sending\" class=\"appear\"><b>{{'ui_feedback_sending' | translate}}</b></span>\n" +
-    "        </form>\n" +
     "        <div class=\"clearfix\"></div>\n" +
     "        <div class=\"grabber-running-container\" ng-if=\"autoGrabberState.isActive\">\n" +
     "            <p style=\"margin: 8px;font-weight:bold;font-size: 1.16em;\">{{'ui_autograbber_running' | translate}} <a\n" +
