@@ -154,3 +154,103 @@ describe('ToolbarController - cold-cache device default', () => {
     expect(toolbarSource).toMatch(/else if \(hadCachedDevices\)/);
   });
 });
+
+describe('AddLinksController - Resolve in Browser', () => {
+  const tcSource = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'partials', 'templateCache.js'), 'utf8'
+  );
+  const sendStart = source.indexOf('$scope.send = function');
+  const sendBody = source.slice(sendStart);
+
+  it('only collects URLs when the stored setting is on and the resolver module exists', () => {
+    const fn = extractFunction(source, 'collectResolvableUrls');
+    expect(fn).not.toBeNull();
+    expect(fn).toMatch(/isResolveInBrowserOn\(\)/);
+    expect(fn).toMatch(/window\.MyjdHostResolvers/);
+    expect(fn).toMatch(/findResolver/);
+    const on = extractFunction(source, 'isResolveInBrowserOn');
+    expect(on).toMatch(/optionalDefaults\[key\]/);
+    expect(on).toMatch(/RESOLVE_IN_BROWSER\.defaultValue/);
+    expect(on).toMatch(/return value === true/);
+  });
+
+  it('gate includes URLs the resolver statically targets or that look like an interstitial', () => {
+    const fn = extractFunction(source, 'collectResolvableUrls');
+    expect(fn).toMatch(/matchesResolverStatically\(resolvers, trimmed\)/);
+    expect(fn).toMatch(/looksLikeInterstitial\(resolvers, trimmed\)/);
+    const stat = extractFunction(source, 'matchesResolverStatically');
+    expect(stat).toMatch(/typeof resolvers\.resolveTarget === "function"/);
+    expect(stat).toMatch(/resolvers\.resolveTarget\(url\)/);
+    expect(stat).toMatch(/resolvers\.findResolver\(url\)/);
+    const loose = extractFunction(source, 'looksLikeInterstitial');
+    expect(loose).toMatch(/typeof resolvers\.looksLikeInterstitial === "function"/);
+  });
+
+  it('an interstitial absent from the reply produces no warning', () => {
+    const idx = sendBody.indexOf('var entry = results[url]');
+    const branch = sendBody.slice(idx, sendBody.indexOf('$scope.state.resolving = null', idx));
+    expect(branch).toMatch(/\(entry && entry\.error\) \|\|\s*matchesResolverStatically\(window\.MyjdHostResolvers, url\)/);
+    expect(branch.match(/warnings\.push/g).length).toBe(1);
+  });
+
+  it('runs the existing path untouched when nothing is resolvable', () => {
+    expect(sendBody).toMatch(/resolveUrls\.length === 0\)\s*\{\s*sendResolved\(\{\}, \[\]\);/);
+  });
+
+  it('only resolves link and text requests', () => {
+    const fn = extractFunction(source, 'collectResolvableUrls');
+    expect(fn).toMatch(/request\.type !== "link" && request\.type !== "text"/);
+  });
+
+  it('substitutes resolved URLs into query.links and keeps sourceUrl as the page url', () => {
+    expect(sendBody).toMatch(/resolved\[contentKey\] !== undefined\s*\?\s*resolved\[contentKey\]\s*:\s*request\.content/);
+    expect(sendBody).toMatch(/query\.sourceUrl = request\.parent\.url/);
+  });
+
+  it('keeps the original content and records a warning for failures', () => {
+    expect(sendBody).toMatch(/warnings\.push\(\{ url: url, reason: describeResolveError\(entry\) \}\)/);
+    expect(sendBody).toMatch(/"no-reply"/);
+    expect(sendBody).toMatch(/entry && entry\.url && !entry\.error/);
+    expect(sendBody).toMatch(/reason: "no-reply"/);
+    expect(sendBody).toMatch(/state\.sending\.log = JSON\.stringify\(warnings\)/);
+  });
+
+  it('shows the resolving state and clears it when the reply arrives', () => {
+    expect(sendBody).toMatch(/state\.resolving = \{ count: resolveUrls\.length \}/);
+    expect(sendBody).toMatch(/state\.resolving = null/);
+  });
+
+  it('suppresses the auto close when there are warnings', () => {
+    const idx = sendBody.indexOf('resolveWarnings.length > 0');
+    expect(idx).toBeGreaterThan(-1);
+    const warnBranch = sendBody.slice(idx, sendBody.indexOf('successClose(idsToRemove)', idx));
+    expect(warnBranch).toMatch(/return;/);
+    expect(warnBranch).not.toMatch(/successClose/);
+  });
+
+  it('Close link emits the same close with the stored ids', () => {
+    const close = source.slice(source.indexOf('$scope.closeAfterResolveWarnings'));
+    expect(close).toMatch(/resolveIdsToRemove/);
+    expect(close).toMatch(/successClose\(idsToRemove\)/);
+  });
+
+  it('defines every handler the add-links panel calls', () => {
+    const start = tcSource.indexOf("$templateCache.put('partials/directives/myaddlinkspanel.html'");
+    expect(start).toBeGreaterThan(-1);
+    const next = tcSource.indexOf('$templateCache.put(', start + 1);
+    const tpl = tcSource.slice(start, next === -1 ? undefined : next);
+    const called = new Set();
+    const re = /ng-(?:click|class|if|show)=\\?"[^"]*?([a-zA-Z_$][\w$]*)\s*\(/g;
+    let m;
+    while ((m = re.exec(tpl)) !== null) called.add(m[1]);
+    const defined = new Set();
+    const defRe = /\$scope\.([a-zA-Z_$][\w$]*)\s*=/g;
+    while ((m = defRe.exec(source)) !== null) defined.add(m[1]);
+    // sendError sits in a block that cannot render; removeRequest is inherited from the
+    // parent scope (ToolbarController), not defined on this controller.
+    const knownUnwired = new Set(['sendError', 'removeRequest']);
+    const missing = [...called].filter((n) => !defined.has(n) && n !== 'translate' && !knownUnwired.has(n));
+    expect(missing).toEqual([]);
+    expect(called.has('closeAfterResolveWarnings')).toBe(true);
+  });
+});

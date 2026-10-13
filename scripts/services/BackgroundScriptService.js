@@ -41,6 +41,12 @@ angular.module('myjdWebextensionApp')
             return ExtensionMessagingService.addListener("myjd-toolbar", "devices-change", callback);
         }
 
+        // Opens supported file host pages in the browser and returns the direct
+        // download links: reply {results: {[originalUrl]: {url, resolver} | {error, resolver}}}.
+        function resolveLinks(urls) {
+            return ExtensionMessagingService.sendMessage("myjd-toolbar", "resolve-links", {urls: urls});
+        }
+
         // Manual "check now" from the settings view. The background runs the
         // same check on a daily alarm; this just runs it on demand.
         function checkForUpdate() {
@@ -57,4 +63,5 @@ angular.module('myjdWebextensionApp')
         this.onApiError = onApiError;
         this.onDeviceListChanged = onDeviceListChanged;
         this.checkForUpdate = checkForUpdate;
+        this.resolveLinks = resolveLinks;
     }]);

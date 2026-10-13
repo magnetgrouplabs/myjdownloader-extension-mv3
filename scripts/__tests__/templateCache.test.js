@@ -22,4 +22,9 @@ describe('Settings Toggles (SET-01, SET-02)', () => {
     expect(settingsSource).toMatch(/\$scope\.settings\[\$scope\.settingsKeys\.CAPTCHA_PRIVACY_MODE\.key\]\s*=\s*\$scope\.settingsKeys\[\$scope\.settingsKeys\.CAPTCHA_PRIVACY_MODE\.key\]\.defaultValue/);
   });
 
+  it('templateCache contains RESOLVE_IN_BROWSER checkbox with correct ng-model', () => {
+    expect(source).toMatch(/id=.*resolve_in_browser/);
+    expect(source).toMatch(/ng-model=.*settingsKeys\.RESOLVE_IN_BROWSER\.key/);
+  });
+
 });

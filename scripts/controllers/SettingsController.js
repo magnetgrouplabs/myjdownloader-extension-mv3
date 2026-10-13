@@ -91,6 +91,7 @@ angular.module('myjdWebextensionApp')
         $scope.settings[$scope.settingsKeys.COUNTDOWN_VALUE.key] = $scope.settingsKeys[$scope.settingsKeys.COUNTDOWN_VALUE.key].defaultValue;
         $scope.settings[$scope.settingsKeys.CLICKNLOAD_ACTIVE.key] = $scope.settingsKeys[$scope.settingsKeys.CLICKNLOAD_ACTIVE.key].defaultValue;
         $scope.settings[$scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key] = $scope.settingsKeys[$scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key].defaultValue;
+        $scope.settings[$scope.settingsKeys.RESOLVE_IN_BROWSER.key] = $scope.settingsKeys[$scope.settingsKeys.RESOLVE_IN_BROWSER.key].defaultValue;
 
         initSettings();
 
@@ -190,6 +191,7 @@ angular.module('myjdWebextensionApp')
             "settings." + $scope.settingsKeys.DEFAULT_AUTOEXTRACT.key,
             "settings." + $scope.settingsKeys.CAPTCHA_PRIVACY_MODE.key,
             "settings." + $scope.settingsKeys.CLICKNLOAD_ACTIVE.key,
+            "settings." + $scope.settingsKeys.RESOLVE_IN_BROWSER.key,
             "settings." + $scope.settingsKeys.DEFAULT_OVERWRITE_PACKAGIZER.key],
             function (newValues, oldValues, scope) {
                 if (!$scope.isAfterInit) return;
@@ -226,6 +228,11 @@ angular.module('myjdWebextensionApp')
                 changes.push({
                     key: $scope.settingsKeys.CLICKNLOAD_ACTIVE.key,
                     value: scope.settings[$scope.settingsKeys.CLICKNLOAD_ACTIVE.key]
+                });
+
+                changes.push({
+                    key: $scope.settingsKeys.RESOLVE_IN_BROWSER.key,
+                    value: scope.settings[$scope.settingsKeys.RESOLVE_IN_BROWSER.key]
                 });
 
                 if (scope.settings[$scope.settingsKeys.COUNTDOWN_VALUE.key] === undefined || (scope.settings[$scope.settingsKeys.COUNTDOWN_VALUE.key] < 1)) {
