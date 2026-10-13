@@ -130,6 +130,18 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "            </small>\n" +
     "        </p>\n" +
     "    </div>\n" +
+    "    <div class=\"inlineSettingsContainer\" id=\"resolveInBrowserSettings\">\n" +
+    "        <label for=\"resolve_in_browser\">\n" +
+    "            <input type=\"checkbox\" id=\"resolve_in_browser\" ng-model=\"settings[settingsKeys.RESOLVE_IN_BROWSER.key]\" />{{'ui_settings_resolve_in_browser' |\n" +
+    "            translate}}</label>\n" +
+    "\n" +
+    "        <div style=\"clear:both;\"></div>\n" +
+    "        <p class=\"description\">\n" +
+    "            <small>\n" +
+    "                {{'ui_settings_resolve_in_browser_description' | translate}}\n" +
+    "            </small>\n" +
+    "        </p>\n" +
+    "    </div>\n" +
     "    <div class=\"inlineSettingsContainer\" id=\"clipboardSettings\" ng-if=\"!clipboardHistorySupported\">\n" +
     "        <label for=\"clipboard_observer_running\">\n" +
     "            <input type=\"checkbox\" id=\"clipboard_observer_running\"\n" +
@@ -457,6 +469,11 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "            {{'ui_add_links_failed_to_send' | translate}}\n" +
     "            <p ng-if=\"state.errorMessage\">Error: {{state.errorMessage}}</p>\n" +
     "        </div>\n" +
+    "        <div ng-if=\"state.resolveWarnings.length > 0\" class=\"errorMessage\" id=\"resolveWarnings\"\n" +
+    "             style=\"background-color: #fff3cd; color: #664d03; border-color: #ffecb5;\">\n" +
+    "            <p ng-repeat=\"warning in state.resolveWarnings track by $index\">{{resolveWarningText(warning)}}</p>\n" +
+    "            <p><a href=\"\" style=\"color: #664d03; text-decoration: underline;\" ng-click=\"closeAfterResolveWarnings()\">{{'ui_add_links_resolve_close' | translate}}</a></p>\n" +
+    "        </div>\n" +
     "        <div ng-if=\"(state.successMessage && state.successMessage.length > 0) === true\"\n" +
     "             class=\"successMessage\"\n" +
     "             id=\"successMessage\">{{state.successMessage}}\n" +
@@ -464,6 +481,9 @@ angular.module('myjdWebextensionApp').run(['$templateCache', function($templateC
     "        <div ng-if=\"state.loading\" class=\"toolbarLoadingContainer\">\n" +
     "            <div class=\"loader\"></div>\n" +
     "            <div class=\"loadingMessage\"><b>{{'ui_add_links_loading' | translate}}</b></div>\n" +
+    "        </div>\n" +
+    "        <div ng-if=\"state.resolving\" class=\"toolbarLoadingContainer\" id=\"resolvingMessage\">\n" +
+    "            <div class=\"loadingMessage\"><i class=\"fa fa-spinner fa-pulse\" aria-hidden=\"true\"></i>&nbsp;{{resolvingText()}}</div>\n" +
     "        </div>\n" +
     "        <div class=\"clearfix\"></div>\n" +
     "        <div id=\"sendLinkProperiesContainer\" ng-if=\"devices\">\n" +

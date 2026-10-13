@@ -10,6 +10,13 @@ const STORAGE_KEYS = {
  DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
 };
 
+// Resolvers live in scripts/resolvers/. A missing file must never kill the worker.
+try {
+ importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js');
+} catch (e) {
+ console.error('Background: host resolver scripts failed to load:', e);
+}
+
 // Clipboard observer
 // A copy in a page arrives as "new-copy-event"; the selection itself comes
 // back a moment later as "new-selection", the same action the right-click
@@ -733,6 +740,366 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 
 // ============================================================
+// Resolve-in-browser: turn a host's landing-page link into the direct file URL
+// ============================================================
+const RESOLVED_CACHE_KEY = 'myjd_resolved_links';
+const RESOLVE_MAX_TTL_MS = 2.5 * 60 * 60 * 1000;
+const RESOLVE_FETCH_TIMEOUT_MS = 10000;
+const RESOLVE_TAB_TIMEOUT_MS = 25000;
+const RESOLVE_CHALLENGE_TIMEOUT_MS = 150000;
+const RESOLVE_KEEPALIVE_MS = 20000;
+const RESOLVE_POLL_MS = 500;
+
+// Worker lifetime: the worker is stopped after 30 s without an event or extension
+// API call, and a single request that takes longer than 5 minutes is also stopped
+// ("Events and calls to extension APIs reset these timers"; the page does not
+// recommend a keepalive technique and says to design for termination).
+// A resolve can wait up to 150 s, so while one is pending a cheap extension API call
+// (storage.session.get) runs every 20 s. The tabs.onUpdated events count too, and
+// the 150 s wait stays under the 5 minute limit.
+// https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle
+let resolveKeepAliveCount = 0;
+let resolveKeepAliveTimer = null;
+function startResolveKeepAlive() {
+ resolveKeepAliveCount++;
+ if (resolveKeepAliveTimer === null) {
+  resolveKeepAliveTimer = setInterval(function() {
+   try { chrome.storage.session.get(RESOLVED_CACHE_KEY).catch(function() {}); } catch (e) { /* ignore */ }
+  }, RESOLVE_KEEPALIVE_MS);
+ }
+}
+function stopResolveKeepAlive() {
+ resolveKeepAliveCount = Math.max(0, resolveKeepAliveCount - 1);
+ if (resolveKeepAliveCount === 0 && resolveKeepAliveTimer !== null) {
+  clearInterval(resolveKeepAliveTimer);
+  resolveKeepAliveTimer = null;
+ }
+}
+
+// Cache in chrome.storage.session: in memory, cleared on browser restart or extension
+// reload, 10 MB limit, not exposed to content scripts by default.
+// https://developer.chrome.com/docs/extensions/reference/api/storage
+async function readResolvedCache() {
+ try {
+  const r = await chrome.storage.session.get(RESOLVED_CACHE_KEY);
+  const c = r && r[RESOLVED_CACHE_KEY];
+  return (c && typeof c === 'object') ? c : {};
+ } catch (e) {
+  return {};
+ }
+}
+
+async function writeResolvedCache(cache) {
+ try {
+  await chrome.storage.session.set({ [RESOLVED_CACHE_KEY]: cache });
+ } catch (e) {
+  console.error('Background: resolved link cache write failed:', e);
+ }
+}
+
+function capExpiry(expiresAt) {
+ const cap = Date.now() + RESOLVE_MAX_TTL_MS;
+ return (typeof expiresAt === 'number' && isFinite(expiresAt)) ? Math.min(expiresAt, cap) : cap;
+}
+
+// Fast path: plain fetch with the user's cookies. Returns {url, expiresAt} on success
+// or null (reason logged) so the caller falls through to the tab path.
+async function resolveViaFetch(originalUrl, resolver) {
+ const Mod = globalThis.MyjdHostResolvers;
+ try {
+  const resp = await fetch(originalUrl, {
+   credentials: 'include',
+   redirect: 'follow',
+   signal: AbortSignal.timeout(RESOLVE_FETCH_TIMEOUT_MS)
+  });
+  const mitigated = resp.headers && typeof resp.headers.get === 'function' && resp.headers.get('cf-mitigated');
+  if (mitigated === 'challenge') {
+   console.log('Background: resolve fetch hit a challenge header for', originalUrl, '-> tab');
+   return null;
+  }
+  if (!resp.ok) {
+   console.log('Background: resolve fetch status', resp.status, 'for', originalUrl, '-> tab');
+   return null;
+  }
+  const text = await resp.text();
+  if (Mod.isChallengePage(text)) {
+   console.log('Background: resolve fetch got a challenge page for', originalUrl, '-> tab');
+   return null;
+  }
+  const out = resolver.extractFromHtml(text, originalUrl);
+  if (out && out.url) return out;
+  console.log('Background: resolve fetch extractor said', out && out.error, 'for', originalUrl, '-> tab');
+  return null;
+ } catch (e) {
+  console.log('Background: resolve fetch failed for', originalUrl, '(' + (e && e.name) + ') -> tab');
+  return null;
+ }
+}
+
+// Tab path. One background tab (tabs.create active:false: "Does not affect whether the
+// window is focused"), https://developer.chrome.com/docs/extensions/reference/api/tabs
+// Waits for tabs.onUpdated status 'complete', reads the DOM with scripting.executeScript
+// (isolated world is the default; needs the scripting permission plus host access, which
+// <all_urls> gives), https://developer.chrome.com/docs/extensions/reference/api/scripting
+// The Chrome docs do not say whether executeScript works on a tab that is not active;
+// a failure surfaces as the 'tab-error' code. Resolves to {url, expiresAt} or {error}.
+function resolveViaTab(originalUrl, resolver) {
+ const Mod = globalThis.MyjdHostResolvers;
+ return new Promise(function(resolve) {
+  let tabId = null;
+  let done = false;
+  let closedByUser = false;
+  let challengeShown = false;
+  let sawComplete = false;
+  let timer = null;
+  let pollTimer = null;
+  let lastError = null;
+  let chain = Promise.resolve();
+
+  function cleanup() {
+   if (timer !== null) { clearTimeout(timer); timer = null; }
+   if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+   try { chrome.tabs.onUpdated.removeListener(onUpdated); } catch (e) { /* ignore */ }
+   try { chrome.tabs.onRemoved.removeListener(onRemoved); } catch (e) { /* ignore */ }
+  }
+
+  function finish(result) {
+   if (done) return;
+   done = true;
+   cleanup();
+   if (tabId !== null && !closedByUser) {
+    try {
+     chrome.tabs.remove(tabId, function() {
+      if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+     });
+    } catch (e) { /* ignore */ }
+   }
+   resolve(result);
+  }
+
+  function armTimer(ms, code) {
+   if (timer !== null) clearTimeout(timer);
+   // A page that loaded but never produced a link reports the extractor's error.
+   timer = setTimeout(function() { finish({ error: lastError || code }); }, ms);
+  }
+
+  // Some hosts inject the link after the load event, so an extractor miss on a
+  // normal page is retried every 500 ms until it succeeds or the timer fires.
+  function schedulePoll() {
+   if (done) return;
+   if (pollTimer !== null) clearTimeout(pollTimer);
+   pollTimer = setTimeout(function() {
+    pollTimer = null;
+    if (!done) chain = chain.then(inspect);
+   }, RESOLVE_POLL_MS);
+  }
+
+  async function inspect() {
+   if (done) return;
+   if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+   let page;
+   try {
+    const res = await chrome.scripting.executeScript({
+     target: { tabId: tabId },
+     func: function() { return { title: document.title, html: document.documentElement.outerHTML }; }
+    });
+    page = res && res[0] && res[0].result;
+   } catch (e) {
+    console.log('Background: resolve executeScript failed for', originalUrl, e && e.message);
+    finish({ error: 'tab-error' });
+    return;
+   }
+   if (done) return;
+   if (!page || typeof page.html !== 'string') {
+    finish({ error: 'tab-error' });
+    return;
+   }
+   if (Mod.isChallengePage(page.html)) {
+    lastError = null;
+    if (!challengeShown) {
+     challengeShown = true;
+     console.log('Background: resolve challenge page for', originalUrl, '-> asking the user');
+     armTimer(RESOLVE_CHALLENGE_TIMEOUT_MS, 'challenge-timeout');
+     try {
+      chrome.tabs.update(tabId, { active: true }, function() {
+       if (chrome.runtime.lastError) { /* ignore */ }
+      });
+     } catch (e) { /* ignore */ }
+    }
+    schedulePoll(); // also catches a challenge solved in place, plus the next 'complete'
+    return;
+   }
+   const out = resolver.extractFromHtml(page.html, originalUrl);
+   if (out && out.url) {
+    finish({ url: out.url, expiresAt: out.expiresAt });
+    return;
+   }
+   lastError = (out && out.error) || 'not-found';
+   schedulePoll();
+  }
+
+  function onUpdated(id, changeInfo) {
+   if (id !== tabId || done || !changeInfo || changeInfo.status !== 'complete') return;
+   sawComplete = true;
+   chain = chain.then(inspect);
+  }
+
+  function onRemoved(id) {
+   if (id !== tabId || done) return;
+   closedByUser = true;
+   finish({ error: 'tab-closed' });
+  }
+
+  (async function() {
+   try {
+    const tab = await chrome.tabs.create({ url: originalUrl, active: false });
+    tabId = tab && tab.id;
+    if (tabId === undefined || tabId === null) throw new Error('no tab id');
+   } catch (e) {
+    console.log('Background: resolve tab create failed for', originalUrl, e && e.message);
+    tabId = null;
+    finish({ error: 'tab-error' });
+    return;
+   }
+   chrome.tabs.onUpdated.addListener(onUpdated);
+   chrome.tabs.onRemoved.addListener(onRemoved);
+   armTimer(RESOLVE_TAB_TIMEOUT_MS, 'timeout');
+   // Safety net: the tab may have reached 'complete' before the listener existed
+   // (tabs.create resolves, then we attach), so ask once for its current status.
+   try {
+    const current = await chrome.tabs.get(tabId);
+    if (!done && !sawComplete && current && current.status === 'complete') {
+     sawComplete = true;
+     chain = chain.then(inspect);
+    }
+   } catch (e) {
+    console.log('Background: resolve tabs.get failed for', originalUrl, e && e.message);
+   }
+  })();
+ });
+}
+
+// originalUrl is what the page contained (cache and result key); targetUrl is the
+// resolver host page that is actually fetched or opened (same string for plain links).
+async function resolveOneLink(originalUrl, targetUrl, resolver, cache) {
+ const hit = cache[originalUrl];
+ if (hit && typeof hit.expiresAt === 'number' && hit.expiresAt > Date.now() && hit.url) {
+  return { url: hit.url, resolver: resolver.id };
+ }
+ if (hit) { delete cache[originalUrl]; await writeResolvedCache(cache); }
+
+ let out = await resolveViaFetch(targetUrl, resolver);
+ if (!out) out = await resolveViaTab(targetUrl, resolver);
+ if (out && out.url) {
+  cache[originalUrl] = { url: out.url, expiresAt: capExpiry(out.expiresAt) };
+  await writeResolvedCache(cache);
+  return { url: out.url, resolver: resolver.id };
+ }
+ return { error: (out && out.error) || 'not-found', resolver: resolver.id };
+}
+
+// Links often arrive wrapped by an interstitial (redirect page). Static decoding is
+// tried first by Mod.resolveTarget; this is the network fallback for a URL that looks
+// like a wrapper. One fetch, no tab. Returns {url, resolver} or null (reason logged).
+function safeResolveTarget(Mod, url) {
+ try {
+  if (typeof Mod.resolveTarget === 'function') return Mod.resolveTarget(url) || null;
+  const r = Mod.findResolver(url);
+  return r ? { url: url, resolver: r } : null;
+ } catch (e) {
+  return null;
+ }
+}
+
+async function findInterstitialTarget(Mod, u) {
+ let resp;
+ try {
+  resp = await fetch(u, {
+   credentials: 'include',
+   redirect: 'follow',
+   signal: AbortSignal.timeout(RESOLVE_FETCH_TIMEOUT_MS)
+  });
+ } catch (e) {
+  console.log('Background: interstitial fetch failed for', u, '(' + (e && e.name) + '), left unchanged');
+  return null;
+ }
+ // The final URL after redirects, checked even on a non-ok or challenged answer:
+ // landing on a resolver host page is enough, the resolver's own path handles the rest.
+ if (resp.url && resp.url !== u) {
+  const viaRedirect = safeResolveTarget(Mod, resp.url);
+  if (viaRedirect) return viaRedirect;
+ }
+ const mitigated = resp.headers && typeof resp.headers.get === 'function' && resp.headers.get('cf-mitigated');
+ if (mitigated === 'challenge' || !resp.ok) {
+  console.log('Background: interstitial fetch blocked for', u, '(status', resp.status + '), left unchanged');
+  return null;
+ }
+ let text;
+ try { text = await resp.text(); } catch (e) { return null; }
+ if (Mod.isChallengePage(text)) {
+  console.log('Background: interstitial returned a challenge page for', u, ', left unchanged');
+  return null;
+ }
+ // Meta refresh, JS redirects and "Proceed" buttons all carry the target as an absolute URL.
+ const cleaned = text.split('\\/').join('/').split('&amp;').join('&').split('\\u0026').join('&');
+ const found = cleaned.match(/https?:\/\/[^\s"'<>\\)]+/g) || [];
+ for (const candidate of found) {
+  const hit = safeResolveTarget(Mod, candidate);
+  if (hit) return hit;
+ }
+ console.log('Background: no resolvable link found in interstitial', u, ', left unchanged');
+ return null;
+}
+
+// Requests are chained so that never more than one resolve tab is open.
+let resolveQueue = Promise.resolve();
+function resolveLinks(urls) {
+ const job = resolveQueue.then(async function() {
+  startResolveKeepAlive();
+  try {
+   const results = {};
+   const Mod = globalThis.MyjdHostResolvers;
+   const list = Array.isArray(urls) ? urls.filter(function(u) { return typeof u === 'string'; }) : [];
+   if (!Mod || typeof Mod.findResolver !== 'function') {
+    list.forEach(function(u) { results[u] = { error: 'no-resolver-module', resolver: null }; });
+    return { results: results };
+   }
+   const cache = await readResolvedCache();
+   for (const u of list) {
+    let target = safeResolveTarget(Mod, u);
+    if (!target) {
+     let wrapped = false;
+     try { wrapped = typeof Mod.looksLikeInterstitial === 'function' && Mod.looksLikeInterstitial(u); } catch (e) { wrapped = false; }
+     if (!wrapped) continue;
+     try {
+      target = await findInterstitialTarget(Mod, u);
+     } catch (e) {
+      console.log('Background: interstitial lookup failed for', u, e && e.message);
+      target = null;
+     }
+     if (!target) continue;
+    }
+    const resolver = target.resolver;
+    try {
+     const r = await resolveOneLink(u, target.url, resolver, cache);
+     if (target.url !== u) r.target = target.url;
+     results[u] = r;
+    } catch (e) {
+     console.error('Background: resolve failed for', u, e);
+     results[u] = { error: 'tab-error', resolver: resolver.id };
+     if (target.url !== u) results[u].target = target.url;
+    }
+   }
+   return { results: results };
+  } finally {
+   stopResolveKeepAlive();
+  }
+ });
+ resolveQueue = job.catch(function() {});
+ return job;
+}
+
+// ============================================================
 // Message handler — central routing for popup, toolbar, content scripts
 // ============================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -1247,6 +1614,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
    console.log('Background: CAPTCHA skip captured (no JDownloader callback), type:', request.data.skipType);
   }
   sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // RESOLVE IN BROWSER: map landing-page links to direct file URLs (see resolveLinks).
+ if (action === "resolve-links") {
+  resolveLinks(request.data && request.data.urls).then(sendResponse, function(e) {
+   console.error('Background: resolve-links failed:', e);
+   sendResponse({ results: {}, error: String((e && e.message) || e) });
+  });
   return true;
  }
 

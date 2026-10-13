@@ -59,6 +59,8 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
         loggedIn: false,
         removeAfterSend: true,
         requestQueue: [],
+        resolving: null,
+        resolveWarnings: [],
       };
 
       $scope.selection = {};
@@ -751,6 +753,88 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
       }, 0);
     };
 
+    // Resolve in Browser: URLs that a host resolver module knows are opened in
+    // the browser first and the direct download link is sent instead.
+    function isResolveInBrowserOn() {
+      var key = storageService.settingsKeys.RESOLVE_IN_BROWSER.key;
+      var value = $scope.optionalDefaults[key];
+      if (value === undefined) {
+        value = storageService.settingsKeys.RESOLVE_IN_BROWSER.defaultValue;
+      }
+      return value === true;
+    }
+
+    // True when the resolver module statically recognises the URL (directly or
+    // through a query-embedded target). Falls back to findResolver for a
+    // module that predates resolveTarget.
+    function matchesResolverStatically(resolvers, url) {
+      if (typeof resolvers.resolveTarget === "function") {
+        return !!resolvers.resolveTarget(url);
+      }
+      return !!resolvers.findResolver(url);
+    }
+
+    function looksLikeInterstitial(resolvers, url) {
+      return (
+        typeof resolvers.looksLikeInterstitial === "function" &&
+        resolvers.looksLikeInterstitial(url) === true
+      );
+    }
+
+    function collectResolvableUrls(requests) {
+      var urls = [];
+      if (!isResolveInBrowserOn()) {
+        return urls;
+      }
+      var resolvers = window.MyjdHostResolvers;
+      if (!resolvers || typeof resolvers.findResolver !== "function") {
+        return urls;
+      }
+      $.each(requests || [], function (index, request) {
+        if (request.type !== "link" && request.type !== "text") {
+          return;
+        }
+        var content = request.content;
+        if (typeof content !== "string") {
+          return;
+        }
+        var trimmed = content.trim();
+        if (!/^https?:\/\/\S+$/i.test(trimmed)) {
+          return;
+        }
+        if (
+          (matchesResolverStatically(resolvers, trimmed) ||
+            looksLikeInterstitial(resolvers, trimmed)) &&
+          urls.indexOf(trimmed) === -1
+        ) {
+          urls.push(trimmed);
+        }
+      });
+      return urls;
+    }
+
+    $scope.resolvingText = function () {
+      var count = $scope.state.resolving ? $scope.state.resolving.count : 0;
+      return chrome.i18n.getMessage("ui_add_links_resolving", [String(count)]);
+    };
+
+    $scope.resolveWarningText = function (warning) {
+      return chrome.i18n.getMessage("ui_add_links_resolve_failed", [
+        warning.url,
+        warning.reason,
+      ]);
+    };
+
+    // Same close the normal success path performs, run on the user's click
+    // when a resolve warning kept the dialog open. The ids are the ones the
+    // normal path would have passed, so remove-after-send still works.
+    $scope.closeAfterResolveWarnings = function () {
+      var idsToRemove = $scope.state.resolveIdsToRemove || [];
+      $scope.state.resolveWarnings = [];
+      $scope.state.resolveIdsToRemove = [];
+      successClose(idsToRemove);
+    };
+
     $scope.send = function (device) {
       if (device !== undefined) {
         $scope.selection.device = device;
@@ -785,10 +869,17 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
           });
         });
       } else {
+        var resolveUrls = collectResolvableUrls($scope.requests);
         $timeout(function () {
           $scope.state.sending.state = $scope.requestStates.RUNNING;
+          $scope.state.resolveWarnings = [];
+          $scope.state.resolveIdsToRemove = [];
+          if (resolveUrls.length > 0) {
+            $scope.state.resolving = { count: resolveUrls.length };
+          }
         }, 0);
 
+        var sendResolved = function (resolved, resolveWarnings) {
         var addLinksQueries = [];
 
         $.each($scope.requests, function (index, request) {
@@ -929,7 +1020,12 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
             if (request.previewText) {
               query.links = request.previewText + "\n\n";
             }
-            query.links += request.content;
+            var contentKey =
+              typeof request.content === "string" ? request.content.trim() : "";
+            query.links +=
+              resolved[contentKey] !== undefined
+                ? resolved[contentKey]
+                : request.content;
 
             if (request.parent.url !== undefined) {
               query.sourceUrl = request.parent.url;
@@ -948,12 +1044,67 @@ angular.module("myjdWebextensionApp").controller("AddLinksCtrl", [
                 });
               }
 
+              if (resolveWarnings.length > 0) {
+                // Keep the dialog open so the warning can be read; the Close
+                // link in the panel performs the close with these ids.
+                $timeout(function () {
+                  $scope.state.resolveIdsToRemove = idsToRemove;
+                  $scope.state.resolveWarnings = resolveWarnings;
+                  $scope.state.sending.state = $scope.requestStates.IDLE;
+                }, 0);
+                return;
+              }
+
               successClose(idsToRemove);
             };
 
             sendAddLinkQueries(addLinksQueries, donecallback);
           }
         });
+        };
+
+        if (resolveUrls.length === 0) {
+          sendResolved({}, []);
+          return;
+        }
+
+        var describeResolveError = function (entry) {
+          return entry && entry.error ? String(entry.error) : "no-reply";
+        };
+
+        BackgroundScriptService.resolveLinks(resolveUrls).then(
+          function (reply) {
+            var results = (reply && reply.results) || {};
+            var resolved = {};
+            var warnings = [];
+            $.each(resolveUrls, function (index, url) {
+              var entry = results[url];
+              if (entry && entry.url && !entry.error) {
+                resolved[url] = entry.url;
+              } else if (
+                (entry && entry.error) ||
+                matchesResolverStatically(window.MyjdHostResolvers, url)
+              ) {
+                warnings.push({ url: url, reason: describeResolveError(entry) });
+              }
+              // else: an interstitial-looking URL the background found no
+              // resolver host behind is just a normal link, not a warning.
+            });
+            $scope.state.resolving = null;
+            if (warnings.length > 0) {
+              $scope.state.sending.log = JSON.stringify(warnings);
+            }
+            sendResolved(resolved, warnings);
+          },
+          function () {
+            var warnings = resolveUrls.map(function (url) {
+              return { url: url, reason: "no-reply" };
+            });
+            $scope.state.resolving = null;
+            $scope.state.sending.log = JSON.stringify(warnings);
+            sendResolved({}, warnings);
+          }
+        );
       }
     };
 
