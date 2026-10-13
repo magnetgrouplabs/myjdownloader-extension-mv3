@@ -6,8 +6,48 @@ console.log("Background: Starting MyJDownloader MV3...");
 const STORAGE_KEYS = {
  CLICKNLOAD_ACTIVE: 'CLICKNLOAD_ACTIVE',
  CONTEXT_MENU_SIMPLE: 'CONTEXT_MENU_SIMPLE',
+ CLIPBOARD_OBSERVER: 'CLIPBOARD_OBSERVER',
  DEFAULT_PREFERRED_JD: 'DEFAULT_PREFERRED_JD'
 };
+
+// Resolvers live in scripts/resolvers/. A missing file must never kill the worker.
+try {
+ importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js');
+} catch (e) {
+ console.error('Background: host resolver scripts failed to load:', e);
+}
+
+// Clipboard observer
+// A copy in a page arrives as "new-copy-event"; the selection itself comes
+// back a moment later as "new-selection", the same action the right-click
+// "download selection" round trip uses. The two paths must behave
+// differently (a copy only opens the toolbar for a link), so the tab that
+// asked because of a copy is recorded here and consumed when its selection
+// arrives. Nothing is asked of the content script, so it stays unchanged.
+const copySelectionRequests = new Map();
+const COPY_SELECTION_WINDOW_MS = 5000;
+
+function markCopySelectionRequest(tabId) {
+ copySelectionRequests.set(tabId, Date.now());
+}
+
+// True when this tab's selection was asked for by a copy and not by the
+// context menu. Consumes the mark either way, and treats an old mark as
+// absent so a stale entry cannot gate a later right click.
+function takeCopySelectionRequest(tabId) {
+ const askedAt = copySelectionRequests.get(tabId);
+ copySelectionRequests.delete(tabId);
+ return typeof askedAt === 'number' && (Date.now() - askedAt) <= COPY_SELECTION_WINDOW_MS;
+}
+
+// Conservative link detector for the copy path: an http, https or ftp URL,
+// a www. prefixed host, or a bare host with a two to twenty-four letter TLD
+// followed by a path. A plain sentence must not match.
+const LINK_PATTERN = /\b(?:https?|ftp):\/\/\S+|\bwww\.[a-z0-9-]+\.[a-z]{2,24}\b|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\/\S*/i;
+
+function containsLink(value) {
+ return typeof value === 'string' && LINK_PATTERN.test(value);
+}
 
 const DEVICE_TYPES = {
  ASK_EVERY_TIME: { id: 'AskEveryTimeDevice', name: 'Ask every time' },
@@ -17,7 +57,8 @@ const DEVICE_TYPES = {
 let state = {
  isConnected: false,
  devices: [],
- selectedDevice: null
+ selectedDevice: null,
+ updateAvailable: false
 };
 
 let settings = {};
@@ -87,6 +128,26 @@ function removeCspStrippingRule(tabId) {
  }).catch(function(err) {
   console.error('Background: Failed to remove CSP stripping rule for tab', tabId, err);
  });
+}
+
+// Restrict chrome.scripting-driven script loading to the known CAPTCHA
+// provider API endpoints, so myjd-captcha-load-api can't be used as a
+// general-purpose remote-script loader for an arbitrary tab. Host and path
+// are checked independently, not as a single (host, path) pair, so e.g.
+// https://www.google.com/1/api.js also passes; both allowed hosts only ever
+// serve their own real path in practice, so this is harmless, just laxer
+// than the "allowlist" name might suggest.
+function isCaptchaApiScript(url) {
+ if (!url || typeof url !== 'string') return false;
+ try {
+  var parsed = new URL(url);
+  if (parsed.protocol !== 'https:') return false;
+  if (parsed.pathname !== '/1/api.js' && parsed.pathname !== '/recaptcha/api.js') return false;
+  var allowedHosts = ['hcaptcha.com', 'www.google.com'];
+  return allowedHosts.indexOf(parsed.hostname) !== -1;
+ } catch (err) {
+  return false;
+ }
 }
 
 async function addLinkToRequestQueue(link, tab) {
@@ -222,9 +283,127 @@ async function sendToOffscreen(action, data = {}) {
 // Badge and settings
 // ============================================================
 function updateBadge() {
+ // Connection problems ("!") take precedence over the update hint.
  let text = state.isConnected ? "" : "!";
+ let color = "#f3d435";
+ if (text === "" && state.updateAvailable) {
+  text = "NEW";
+  color = "#4a90d9";
+ }
  chrome.action.setBadgeText({ text: text });
- chrome.action.setBadgeBackgroundColor({ color: "#f3d435" });
+ chrome.action.setBadgeBackgroundColor({ color: color });
+}
+
+// ============================================================
+// Update notifier
+// ============================================================
+//
+// This extension is installed unpacked (Load unpacked from a release zip), so
+// Chrome's auto-update never runs and users have no way to learn that a new
+// release exists. A daily alarm asks the GitHub releases API for the latest
+// tag and, when it is newer than the running version, stores the release info
+// and shows a "NEW" badge plus a banner in the settings view. Only DATA is
+// fetched — no code is downloaded or executed (MV3 remotely-hosted-code
+// policy). The user still updates manually from the releases page.
+const UPDATE_CHECK_ALARM = 'updateCheck';
+const UPDATE_STORAGE_KEY = 'myjd_update_available';
+const RELEASES_API = 'https://api.github.com/repos/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+const RELEASES_PAGE = 'https://github.com/magnetgrouplabs/myjdownloader-extension-mv3/releases/latest';
+
+// Numeric per-component compare so zero-padded tags ("2026.07.20") and the
+// 4th-component re-release scheme ("2026.7.13.1" > "2026.7.13") both order
+// correctly. Returns > 0 when a is newer than b.
+//
+// This is only a FALLBACK for ordering releases. It cannot be trusted on its
+// own: the third component changed meaning on 2026-07-21, from the day of the
+// month to a per-month release counter. Numerically 2026.7.4 < 2026.7.13.1,
+// but 2026.7.4 (the 4th July release, published 2026-07-21) is in fact newer
+// than 2026.7.13.1 (published 2026-07-13). Ordering by publish date instead
+// is what makes the notifier correct across that discontinuity, and keeps it
+// correct if the scheme ever changes again. See isNewerRelease().
+function compareVersions(a, b) {
+ const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+ const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+ const len = Math.max(pa.length, pb.length);
+ for (let i = 0; i < len; i++) {
+  const d = (pa[i] || 0) - (pb[i] || 0);
+  if (d !== 0) return d;
+ }
+ return 0;
+}
+
+// buildMeta.json is written by the release workflow and ships inside the zip.
+// Its "timestamp" is when this build was cut, which is the only local value
+// that can be compared against a release's publish date. Cached because the
+// file never changes for the life of a build.
+let buildTimestampPromise = null;
+function getBuildTimestamp() {
+ if (!buildTimestampPromise) {
+  buildTimestampPromise = (async () => {
+   try {
+    const resp = await fetch(chrome.runtime.getURL('buildMeta.json'));
+    if (!resp.ok) return 0;
+    const meta = await resp.json();
+    const ts = Number(meta && meta.timestamp);
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+   } catch (e) {
+    // Dev checkout without a generated buildMeta.json.
+    return 0;
+   }
+  })();
+ }
+ return buildTimestampPromise;
+}
+
+// True when the given release is newer than the running build. Prefers publish
+// date over version numbers (see compareVersions), and only falls back to the
+// numeric compare when there is no usable timestamp on one side.
+async function isNewerRelease(version, publishedAt) {
+ const current = chrome.runtime.getManifest().version;
+ // Numeric equality, not string equality: Chrome strips leading zeros, so the
+ // tag "v2026.07.13.1" is the running "2026.7.13.1". Catching that here also
+ // keeps the date compare below from ever seeing the release it is running.
+ if (compareVersions(version, current) === 0) return false;
+ const releasedAt = typeof publishedAt === 'number' ? publishedAt : Date.parse(publishedAt || '');
+ const buildAt = await getBuildTimestamp();
+ if (buildAt > 0 && Number.isFinite(releasedAt) && releasedAt > 0) {
+  return releasedAt > buildAt;
+ }
+ return compareVersions(version, current) > 0;
+}
+
+async function checkForUpdate() {
+ try {
+  const resp = await fetch(RELEASES_API, {
+   headers: { 'Accept': 'application/vnd.github+json' }
+  });
+  if (!resp.ok) return null;
+  const release = await resp.json();
+  if (!release || typeof release.tag_name !== 'string') return null;
+  const latest = release.tag_name.replace(/^v/, '');
+  const publishedAt = Date.parse(release.published_at || '');
+  if (await isNewerRelease(latest, publishedAt)) {
+   const info = {
+    version: latest,
+    url: release.html_url || RELEASES_PAGE,
+    // Persisted so the restore path in initSettings() can re-apply the same
+    // date comparison instead of falling back to the numeric one.
+    publishedAt: Number.isFinite(publishedAt) ? publishedAt : null
+   };
+   await chrome.storage.local.set({ [UPDATE_STORAGE_KEY]: info });
+   state.updateAvailable = true;
+   updateBadge();
+   return info;
+  }
+  // Up to date (or the user updated in the meantime): clear any stale flag.
+  await chrome.storage.local.remove(UPDATE_STORAGE_KEY);
+  state.updateAvailable = false;
+  updateBadge();
+  return null;
+ } catch (e) {
+  // Offline or rate limited — stay quiet, the next alarm retries.
+  return null;
+ }
 }
 
 async function initSettings() {
@@ -232,10 +411,21 @@ async function initSettings() {
 
  settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE] = result[STORAGE_KEYS.CLICKNLOAD_ACTIVE] ?? true;
  settings[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] = result[STORAGE_KEYS.CONTEXT_MENU_SIMPLE] ?? true;
+ settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = result[STORAGE_KEYS.CLIPBOARD_OBSERVER] ?? false;
  settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = result[STORAGE_KEYS.DEFAULT_PREFERRED_JD] || DEVICE_TYPES.ASK_EVERY_TIME;
 
  if (settings[STORAGE_KEYS.CLICKNLOAD_ACTIVE]) {
   addCnlInterceptor();
+ }
+
+ // Restore the update hint across service-worker restarts; drop it once the
+ // running version has caught up with the stored one.
+ const upd = await chrome.storage.local.get(UPDATE_STORAGE_KEY);
+ const updInfo = upd[UPDATE_STORAGE_KEY];
+ if (updInfo && await isNewerRelease(updInfo.version, updInfo.publishedAt)) {
+  state.updateAvailable = true;
+ } else if (updInfo) {
+  chrome.storage.local.remove(UPDATE_STORAGE_KEY);
  }
 
  initMenuItems();
@@ -366,10 +556,32 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes[STORAGE_KEYS.CLICKNLOAD_ACTIVE].newValue) addCnlInterceptor();
   else removeCnlInterceptor();
  }
+ if (changes[STORAGE_KEYS.CLIPBOARD_OBSERVER]) {
+  // The popup and the keyboard shortcut both write this key, and the service
+  // worker may have been running with the old value since before either.
+  settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] = changes[STORAGE_KEYS.CLIPBOARD_OBSERVER].newValue;
+ }
  if (changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD]) {
   settings[STORAGE_KEYS.DEFAULT_PREFERRED_JD] = changes[STORAGE_KEYS.DEFAULT_PREFERRED_JD].newValue;
  }
 });
+
+// ============================================================
+// Keyboard shortcut: toggle the clipboard observer
+// ============================================================
+// manifest.json declares "toggle-clipboard-observer" (Ctrl+Shift+X). The new
+// value is written to chrome.storage.local, which the popup reads and the
+// listener above mirrors into settings[], so both contexts stay in step.
+// The guard keeps this harmless where chrome.commands is unavailable.
+if (chrome.commands && chrome.commands.onCommand) {
+ chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "toggle-clipboard-observer") return;
+  const current = await chrome.storage.local.get(STORAGE_KEYS.CLIPBOARD_OBSERVER);
+  const next = current[STORAGE_KEYS.CLIPBOARD_OBSERVER] !== true;
+  await chrome.storage.local.set({ [STORAGE_KEYS.CLIPBOARD_OBSERVER]: next });
+  console.log("Background: Clipboard observer toggled to", next);
+ });
+}
 
 // ============================================================
 // DeclarativeNetRequest for CNL
@@ -528,6 +740,366 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 
 // ============================================================
+// Resolve-in-browser: turn a host's landing-page link into the direct file URL
+// ============================================================
+const RESOLVED_CACHE_KEY = 'myjd_resolved_links';
+const RESOLVE_MAX_TTL_MS = 2.5 * 60 * 60 * 1000;
+const RESOLVE_FETCH_TIMEOUT_MS = 10000;
+const RESOLVE_TAB_TIMEOUT_MS = 25000;
+const RESOLVE_CHALLENGE_TIMEOUT_MS = 150000;
+const RESOLVE_KEEPALIVE_MS = 20000;
+const RESOLVE_POLL_MS = 500;
+
+// Worker lifetime: the worker is stopped after 30 s without an event or extension
+// API call, and a single request that takes longer than 5 minutes is also stopped
+// ("Events and calls to extension APIs reset these timers"; the page does not
+// recommend a keepalive technique and says to design for termination).
+// A resolve can wait up to 150 s, so while one is pending a cheap extension API call
+// (storage.session.get) runs every 20 s. The tabs.onUpdated events count too, and
+// the 150 s wait stays under the 5 minute limit.
+// https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle
+let resolveKeepAliveCount = 0;
+let resolveKeepAliveTimer = null;
+function startResolveKeepAlive() {
+ resolveKeepAliveCount++;
+ if (resolveKeepAliveTimer === null) {
+  resolveKeepAliveTimer = setInterval(function() {
+   try { chrome.storage.session.get(RESOLVED_CACHE_KEY).catch(function() {}); } catch (e) { /* ignore */ }
+  }, RESOLVE_KEEPALIVE_MS);
+ }
+}
+function stopResolveKeepAlive() {
+ resolveKeepAliveCount = Math.max(0, resolveKeepAliveCount - 1);
+ if (resolveKeepAliveCount === 0 && resolveKeepAliveTimer !== null) {
+  clearInterval(resolveKeepAliveTimer);
+  resolveKeepAliveTimer = null;
+ }
+}
+
+// Cache in chrome.storage.session: in memory, cleared on browser restart or extension
+// reload, 10 MB limit, not exposed to content scripts by default.
+// https://developer.chrome.com/docs/extensions/reference/api/storage
+async function readResolvedCache() {
+ try {
+  const r = await chrome.storage.session.get(RESOLVED_CACHE_KEY);
+  const c = r && r[RESOLVED_CACHE_KEY];
+  return (c && typeof c === 'object') ? c : {};
+ } catch (e) {
+  return {};
+ }
+}
+
+async function writeResolvedCache(cache) {
+ try {
+  await chrome.storage.session.set({ [RESOLVED_CACHE_KEY]: cache });
+ } catch (e) {
+  console.error('Background: resolved link cache write failed:', e);
+ }
+}
+
+function capExpiry(expiresAt) {
+ const cap = Date.now() + RESOLVE_MAX_TTL_MS;
+ return (typeof expiresAt === 'number' && isFinite(expiresAt)) ? Math.min(expiresAt, cap) : cap;
+}
+
+// Fast path: plain fetch with the user's cookies. Returns {url, expiresAt} on success
+// or null (reason logged) so the caller falls through to the tab path.
+async function resolveViaFetch(originalUrl, resolver) {
+ const Mod = globalThis.MyjdHostResolvers;
+ try {
+  const resp = await fetch(originalUrl, {
+   credentials: 'include',
+   redirect: 'follow',
+   signal: AbortSignal.timeout(RESOLVE_FETCH_TIMEOUT_MS)
+  });
+  const mitigated = resp.headers && typeof resp.headers.get === 'function' && resp.headers.get('cf-mitigated');
+  if (mitigated === 'challenge') {
+   console.log('Background: resolve fetch hit a challenge header for', originalUrl, '-> tab');
+   return null;
+  }
+  if (!resp.ok) {
+   console.log('Background: resolve fetch status', resp.status, 'for', originalUrl, '-> tab');
+   return null;
+  }
+  const text = await resp.text();
+  if (Mod.isChallengePage(text)) {
+   console.log('Background: resolve fetch got a challenge page for', originalUrl, '-> tab');
+   return null;
+  }
+  const out = resolver.extractFromHtml(text, originalUrl);
+  if (out && out.url) return out;
+  console.log('Background: resolve fetch extractor said', out && out.error, 'for', originalUrl, '-> tab');
+  return null;
+ } catch (e) {
+  console.log('Background: resolve fetch failed for', originalUrl, '(' + (e && e.name) + ') -> tab');
+  return null;
+ }
+}
+
+// Tab path. One background tab (tabs.create active:false: "Does not affect whether the
+// window is focused"), https://developer.chrome.com/docs/extensions/reference/api/tabs
+// Waits for tabs.onUpdated status 'complete', reads the DOM with scripting.executeScript
+// (isolated world is the default; needs the scripting permission plus host access, which
+// <all_urls> gives), https://developer.chrome.com/docs/extensions/reference/api/scripting
+// The Chrome docs do not say whether executeScript works on a tab that is not active;
+// a failure surfaces as the 'tab-error' code. Resolves to {url, expiresAt} or {error}.
+function resolveViaTab(originalUrl, resolver) {
+ const Mod = globalThis.MyjdHostResolvers;
+ return new Promise(function(resolve) {
+  let tabId = null;
+  let done = false;
+  let closedByUser = false;
+  let challengeShown = false;
+  let sawComplete = false;
+  let timer = null;
+  let pollTimer = null;
+  let lastError = null;
+  let chain = Promise.resolve();
+
+  function cleanup() {
+   if (timer !== null) { clearTimeout(timer); timer = null; }
+   if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+   try { chrome.tabs.onUpdated.removeListener(onUpdated); } catch (e) { /* ignore */ }
+   try { chrome.tabs.onRemoved.removeListener(onRemoved); } catch (e) { /* ignore */ }
+  }
+
+  function finish(result) {
+   if (done) return;
+   done = true;
+   cleanup();
+   if (tabId !== null && !closedByUser) {
+    try {
+     chrome.tabs.remove(tabId, function() {
+      if (chrome.runtime.lastError) { /* ignore - tab may already be closed */ }
+     });
+    } catch (e) { /* ignore */ }
+   }
+   resolve(result);
+  }
+
+  function armTimer(ms, code) {
+   if (timer !== null) clearTimeout(timer);
+   // A page that loaded but never produced a link reports the extractor's error.
+   timer = setTimeout(function() { finish({ error: lastError || code }); }, ms);
+  }
+
+  // Some hosts inject the link after the load event, so an extractor miss on a
+  // normal page is retried every 500 ms until it succeeds or the timer fires.
+  function schedulePoll() {
+   if (done) return;
+   if (pollTimer !== null) clearTimeout(pollTimer);
+   pollTimer = setTimeout(function() {
+    pollTimer = null;
+    if (!done) chain = chain.then(inspect);
+   }, RESOLVE_POLL_MS);
+  }
+
+  async function inspect() {
+   if (done) return;
+   if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+   let page;
+   try {
+    const res = await chrome.scripting.executeScript({
+     target: { tabId: tabId },
+     func: function() { return { title: document.title, html: document.documentElement.outerHTML }; }
+    });
+    page = res && res[0] && res[0].result;
+   } catch (e) {
+    console.log('Background: resolve executeScript failed for', originalUrl, e && e.message);
+    finish({ error: 'tab-error' });
+    return;
+   }
+   if (done) return;
+   if (!page || typeof page.html !== 'string') {
+    finish({ error: 'tab-error' });
+    return;
+   }
+   if (Mod.isChallengePage(page.html)) {
+    lastError = null;
+    if (!challengeShown) {
+     challengeShown = true;
+     console.log('Background: resolve challenge page for', originalUrl, '-> asking the user');
+     armTimer(RESOLVE_CHALLENGE_TIMEOUT_MS, 'challenge-timeout');
+     try {
+      chrome.tabs.update(tabId, { active: true }, function() {
+       if (chrome.runtime.lastError) { /* ignore */ }
+      });
+     } catch (e) { /* ignore */ }
+    }
+    schedulePoll(); // also catches a challenge solved in place, plus the next 'complete'
+    return;
+   }
+   const out = resolver.extractFromHtml(page.html, originalUrl);
+   if (out && out.url) {
+    finish({ url: out.url, expiresAt: out.expiresAt });
+    return;
+   }
+   lastError = (out && out.error) || 'not-found';
+   schedulePoll();
+  }
+
+  function onUpdated(id, changeInfo) {
+   if (id !== tabId || done || !changeInfo || changeInfo.status !== 'complete') return;
+   sawComplete = true;
+   chain = chain.then(inspect);
+  }
+
+  function onRemoved(id) {
+   if (id !== tabId || done) return;
+   closedByUser = true;
+   finish({ error: 'tab-closed' });
+  }
+
+  (async function() {
+   try {
+    const tab = await chrome.tabs.create({ url: originalUrl, active: false });
+    tabId = tab && tab.id;
+    if (tabId === undefined || tabId === null) throw new Error('no tab id');
+   } catch (e) {
+    console.log('Background: resolve tab create failed for', originalUrl, e && e.message);
+    tabId = null;
+    finish({ error: 'tab-error' });
+    return;
+   }
+   chrome.tabs.onUpdated.addListener(onUpdated);
+   chrome.tabs.onRemoved.addListener(onRemoved);
+   armTimer(RESOLVE_TAB_TIMEOUT_MS, 'timeout');
+   // Safety net: the tab may have reached 'complete' before the listener existed
+   // (tabs.create resolves, then we attach), so ask once for its current status.
+   try {
+    const current = await chrome.tabs.get(tabId);
+    if (!done && !sawComplete && current && current.status === 'complete') {
+     sawComplete = true;
+     chain = chain.then(inspect);
+    }
+   } catch (e) {
+    console.log('Background: resolve tabs.get failed for', originalUrl, e && e.message);
+   }
+  })();
+ });
+}
+
+// originalUrl is what the page contained (cache and result key); targetUrl is the
+// resolver host page that is actually fetched or opened (same string for plain links).
+async function resolveOneLink(originalUrl, targetUrl, resolver, cache) {
+ const hit = cache[originalUrl];
+ if (hit && typeof hit.expiresAt === 'number' && hit.expiresAt > Date.now() && hit.url) {
+  return { url: hit.url, resolver: resolver.id };
+ }
+ if (hit) { delete cache[originalUrl]; await writeResolvedCache(cache); }
+
+ let out = await resolveViaFetch(targetUrl, resolver);
+ if (!out) out = await resolveViaTab(targetUrl, resolver);
+ if (out && out.url) {
+  cache[originalUrl] = { url: out.url, expiresAt: capExpiry(out.expiresAt) };
+  await writeResolvedCache(cache);
+  return { url: out.url, resolver: resolver.id };
+ }
+ return { error: (out && out.error) || 'not-found', resolver: resolver.id };
+}
+
+// Links often arrive wrapped by an interstitial (redirect page). Static decoding is
+// tried first by Mod.resolveTarget; this is the network fallback for a URL that looks
+// like a wrapper. One fetch, no tab. Returns {url, resolver} or null (reason logged).
+function safeResolveTarget(Mod, url) {
+ try {
+  if (typeof Mod.resolveTarget === 'function') return Mod.resolveTarget(url) || null;
+  const r = Mod.findResolver(url);
+  return r ? { url: url, resolver: r } : null;
+ } catch (e) {
+  return null;
+ }
+}
+
+async function findInterstitialTarget(Mod, u) {
+ let resp;
+ try {
+  resp = await fetch(u, {
+   credentials: 'include',
+   redirect: 'follow',
+   signal: AbortSignal.timeout(RESOLVE_FETCH_TIMEOUT_MS)
+  });
+ } catch (e) {
+  console.log('Background: interstitial fetch failed for', u, '(' + (e && e.name) + '), left unchanged');
+  return null;
+ }
+ // The final URL after redirects, checked even on a non-ok or challenged answer:
+ // landing on a resolver host page is enough, the resolver's own path handles the rest.
+ if (resp.url && resp.url !== u) {
+  const viaRedirect = safeResolveTarget(Mod, resp.url);
+  if (viaRedirect) return viaRedirect;
+ }
+ const mitigated = resp.headers && typeof resp.headers.get === 'function' && resp.headers.get('cf-mitigated');
+ if (mitigated === 'challenge' || !resp.ok) {
+  console.log('Background: interstitial fetch blocked for', u, '(status', resp.status + '), left unchanged');
+  return null;
+ }
+ let text;
+ try { text = await resp.text(); } catch (e) { return null; }
+ if (Mod.isChallengePage(text)) {
+  console.log('Background: interstitial returned a challenge page for', u, ', left unchanged');
+  return null;
+ }
+ // Meta refresh, JS redirects and "Proceed" buttons all carry the target as an absolute URL.
+ const cleaned = text.split('\\/').join('/').split('&amp;').join('&').split('\\u0026').join('&');
+ const found = cleaned.match(/https?:\/\/[^\s"'<>\\)]+/g) || [];
+ for (const candidate of found) {
+  const hit = safeResolveTarget(Mod, candidate);
+  if (hit) return hit;
+ }
+ console.log('Background: no resolvable link found in interstitial', u, ', left unchanged');
+ return null;
+}
+
+// Requests are chained so that never more than one resolve tab is open.
+let resolveQueue = Promise.resolve();
+function resolveLinks(urls) {
+ const job = resolveQueue.then(async function() {
+  startResolveKeepAlive();
+  try {
+   const results = {};
+   const Mod = globalThis.MyjdHostResolvers;
+   const list = Array.isArray(urls) ? urls.filter(function(u) { return typeof u === 'string'; }) : [];
+   if (!Mod || typeof Mod.findResolver !== 'function') {
+    list.forEach(function(u) { results[u] = { error: 'no-resolver-module', resolver: null }; });
+    return { results: results };
+   }
+   const cache = await readResolvedCache();
+   for (const u of list) {
+    let target = safeResolveTarget(Mod, u);
+    if (!target) {
+     let wrapped = false;
+     try { wrapped = typeof Mod.looksLikeInterstitial === 'function' && Mod.looksLikeInterstitial(u); } catch (e) { wrapped = false; }
+     if (!wrapped) continue;
+     try {
+      target = await findInterstitialTarget(Mod, u);
+     } catch (e) {
+      console.log('Background: interstitial lookup failed for', u, e && e.message);
+      target = null;
+     }
+     if (!target) continue;
+    }
+    const resolver = target.resolver;
+    try {
+     const r = await resolveOneLink(u, target.url, resolver, cache);
+     if (target.url !== u) r.target = target.url;
+     results[u] = r;
+    } catch (e) {
+     console.error('Background: resolve failed for', u, e);
+     results[u] = { error: 'tab-error', resolver: resolver.id };
+     if (target.url !== u) results[u].target = target.url;
+    }
+   }
+   return { results: results };
+  } finally {
+   stopResolveKeepAlive();
+  }
+ });
+ resolveQueue = job.catch(function() {});
+ return job;
+}
+
+// ============================================================
 // Message handler — central routing for popup, toolbar, content scripts
 // ============================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -561,6 +1133,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   state.isConnected = request.data.isConnected;
   updateBadge();
   sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // --- Update notifier (manual check from the settings view) ---
+ if (action === "check-for-update") {
+  checkForUpdate().then((info) => sendResponse({ update: info }));
   return true;
  }
 
@@ -669,21 +1247,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  }
 
  // ============================================================
- // Device polling (from popup's DeviceController)
- // ============================================================
- if (action === "device-poll") {
-  // In MV3, device polling happens in the popup's MyjdService directly.
-  // Acknowledge the message to prevent errors.
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- if (action === "device-poll-start" || action === "device-poll-stop") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
- // ============================================================
  // API operations — forwarded to offscreen document
  // ============================================================
 
@@ -747,12 +1310,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // Send feedback
- if (action === "send-feedback") {
-  sendResponse({ status: 'ok' });
-  return true;
- }
-
  // ============================================================
  // CNL captured from content script
  // ============================================================
@@ -779,8 +1336,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // compatibility, but nothing ships that name today; handling only it left
  // the whole right-click-with-a-selection path dead (issue #15).
  if (action === "new-selection" || action === "selection-result") {
-  if (request.data && request.data.text && sender.tab) {
-   addLinkToRequestQueue(request.data.text, sender.tab);
+  if (sender.tab) {
+   // Consume the mark even when the selection is empty, so it cannot leak
+   // into the next right click on the same tab.
+   const fromCopy = takeCopySelectionRequest(sender.tab.id);
+   if (request.data && request.data.text) {
+    // A copy fires on every copy on every page, so it only opens the toolbar
+    // when the selection actually carries a link, which is what the setting
+    // description promises. A right click is explicit and stays
+    // unconditional. The html is checked too, because a linked word copies
+    // as plain text with the href only in the markup.
+    const wanted = !fromCopy || containsLink(request.data.text) || containsLink(request.data.html);
+    if (wanted) {
+     addLinkToRequestQueue(request.data.text, sender.tab);
+    }
+   }
+  }
+  sendResponse({ status: 'ok' });
+  return true;
+ }
+
+ // ============================================================
+ // Copy in a page (clipboard observer)
+ // ============================================================
+ // onCopyContentscript.js sends this on every trusted copy. When the setting
+ // is on, ask that tab for its selection; the answer arrives as
+ // "new-selection" above. Without this handler the message fell through to
+ // the unhandled-action default and the whole feature did nothing.
+ if (action === "new-copy-event") {
+  if (sender.tab && sender.tab.id !== undefined && settings[STORAGE_KEYS.CLIPBOARD_OBSERVER] === true) {
+   markCopySelectionRequest(sender.tab.id);
+   chrome.tabs.sendMessage(sender.tab.id, { action: "get-selection", tabId: sender.tab.id })
+    .catch(() => {
+     // No content script in that tab, or the frame is already gone.
+    });
   }
   sendResponse({ status: 'ok' });
   return true;
@@ -813,6 +1402,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'error', error: err.message });
    }
   })();
+  return true;
+ }
+
+ // MYJD CAPTCHA: load the provider's API script in the page's MAIN world.
+ // The isolated world content scripts run in enforces its own CSP
+ // (script-src 'self' 'wasm-unsafe-eval' ...), which blocks a remote
+ // <script src> appended from the content script regardless of the page's
+ // own (already stripped) CSP header. Loading it via chrome.scripting in the
+ // MAIN world is subject to the page's CSP only, which the existing
+ // addCspStrippingRule() already clears for this tab. The result is handed
+ // back via window.postMessage, same bridge pattern as cnlInterceptorMain.js.
+ // Target origin '*' rather than window.location.origin: on an opaque-origin
+ // document (sandboxed page) location.origin is the string "null", which
+ // postMessage rejects with a SyntaxError instead of sending. Same window,
+ // no secret in the payload, and the receiver already checks
+ // event.source === window, so '*' costs nothing here.
+ if (action === "myjd-captcha-load-api") {
+  if (!sender.tab || !isCaptchaApiScript(request.data && request.data.url)) {
+   console.error('Background: Rejected CAPTCHA API script URL:', request.data && request.data.url);
+   sendResponse({ status: 'error', error: 'url not allowed' });
+   return true;
+  }
+  chrome.scripting.executeScript({
+   target: { tabId: sender.tab.id },
+   world: 'MAIN',
+   args: [request.data.url],
+   func: function(url) {
+    var container = document.getElementById('captchaContainer') || document.head || document.documentElement;
+    var script = document.createElement('script');
+    script.src = url;
+    script.addEventListener('load', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'loaded' }, '*');
+    });
+    script.addEventListener('error', function() {
+     window.postMessage({ __myjd_captcha_api__: true, status: 'error' }, '*');
+    });
+    container.appendChild(script);
+   }
+  }).then(function() {
+   sendResponse({ status: 'ok' });
+  }).catch(function(err) {
+   console.error('Background: Failed to load CAPTCHA API script in MAIN world:', err);
+   sendResponse({ status: 'error', error: err && err.message });
+  });
   return true;
  }
 
@@ -984,6 +1617,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
+ // RESOLVE IN BROWSER: map landing-page links to direct file URLs (see resolveLinks).
+ if (action === "resolve-links") {
+  resolveLinks(request.data && request.data.urls).then(sendResponse, function(e) {
+   console.error('Background: resolve-links failed:', e);
+   sendResponse({ results: {}, error: String((e && e.message) || e) });
+  });
+  return true;
+ }
+
  // Default: acknowledge unknown actions
  console.log("Background: Unhandled action:", action);
  sendResponse({ forwarded: true, action: action });
@@ -1091,7 +1733,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Keep alive + init
 // ============================================================
 chrome.alarms.create('keepAlive', { periodInMinutes: 4 });
-chrome.alarms.onAlarm.addListener(() => {
+chrome.alarms.create(UPDATE_CHECK_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+ if (alarm && alarm.name === UPDATE_CHECK_ALARM) {
+  checkForUpdate();
+  return;
+ }
  console.log("Background: Keepalive alarm");
 });
 

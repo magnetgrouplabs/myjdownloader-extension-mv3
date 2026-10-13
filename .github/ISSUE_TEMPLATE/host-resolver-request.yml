@@ -1,0 +1,84 @@
+name: Host resolver request
+description: Ask for a file host to be resolved in the browser, for links JDownloader cannot load because of Cloudflare.
+title: "[Host resolver] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Some file hosts sit behind Cloudflare, so JDownloader cannot load their pages. The extension can open the page in your browser, read the direct download link, and send that link to JDownloader instead. This needs a small resolver for each host.
+
+        A resolver only works for hosts that your browser can already open. If the page does not load in your browser, a resolver cannot help.
+
+        You can also write a resolver yourself. See the "Adding a host resolver" section of CONTRIBUTING.md.
+
+  - type: input
+    id: host-name
+    attributes:
+      label: Host name and site
+      description: The name of the file host and its main domain.
+      placeholder: e.g., FileDitch (fileditchfiles.me, fileditchvids.st)
+    validations:
+      required: true
+
+  - type: input
+    id: sample-url
+    attributes:
+      label: Sample file page URL
+      description: A link to one file page on this host. It may become public in this issue, so only share a file you are comfortable sharing.
+      placeholder: e.g., https://fileditchfiles.me/beta10/<id>/<file name>
+    validations:
+      required: true
+
+  - type: textarea
+    id: jd-message
+    attributes:
+      label: What JDownloader reports
+      description: Send the link to JDownloader as it is, without the resolver. Paste the exact text JDownloader shows for it (status, error or log line).
+      render: text
+      placeholder: |
+        e.g., Cloudflare block detected
+    validations:
+      required: true
+
+  - type: input
+    id: direct-link-format
+    attributes:
+      label: Direct download link format
+      description: If you know what the final download link looks like, describe it. Remove any private token from the example.
+      placeholder: e.g., https://files.example.org/<token>/<file name>
+    validations:
+      required: false
+
+  - type: dropdown
+    id: cloudflare-challenge
+    attributes:
+      label: Cloudflare challenge in the browser
+      description: When you open the file page in your browser, does it show a Cloudflare check?
+      options:
+        - No, the page loads normally
+        - Yes, a checkbox or interactive challenge
+        - Yes, but it passes by itself after a moment
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: saved-page
+    attributes:
+      label: Saved page HTML
+      description: |
+        Open the file page in your browser, press Ctrl+S, choose "Webpage, HTML Only", and save it. Attach the saved file here by dragging it into this box.
+
+        The saved file may contain session details such as cookies or tokens. You can open it in a text editor and remove them first. If you would rather not post it here, say so and we will arrange another way to send it.
+      placeholder: Drag and drop the saved .html file here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: understanding
+    attributes:
+      label: Confirmation
+      options:
+        - label: I understand that resolvers only work for hosts the browser can already open.
+          required: true
