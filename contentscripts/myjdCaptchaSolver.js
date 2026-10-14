@@ -6,12 +6,21 @@ if (!location.hash.startsWith('#rc2jdt')) return;
 
 // --- DOM replacement (defense-in-depth) ---
 
-// Strategy 1: Immediately replace the entire document
+// Strategy 1: Replace the document the same way the known-good 9aeddea build
+// did (document.open/close). That path successfully loaded hCaptcha api.js;
+// later "in-place wipe" experiments regressed it. Only change vs 9aeddea:
+// reuse document.body after open/close instead of appending a second <body>,
+// which left a blank-looking page in some browsers (double-body).
 document.open();
 document.close();
 
-// Build placeholder DOM using createElement only (no inline scripts)
-var body = document.createElement('body');
+var body = document.body;
+if (!body) {
+    body = document.createElement('body');
+    document.documentElement.appendChild(body);
+} else {
+    while (body.firstChild) body.removeChild(body.firstChild);
+}
 body.id = 'myjd-captcha-body';
 body.style.background = '#3c686f';
 body.style.color = '#fff';
@@ -24,7 +33,6 @@ loadingMsg.style.textAlign = 'center';
 loadingMsg.style.fontSize = '18px';
 loadingMsg.style.marginTop = '40px';
 body.appendChild(loadingMsg);
-document.documentElement.appendChild(body);
 
 // Strategy 2: On readystatechange, clear foreign DOM
 var clearDocument = function() {
@@ -273,7 +281,7 @@ function injectSkipButtons(job) {
             chrome.runtime.sendMessage({
                 action: 'captcha-skip',
                 data: {
-                    callbackUrl: 'MYJD',
+                    callbackUrl: job.callbackUrl || 'MYJD',
                     captchaId: job.captchaId,
                     skipType: skipType
                 }
@@ -301,8 +309,9 @@ function startTokenPolling(job) {
                     action: 'captcha-solved',
                     data: {
                         token: recaptchaTextareas[i].value,
-                        callbackUrl: 'MYJD',
-                        captchaId: job.captchaId
+                        callbackUrl: job.callbackUrl || 'MYJD',
+                        captchaId: job.captchaId,
+                        deviceId: job.deviceId || null
                     }
                 });
                 return;
@@ -319,8 +328,9 @@ function startTokenPolling(job) {
                     action: 'captcha-solved',
                     data: {
                         token: hcaptchaTextareas[i].value,
-                        callbackUrl: 'MYJD',
-                        captchaId: job.captchaId
+                        callbackUrl: job.callbackUrl || 'MYJD',
+                        captchaId: job.captchaId,
+                        deviceId: job.deviceId || null
                     }
                 });
                 return;
@@ -333,7 +343,7 @@ function startTokenPolling(job) {
 
 /**
  * 5-minute countdown timer with visual urgency.
- * Sends skip(single) with MYJD callbackUrl on expiry.
+ * Sends skip(single) with the job's callback on expiry.
  */
 function startCountdown(job) {
     var TIMEOUT_MS = 5 * 60 * 1000; // 300000ms = 5 minutes
@@ -370,7 +380,7 @@ function startCountdown(job) {
             chrome.runtime.sendMessage({
                 action: 'captcha-skip',
                 data: {
-                    callbackUrl: 'MYJD',
+                    callbackUrl: job.callbackUrl || 'MYJD',
                     captchaId: job.captchaId,
                     skipType: 'single'
                 }

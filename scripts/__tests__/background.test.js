@@ -781,3 +781,146 @@ describe('Background.js Storage Key Consistency (Phase 9)', () => {
     expect(backgroundSrc).not.toMatch(/['"]settings_add_links_dialog_active['"]/);
   });
 });
+
+describe('Background.js MYJD prepareCaptchaTab callback marker', () => {
+  beforeEach(() => {
+    global.__resetChromeStorage();
+    jest.clearAllMocks();
+    global.chrome.runtime.onMessage._listeners.length = 0;
+    global.chrome.runtime.onInstalled._listeners.length = 0;
+    global.chrome.runtime.onStartup._listeners.length = 0;
+    global.chrome.tabs.onRemoved._listeners.length = 0;
+    global.chrome.contextMenus.onClicked._listeners.length = 0;
+    global.chrome.alarms.onAlarm._listeners.length = 0;
+    global.chrome.storage.onChanged._listeners.length = 0;
+    global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
+    jest.resetModules();
+    require('../../background.js');
+  });
+
+  it('keeps the MyJDownloader web interface flow on the MYJD marker', async () => {
+    const listeners = global.chrome.runtime.onMessage._listeners;
+    const handler = listeners[listeners.length - 1];
+    const JOB_DETAILS = {
+      captchaType: 'hcaptcha',
+      siteKey: '10000000-ffff-ffff-ffff-000000000001',
+      siteKeyType: 'NORMAL',
+      v3action: '',
+      hoster: 'ddownload.com',
+      targetUrl: 'https://ddownload.com/file/abc',
+      captchaId: '42'
+    };
+    await new Promise(resolve => {
+      handler(
+        { action: 'myjd-prepare-captcha-tab', data: { tabId: 55, jobDetails: JOB_DETAILS } },
+        { id: chrome.runtime.id, tab: { id: 55 } },
+        resolve
+      );
+    });
+    expect(global.__getSessionStore()['myjd_captcha_job'].callbackUrl).toBe('MYJD');
+  });
+});
+
+
+describe('Background.js remote MyJD captcha prepare + solve', () => {
+  const JOB_DETAILS = {
+    captchaType: 'hcaptcha',
+    siteKey: '10000000-ffff-ffff-ffff-000000000001',
+    siteKeyType: 'NORMAL',
+    v3action: '',
+    hoster: 'upstore.net',
+    targetUrl: 'https://upstore.net/file/abc',
+    captchaId: 99,
+    deviceId: 'device-hed-nas'
+  };
+
+  beforeEach(() => {
+    global.__resetChromeStorage();
+    jest.clearAllMocks();
+    global.chrome.runtime.onMessage._listeners.length = 0;
+    global.chrome.runtime.onInstalled._listeners.length = 0;
+    global.chrome.runtime.onStartup._listeners.length = 0;
+    global.chrome.tabs.onRemoved._listeners.length = 0;
+    global.chrome.contextMenus.onClicked._listeners.length = 0;
+    global.chrome.alarms.onAlarm._listeners.length = 0;
+    global.chrome.storage.onChanged._listeners.length = 0;
+    global.chrome.webRequest.onBeforeRequest._listeners.length = 0;
+    global.chrome.tabs.create.mockImplementation((opts) =>
+      Promise.resolve({ id: 9001, url: (opts && opts.url) || '' })
+    );
+    global.chrome.tabs.update.mockImplementation((id, opts) =>
+      Promise.resolve({ id: id, url: (opts && opts.url) || '' })
+    );
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, status: 200 }));
+    jest.resetModules();
+    require('../../background.js');
+  });
+
+  function send(message, tabId) {
+    const listeners = global.chrome.runtime.onMessage._listeners;
+    const handler = listeners[listeners.length - 1];
+    return new Promise(resolve => {
+      const sender = { id: chrome.runtime.id };
+      if (tabId !== undefined) sender.tab = { id: tabId };
+      handler(message, sender, resolve);
+    });
+  }
+
+  it('opens a new tab with #rc2jdt when myjd-prepare-captcha-tab has no tabId', async () => {
+    const resp = await send({
+      action: 'myjd-prepare-captcha-tab',
+      data: { tabId: null, jobDetails: JOB_DETAILS }
+    });
+    expect(resp).toEqual({ status: 'ok', tabId: 9001 });
+    expect(global.chrome.tabs.create).toHaveBeenCalledWith({
+      url: 'about:blank',
+      active: true
+    });
+    expect(global.chrome.tabs.update).toHaveBeenCalledWith(9001, {
+      url: 'https://upstore.net/file/abc#rc2jdt'
+    });
+    expect(global.__getSessionStore()['myjd_captcha_job']).toEqual(
+      Object.assign({}, JOB_DETAILS, { callbackUrl: 'MYJD' })
+    );
+  });
+
+  it('submits a MYJD solution through offscreen-captcha-solve when deviceId is known', async () => {
+    await send({
+      action: 'myjd-prepare-captcha-tab',
+      data: { tabId: null, jobDetails: JOB_DETAILS }
+    });
+
+    const sendMessage = global.chrome.runtime.sendMessage;
+    sendMessage.mockImplementation((msg, cb) => {
+      if (msg && msg.target === 'offscreen' && msg.action === 'offscreen-captcha-solve') {
+        if (typeof cb === 'function') cb({ success: true, result: true });
+        return Promise.resolve({ success: true, result: true });
+      }
+      if (typeof cb === 'function') cb({});
+      return Promise.resolve({});
+    });
+
+    await send({
+      action: 'captcha-solved',
+      data: {
+        token: 'z'.repeat(40),
+        callbackUrl: 'MYJD',
+        captchaId: 99
+      }
+    }, 9001);
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const solveCalls = sendMessage.mock.calls.filter(
+      c => c[0] && c[0].action === 'offscreen-captcha-solve'
+    );
+    expect(solveCalls.length).toBeGreaterThanOrEqual(1);
+    expect(solveCalls[0][0]).toEqual(expect.objectContaining({
+      target: 'offscreen',
+      action: 'offscreen-captcha-solve',
+      deviceId: 'device-hed-nas',
+      captchaId: 99,
+      token: 'z'.repeat(40)
+    }));
+  });
+});
