@@ -1,6 +1,11 @@
 (function() {
 'use strict';
 
+// Tabs sent to the hoster with #rc2jdt belong to myjdCaptchaSolver.js, which
+// reports with the job's own callback. Running here too would add a second set
+// of skip buttons and countdown and report the token without a callback.
+if (window.location.hash.startsWith('#rc2jdt')) return;
+
 // CAP-01: Detect CAPTCHA pages — JDownloader localhost or any site with widgets
 var captchaPathPattern = /\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//;
 var isJdLocalhost = /^http:\/\/127\.0\.0\.1/.test(window.location.href) && captchaPathPattern.test(window.location.pathname);

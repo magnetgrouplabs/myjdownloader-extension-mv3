@@ -58,9 +58,10 @@ document.addEventListener('DOMContentLoaded', function() {
 var pollingHandle = null;
 var countdownHandle = null;
 
-// --- Read job data from chrome.storage.session ---
-chrome.storage.session.get('myjd_captcha_job', function(result) {
-    var job = result && result.myjd_captcha_job;
+// --- Ask the service worker for the job parked for this tab ---
+chrome.runtime.sendMessage({ action: 'myjd-get-captcha-job' }, function(response) {
+    void chrome.runtime.lastError;
+    var job = response && response.job;
     if (!job) {
         while (body.firstChild) body.removeChild(body.firstChild);
         var errMsg = document.createElement('div');
@@ -120,13 +121,18 @@ function renderCaptchaWidget(job) {
         widgetDiv.className = 'h-captcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
         apiScriptUrl = 'https://hcaptcha.com/1/api.js';
+    } else if (job.v3action) {
+        // reCAPTCHA v3 has no widget: a v3 key in a g-recaptcha div is an
+        // "Invalid key type". The key is loaded with ?render= and run by
+        // myjd-captcha-execute.
+        apiScriptUrl = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(job.siteKey);
     } else {
         widgetDiv.className = 'g-recaptcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
-        if (job.siteKeyType === 'INVISIBLE') {
-            widgetDiv.setAttribute('data-size', 'invisible');
-        }
         apiScriptUrl = 'https://www.google.com/recaptcha/api.js';
+    }
+    if (job.siteKeyType === 'INVISIBLE') {
+        widgetDiv.setAttribute('data-size', 'invisible');
     }
 
     captchaContainer.appendChild(widgetDiv);
@@ -146,7 +152,7 @@ function renderCaptchaWidget(job) {
         clearTimeout(apiTimeoutHandle);
         if (loaded) {
             // For invisible/v3 CAPTCHAs, request MAIN world execution now that the API is ready
-            if (job.siteKeyType === 'INVISIBLE') {
+            if (job.siteKeyType === 'INVISIBLE' || job.v3action) {
                 chrome.runtime.sendMessage({
                     action: 'myjd-captcha-execute',
                     data: { siteKey: job.siteKey, v3action: job.v3action || '' }

@@ -91,9 +91,6 @@ function persistQueue() {
 
 let queueReady = restoreRequestQueue();
 
-// Make chrome.storage.session accessible from content scripts (for myjdCaptchaSolver.js)
-chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
-
 // ============================================================
 // MYJD CAPTCHA CSP rule management
 // ============================================================
@@ -739,6 +736,10 @@ chrome.webRequest.onBeforeRequest.addListener(
 );
 
 
+function captchaJobKey(tabId) {
+ return 'myjd_captcha_job_' + tabId;
+}
+
 // Park a CAPTCHA job for myjdCaptchaSolver.js and send the tab to the hoster's
 // own domain with #rc2jdt, where the widget can legally render. Shared by the
 // MyJDownloader web interface flow and JDownloader's own browser solver; they
@@ -749,9 +750,12 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName, sendR
   // whether the solution is routed to my.jdownloader.org or to JDownloader's
   // own callback URL, so it has to travel inside the job.
   const job = Object.assign({}, jobDetails, { callbackUrl: callbackUrl });
-  await chrome.storage.session.set({ myjd_captcha_job: job });
+  // One slot per tab: JDownloader opens a tab per challenge, and a shared slot
+  // would let a second challenge overwrite the first before its tab reads it.
+  await chrome.storage.session.set({ [captchaJobKey(tabId)]: job });
   addCspStrippingRule(tabId);
-  chrome.tabs.update(tabId, { url: jobDetails.targetUrl + '#rc2jdt' });
+  // The solver gates on the hash starting with #rc2jdt, so drop any fragment the site URL has
+  chrome.tabs.update(tabId, { url: jobDetails.targetUrl.split('#')[0] + '#rc2jdt' });
   activeCaptchaTabs[tabId] = {
    callbackUrl: callbackUrl,
    captchaId: jobDetails.captchaId,
@@ -1425,6 +1429,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
+ // myjdCaptchaSolver.js asks for the job parked for its own tab
+ if (action === "myjd-get-captcha-job") {
+  if (!sender.tab) {
+   sendResponse({ job: null });
+   return true;
+  }
+  const key = captchaJobKey(sender.tab.id);
+  chrome.storage.session.get(key).then(function(result) {
+   sendResponse({ job: (result && result[key]) || null });
+  }).catch(function() {
+   sendResponse({ job: null });
+  });
+  return true;
+ }
+
  // MYJD CAPTCHA: load the provider's API script in the page's MAIN world.
  // The isolated world content scripts run in enforces its own CSP
  // (script-src 'self' 'wasm-unsafe-eval' ...), which blocks a remote
@@ -1479,8 +1498,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     func: function(siteKey, v3action) {
      if (typeof grecaptcha !== 'undefined') {
       grecaptcha.ready(function() {
-       var opts = v3action ? { action: v3action } : {};
-       grecaptcha.execute(siteKey, opts);
+       if (!v3action) {
+        // Invisible v2: run the widget rendered on the page. execute(siteKey)
+        // is the v3 signature and fails for a key not loaded with ?render=.
+        grecaptcha.execute();
+        return;
+       }
+       // v3 renders no widget of its own; put the token where the solver's
+       // g-recaptcha-response polling picks it up.
+       grecaptcha.execute(siteKey, { action: v3action }).then(function(token) {
+        var field = document.createElement('textarea');
+        field.id = 'g-recaptcha-response-myjd';
+        field.style.display = 'none';
+        field.value = token;
+        document.body.appendChild(field);
+       });
       });
      } else if (typeof hcaptcha !== 'undefined') {
       hcaptcha.execute();
@@ -1514,7 +1546,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     captchaId: request.data.captchaId,
     detectedAt: Date.now()
    };
-   console.log('Background: CAPTCHA tab detected:', sender.tab.id, request.data.captchaType);
+   console.log('Background: CAPTCHA tab detected:', sender.tab.id, request.data.captchaType,
+    'url:', sender.tab.url, 'callback:', request.data.callbackUrl);
   }
   sendResponse({ status: 'ok' });
   return true;
@@ -1711,8 +1744,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  delete requestQueue[String(tabId)];
  persistQueue();
 
- // Always clean up CSP rules for closed tabs
+ // Always clean up CSP rules and parked CAPTCHA jobs for closed tabs
  removeCspStrippingRule(tabId);
+ chrome.storage.session.remove(captchaJobKey(tabId)).catch(function() {});
 
  // CAPTCHA: send skip on tab close (CAP-07)
  if (activeCaptchaTabs[tabId]) {

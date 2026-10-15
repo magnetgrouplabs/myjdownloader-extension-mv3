@@ -11,18 +11,18 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
  * (issue #5).
  *
  * JDownloader serves its challenge pages on the loopback interface. Its
- * recaptcha.html embeds the widget and submits the token itself; its
- * hcaptcha.html contains no widget and no hCaptcha api.js at all — it is only
- * the "Browser extension required" page, because hCaptcha has to run on the
- * hoster's domain. The challenge data is in meta tags for the extension to
- * pick up.
+ * recaptcha.html and hcaptcha.html contain no widget and no provider api.js at
+ * all — both are only the "Browser extension required" page, because the
+ * challenge has to run on the hoster's domain. The challenge data is in meta
+ * tags for the extension to pick up (issues #5, #22, #25).
  */
 describe('browserSolverBridge — JD browser solver hand-off (issue #5)', () => {
     const HCAPTCHA_METAS = {
         sitekey: '10000000-ffff-ffff-ffff-000000000001',
         sitekeyType: 'NORMAL',
         v3action: '',
-        challengeType: 'hcaptcha',
+        // JDownloader writes the Java class name here, not the URL namespace
+        challengeType: 'HCaptchaChallenge',
         siteDomain: 'ddownload.com',
         siteUrl: 'https://ddownload.com/file/abc',
         challengeId: '1735689600123'
@@ -98,13 +98,48 @@ describe('browserSolverBridge — JD browser solver hand-off (issue #5)', () => 
         expect(message.data.callbackUrl).toBe(url);
     });
 
-    it('leaves reCAPTCHA pages alone — JDownloader solves those on its own page', () => {
-        const sent = run({
-            url: 'http://127.0.0.1:9666/captcha/recaptchav2/example.org?id=7',
-            metas: Object.assign({}, HCAPTCHA_METAS, { challengeType: 'recaptchav2' })
+    it('hands reCAPTCHA v2 over too — its JDownloader page has no widget either (#22)', () => {
+        const [message] = run({
+            url: 'http://127.0.0.1:9666/captcha/recaptchav2/datavaults.co?id=7',
+            metas: Object.assign({}, HCAPTCHA_METAS, {
+                challengeType: 'RecaptchaV2Challenge',
+                siteDomain: 'datavaults.co',
+                siteUrl: 'https://datavaults.co/abc'
+            })
         });
 
-        expect(sent).toHaveLength(0);
+        expect(message.data.jobDetails).toMatchObject({
+            captchaType: 'recaptchav2',
+            hoster: 'datavaults.co',
+            targetUrl: 'https://datavaults.co/abc'
+        });
+    });
+
+    it('unwraps the v3 action JDownloader writes as JSON', () => {
+        const [message] = run({
+            url: 'http://127.0.0.1:9666/captcha/recaptchav3/example.org?id=8',
+            metas: Object.assign({}, HCAPTCHA_METAS, {
+                challengeType: 'RecaptchaV2Challenge',
+                sitekeyType: 'INVISIBLE',
+                v3action: '{"action":"login"}'
+            })
+        });
+
+        expect(message.data.jobDetails).toMatchObject({
+            captchaType: 'recaptchav3',
+            siteKeyType: 'INVISIBLE',
+            v3action: 'login'
+        });
+    });
+
+    it('ignores other paths on the loopback interface', () => {
+        expect(run({ url: 'http://127.0.0.1:9666/flash/addcrypted2' })).toHaveLength(0);
+    });
+
+    it('does not navigate to a site URL that is not http(s)', () => {
+        const metas = Object.assign({}, HCAPTCHA_METAS, { siteUrl: 'javascript:alert(1)' });
+
+        expect(run({ metas })).toHaveLength(0);
     });
 
     it('ignores pages that are not on the loopback interface', () => {
