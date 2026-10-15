@@ -378,10 +378,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 sendResponse({ success: false, error: 'deviceId and captchaId required' });
                 return true;
             }
-            // Same calls as the MV2 Rc2Service: getCaptchaJob, then get(id, "rawtoken")
-            // for siteKey / siteUrl / type / v3Action.
-            sendCaptchaDeviceCall(request.deviceId, '/captcha/getCaptchaJob', [request.captchaId]).done(function(jobResult) {
-                var job = unwrapData(jobResult);
+            // getCaptchaJob, then get(id, "rawtoken") for siteKey / siteUrl /
+            // type / v3Action. A job already read from /captcha/list skips the
+            // first call.
+            var getChallenge = function(job) {
                 if (!job || job.id == null) {
                     sendResponse({ success: false, error: 'Captcha job not available' });
                     return;
@@ -391,6 +391,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 }).fail(function(err) {
                     sendResponse({ success: false, error: errorText(err) });
                 });
+            };
+            if (request.job) {
+                getChallenge(request.job);
+                return true;
+            }
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/getCaptchaJob', [request.captchaId]).done(function(jobResult) {
+                getChallenge(unwrapData(jobResult));
             }).fail(function(err) {
                 sendResponse({ success: false, error: errorText(err) });
             });

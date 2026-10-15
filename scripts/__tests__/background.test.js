@@ -960,7 +960,7 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
     });
 
     it('never polls for a tab without a JDownloader-local job', async () => {
-      await send({ action: 'myjd-prepare-captcha-tab', data: { tabId: 55, jobDetails: JOB_DETAILS } }, 55);
+      await chrome.storage.session.set({ myjd_captcha_job_55: Object.assign({}, JOB_DETAILS, { callbackUrl: 'MYJD' }) });
       global.fetch = answer('true');
 
       await expect(send({ action: 'captcha-can-close-poll', data: {} }, 55)).resolves.toEqual({ canClose: false });
@@ -1006,14 +1006,5 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
 
     expect(response).toEqual({ status: 'error', error: 'no sender tab' });
     expect(global.chrome.tabs.update).not.toHaveBeenCalled();
-  });
-
-  it('keeps the MyJDownloader web interface flow on the MYJD marker', async () => {
-    await send({
-      action: 'myjd-prepare-captcha-tab',
-      data: { tabId: 55, jobDetails: JOB_DETAILS }
-    }, 55);
-
-    expect(global.__getSessionStore()['myjd_captcha_job_55'].callbackUrl).toBe('MYJD');
   });
 });

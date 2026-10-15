@@ -154,9 +154,9 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
   });
 
-  describe('myjd-prepare-captcha-tab handler', () => {
-    it('should handle myjd-prepare-captcha-tab action', () => {
-      expect(bgSource).toMatch(/myjd-prepare-captcha-tab/);
+  describe('prepareCaptchaTab', () => {
+    it('should not take a tab id from a message (no myjd-prepare-captcha-tab)', () => {
+      expect(bgSource).not.toMatch(/myjd-prepare-captcha-tab/);
     });
 
     it('should write myjd_captcha_job to session storage', () => {
@@ -172,13 +172,11 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
       expect(bgSource).toMatch(/chrome\.tabs\.update\(tabId, \{ url: url \}\)/);
     });
 
-    it('should track tab in activeCaptchaTabs with MYJD callbackUrl', () => {
-      // The handler hands the MYJD marker to prepareCaptchaTab, which is shared
-      // with JDownloader's browser solver flow and records activeCaptchaTabs.
-      // Behavioural coverage lives in scripts/__tests__/background.test.js.
-      const section = bgSource.match(/myjd-prepare-captcha-tab[\s\S]*?return\s+true/);
-      expect(section).not.toBeNull();
-      expect(section[0]).toMatch(/prepareCaptchaTab\([^)]*['"]MYJD['"]/);
+    it('should track the tab in activeCaptchaTabs with its callbackUrl', () => {
+      // Shared by the MyJD flows (MYJD marker) and JDownloader's browser solver.
+      // Behavioural coverage lives in scripts/__tests__/background.test.js and
+      // remoteCaptcha.test.js.
+      expect(bgSource).toMatch(/prepareCaptchaTab\([^)]*['"]MYJD['"]/);
       const prepare = bgSource.match(/async function prepareCaptchaTab[\s\S]*?\n\}/);
       expect(prepare).not.toBeNull();
       expect(prepare[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
