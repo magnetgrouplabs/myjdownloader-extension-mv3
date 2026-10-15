@@ -741,16 +741,20 @@ function captchaJobKey(tabId) {
 }
 
 // JDownloader writes the v3 action as a JSON map, {"action":"login"}, both on its
-// browser-solver page and in the MyJD API's v3Action. The solver passes it to
-// grecaptcha.execute() as { action: v3action }, so only the name is kept.
+// browser-solver page and in the MyJD API's v3Action (where jdapi may hand it
+// over already parsed). The solver passes it to grecaptcha.execute() as
+// { action: v3action }, so only the name is kept.
 function v3ActionName(raw) {
  if (!raw) return '';
- try {
-  const parsed = JSON.parse(raw);
-  return (parsed && typeof parsed.action === 'string') ? parsed.action : '';
- } catch (e) {
-  return String(raw);
+ let parsed = raw;
+ if (typeof raw === 'string') {
+  try {
+   parsed = JSON.parse(raw);
+  } catch (e) {
+   return raw;
+  }
  }
+ return (parsed && typeof parsed.action === 'string') ? parsed.action : '';
 }
 
 // The hoster URL the solver renders on. The solver gates on the hash starting
@@ -846,6 +850,33 @@ async function findRemoteCaptcha(captchaId, devices) {
   return (details.siteKey && details.targetUrl) ? details : null;
  }
  return null;
+}
+
+// Skip a MYJD-flow challenge: through the MyJD API when the tab's parked job
+// names the device (a remote JD whose challenge the site never started),
+// otherwise tell the my.jdownloader.org tabs, which started it.
+async function skipMyjdCaptcha(job, captchaId, skipType) {
+ if (job && job.deviceId && job.captchaId != null) {
+  const skipped = await sendToOffscreen('offscreen-captcha-skip', {
+   deviceId: job.deviceId, captchaId: job.captchaId, skipType: skipType
+  });
+  if (skipped && skipped.success) {
+   console.log('Background: CAPTCHA skipped via MyJD API for', job.hoster, job.captchaId, skipType);
+   return;
+  }
+  console.warn('Background: MyJD API skip failed, telling my.jdownloader.org:', skipped && skipped.error);
+ }
+ chrome.tabs.query({
+  url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
+ }, function(tabs) {
+  for (const tab of tabs || []) {
+   chrome.tabs.sendMessage(tab.id, {
+    name: 'tab-closed',
+    type: 'myjdrc2',
+    data: { captchaId: captchaId }
+   }, function() { /* ignore errors */ });
+  }
+ });
 }
 
 function findCaptchaTab(captchaId) {
@@ -1812,19 +1843,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
    delete activeCaptchaTabs[sender.tab.id];
   }
   if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
-   // MYJD flow: send tab-closed to my.jdownloader.org tabs
-   chrome.tabs.query({
-    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
-   }, function(tabs) {
-    if (tabs && tabs.length > 0) {
-     for (var i = 0; i < tabs.length; i++) {
-      chrome.tabs.sendMessage(tabs[i].id, {
-       name: 'tab-closed',
-       type: 'myjdrc2',
-       data: { captchaId: request.data.captchaId }
-      }, function() { /* ignore errors */ });
-     }
-    }
+   // MYJD flow: only the job parked for this sender tab is trusted for the device
+   (async function() {
+    const key = sender.tab ? captchaJobKey(sender.tab.id) : null;
+    const job = key ? (await chrome.storage.session.get(key))[key] : null;
+    await skipMyjdCaptcha(job, request.data.captchaId, request.data.skipType);
+   })().catch(function(err) {
+    console.error('Background: MYJD CAPTCHA skip failed:', err);
    });
    // Close sender tab and clean up CSP rule
    if (sender.tab) {
@@ -1937,30 +1962,30 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  delete requestQueue[String(tabId)];
  persistQueue();
 
- // Always clean up CSP rules and parked CAPTCHA jobs for closed tabs
+ // Always clean up CSP rules and parked CAPTCHA jobs for closed tabs. The job
+ // is read first: a remote JD's challenge is skipped with its device.
  removeCspStrippingRule(tabId);
- chrome.storage.session.remove(captchaJobKey(tabId)).catch(function() {});
+ const jobKey = captchaJobKey(tabId);
+ const jobRead = chrome.storage.session.get(jobKey).then(function(items) {
+  return items[jobKey];
+ }).catch(function() {
+  return null;
+ }).finally(function() {
+  chrome.storage.session.remove(jobKey).catch(function() {});
+ });
 
  // CAPTCHA: send skip on tab close (CAP-07)
  if (activeCaptchaTabs[tabId]) {
   var info = activeCaptchaTabs[tabId];
   delete activeCaptchaTabs[tabId];
   if (info.callbackUrl === 'MYJD') {
-   // MYJD flow: send tab-closed to my.jdownloader.org tabs
-   chrome.tabs.query({
-    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
-   }, function(tabs) {
-    if (tabs && tabs.length > 0) {
-     for (var i = 0; i < tabs.length; i++) {
-      chrome.tabs.sendMessage(tabs[i].id, {
-       name: 'tab-closed',
-       type: 'myjdrc2',
-       data: { captchaId: info.captchaId }
-      }, function() { /* ignore errors */ });
-     }
-    }
+   // The parked job was read above, before its removal
+   jobRead.then(function(job) {
+    return skipMyjdCaptcha(job, info.captchaId, 'single');
+   }).catch(function(err) {
+    console.error('Background: MYJD CAPTCHA tab-close skip failed:', err);
    });
-   console.log('Background: MYJD CAPTCHA tab closed, sent tab-closed for', info.hoster);
+   console.log('Background: MYJD CAPTCHA tab closed, skipping', info.hoster);
   } else if (info.callbackUrl) {
    // MV3 service workers have no XMLHttpRequest -> use fetch() (fire-and-forget).
    fetch(info.callbackUrl + '&do=skip&skiptype=single', {

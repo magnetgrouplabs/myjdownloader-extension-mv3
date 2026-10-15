@@ -169,10 +169,14 @@ require(['jdapi'], function(API) {
     }
 });
 
+// jdapi's own error types for a request that never got an answer
+var NETWORK_ERROR_TYPES = ['CONNECTION_REFUSED', 'TIMEOUT', 'UNKNOWN_ERROR'];
+
 // Device-scoped call through jdapi's normal path (Direct Connection when
-// available, otherwise the api.jdownloader.org relay). On a direct-path failure,
-// clear localURL once and retry via the relay so a flaky LAN host does not stall
-// the captcha calls.
+// available, otherwise the api.jdownloader.org relay). When the direct path is
+// unreachable, drop the device's localURL once and retry via the relay so a
+// flaky LAN host does not stall the captcha calls. API errors from JD itself
+// (e.g. a job that is already solved) are not retried.
 function sendCaptchaDeviceCall(deviceId, action, params) {
     var deferred = $.Deferred();
     if (!api) {
@@ -183,32 +187,34 @@ function sendCaptchaDeviceCall(deviceId, action, params) {
         deferred.reject('Not logged in');
         return deferred;
     }
-    api.setActiveDevice(deviceId);
     function attempt(isRetry) {
+        api.setActiveDevice(deviceId);
         api.send(action, params).done(function(result) {
             deferred.resolve(result);
         }).fail(function(err) {
-            if (isRetry || !api.apiDeviceController || typeof api.apiDeviceController.getDeviceAPIForId !== 'function') {
+            var controller = api.apiDeviceController;
+            var device = controller && controller.devices && controller.devices[deviceId];
+            var isNetworkError = err && NETWORK_ERROR_TYPES.indexOf(err.type) !== -1;
+            if (isRetry || !isNetworkError || !device || !device.isInLocalMode()) {
                 deferred.reject(err);
                 return;
             }
-            api.apiDeviceController.getDeviceAPIForId(deviceId).done(function(deviceApi) {
-                if (deviceApi && deviceApi.localURL) {
-                    console.warn('[Offscreen] Direct captcha call failed for', action, '- retrying via cloud relay');
-                    deviceApi.setLocalURL(null);
-                    api.setActiveDevice(deviceId);
-                    attempt(true);
-                } else {
-                    deferred.reject(err);
-                }
-            }).fail(function() {
-                deferred.reject(err);
-            });
+            console.warn('[Offscreen] Direct captcha call failed for', action, '- retrying via cloud relay');
+            device.setLocalURL(null);
+            attempt(true);
         });
     }
     attempt(false);
     return deferred;
 }
+
+// Ids go over the API as bare digits, anything else JSON-stringified
+function captchaIdParam(captchaId) {
+    return /^\d+$/.test(String(captchaId)) ? String(captchaId) : JSON.stringify(captchaId);
+}
+
+// The solver's skip types (JD's &skiptype=) as MyJD API SkipRequest values
+var SKIP_REQUESTS = { single: 'SINGLE', hoster: 'BLOCK_HOSTER', package: 'BLOCK_PACKAGE', all: 'BLOCK_ALL_CAPTCHAS' };
 
 // jdapi returns results either bare or wrapped in {data: ...}
 function unwrapData(result) {
@@ -397,8 +403,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             // The challenge was fetched as rawtoken, so JD expects the 3-param
             // solve(id, result, resultFormat). Id is JSON-stringified like get.
-            var solveId = /^\d+$/.test(String(request.captchaId)) ? String(request.captchaId) : JSON.stringify(request.captchaId);
-            sendCaptchaDeviceCall(request.deviceId, '/captcha/solve', [solveId, request.token, 'rawtoken']).done(function(result) {
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/solve', [captchaIdParam(request.captchaId), request.token, 'rawtoken']).done(function(result) {
                 if (unwrapData(result) === false) {
                     sendResponse({ success: false, error: 'JD rejected captcha solution' });
                 } else {
@@ -406,6 +411,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 }
             }).fail(function(err) {
                 console.warn('[Offscreen] captcha/solve failed', err);
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-skip':
+            if (!request.deviceId || request.captchaId == null) {
+                sendResponse({ success: false, error: 'deviceId and captchaId required' });
+                return true;
+            }
+            // CaptchaAPI.skip(id, SkipRequest), the API side of the browser
+            // solver's &do=skip&skiptype=...
+            var skipRequest = SKIP_REQUESTS[request.skipType] || 'SINGLE';
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/skip', [captchaIdParam(request.captchaId), skipRequest]).done(function() {
+                sendResponse({ success: true });
+            }).fail(function(err) {
+                console.warn('[Offscreen] captcha/skip failed', err);
                 sendResponse({ success: false, error: errorText(err) });
             });
             return true;
