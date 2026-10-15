@@ -165,6 +165,11 @@ function renderCaptchaWidget(job) {
                 chrome.runtime.sendMessage({
                     action: 'myjd-captcha-execute',
                     data: { siteKey: job.siteKey, v3action: job.v3action || '' }
+                }, function(response) {
+                    void chrome.runtime.lastError;
+                    if (response && response.status === 'error') {
+                        showApiLoadError('The CAPTCHA could not run on this page (' + response.error + '). Use a skip button below.');
+                    }
                 });
             }
         } else {
@@ -255,11 +260,11 @@ function startCanClosePolling() {
  * script fails to load, instead of leaving a blank widget until the
  * 5-minute countdown auto-skips. The skip buttons stay usable.
  */
-function showApiLoadError() {
+function showApiLoadError(text) {
     var container = document.getElementById('captchaContainer');
     if (!container) return;
     var errMsg = document.createElement('div');
-    errMsg.textContent = 'Failed to load the CAPTCHA widget. Use a skip button below or try again.';
+    errMsg.textContent = text || 'Failed to load the CAPTCHA widget. Use a skip button below or try again.';
     errMsg.style.color = '#f44336';
     errMsg.style.fontSize = '14px';
     errMsg.style.marginTop = '12px';

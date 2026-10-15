@@ -774,6 +774,7 @@ function captchaTabUrl(targetUrl) {
 // only differ in where the solved token has to be delivered. With no tabId
 // (a remote JDownloader has no tab of its own) a new tab is opened.
 async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
+ let createdTabId = null;
  try {
   // The solver reports the token with the job's callbackUrl, which decides
   // whether the solution is routed to my.jdownloader.org or to JDownloader's
@@ -785,7 +786,7 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
   const url = captchaTabUrl(jobDetails.targetUrl);
   if (tabId == null) {
    // Open blank first so the CSP rule exists before the hoster's response arrives
-   tabId = (await chrome.tabs.create({ url: 'about:blank', active: true })).id;
+   tabId = createdTabId = (await chrome.tabs.create({ url: 'about:blank', active: true })).id;
   }
   // One slot per tab: JDownloader opens a tab per challenge, and a shared slot
   // would let a second challenge overwrite the first before its tab reads it.
@@ -805,6 +806,9 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
   return { status: 'ok', tabId: tabId };
  } catch (err) {
   console.error('Background: Failed to prepare ' + flowName + ' CAPTCHA tab:', err);
+  // Don't leave the blank tab opened for this challenge behind; onRemoved
+  // drops its parked job and CSP rule
+  if (createdTabId != null) chrome.tabs.remove(createdTabId).catch(function() {});
   return { status: 'error', error: err.message };
  }
 }
@@ -1617,10 +1621,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // CAPTCHA icon on my.jdownloader.org (webinterfaceEnhancer.js), or the
- // legacy myjdrc2/captcha-new the site may post
- if (action === "myjd-webui-captcha-click" || (action === "captcha-new" && request.name === "myjdrc2")) {
-  openPendingRemoteCaptchas().then(function(result) {
+ // CAPTCHA icon on my.jdownloader.org (webinterfaceEnhancer.js), only while
+ // the Enhance CAPTCHA dialog setting is on (it defaults to on)
+ if (action === "myjd-webui-captcha-click") {
+  chrome.storage.local.get('ENHANCE_CAPTCHA_DIALOG').then(function(result) {
+   if (result.ENHANCE_CAPTCHA_DIALOG === false) return { disabled: true };
+   return openPendingRemoteCaptchas();
+  }).then(function(result) {
    console.log('Background: remote CAPTCHAs opened', result);
    sendResponse({ status: 'ok', result: result });
   }).catch(function(err) {
@@ -1712,34 +1719,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     target: { tabId: sender.tab.id },
     world: 'MAIN',
     args: [request.data.siteKey, request.data.v3action],
+    // Resolves with an error text, or null once the challenge runs (v3: once
+    // its token is in place), so the solver can show a failure instead of
+    // idling until the countdown skips.
     func: function(siteKey, v3action) {
-     if (typeof grecaptcha !== 'undefined') {
-      grecaptcha.ready(function() {
-       if (!v3action) {
-        // Invisible v2: run the widget rendered on the page. execute(siteKey)
-        // is the v3 signature and fails for a key not loaded with ?render=.
-        grecaptcha.execute();
-        return;
-       }
-       // v3 renders no widget of its own; put the token where the solver's
-       // g-recaptcha-response polling picks it up.
-       grecaptcha.execute(siteKey, { action: v3action }).then(function(token) {
-        var field = document.createElement('textarea');
-        field.id = 'g-recaptcha-response-myjd';
-        field.style.display = 'none';
-        field.value = token;
-        document.body.appendChild(field);
-       });
-      });
-     } else if (typeof hcaptcha !== 'undefined') {
-      hcaptcha.execute();
+     function errorText(e) {
+      return String((e && e.message) || e || 'execute failed');
      }
+     return new Promise(function(resolve) {
+      try {
+       if (typeof grecaptcha !== 'undefined') {
+        grecaptcha.ready(function() {
+         try {
+          if (!v3action) {
+           // Invisible v2: run the widget rendered on the page. execute(siteKey)
+           // is the v3 signature and fails for a key not loaded with ?render=.
+           grecaptcha.execute();
+           resolve(null);
+           return;
+          }
+          // v3 renders no widget of its own; put the token where the solver's
+          // g-recaptcha-response polling picks it up.
+          grecaptcha.execute(siteKey, { action: v3action }).then(function(token) {
+           var field = document.createElement('textarea');
+           field.id = 'g-recaptcha-response-myjd';
+           field.style.display = 'none';
+           field.value = token;
+           document.body.appendChild(field);
+           resolve(null);
+          }, function(e) {
+           resolve(errorText(e));
+          });
+         } catch (e) {
+          resolve(errorText(e));
+         }
+        });
+       } else if (typeof hcaptcha !== 'undefined') {
+        hcaptcha.execute();
+        resolve(null);
+       } else {
+        resolve('no CAPTCHA API on the page');
+       }
+      } catch (e) {
+       resolve(errorText(e));
+      }
+     });
     }
+   }).then(function(results) {
+    const error = results && results[0] && results[0].result;
+    if (error) console.warn('Background: CAPTCHA execute failed in tab', sender.tab.id, error);
+    sendResponse(error ? { status: 'error', error: error } : { status: 'ok' });
    }).catch(function(err) {
     console.error('Background: Failed to execute CAPTCHA in MAIN world:', err);
+    sendResponse({ status: 'error', error: err && err.message });
    });
+  } else {
+   sendResponse({ status: 'ok' });
   }
-  sendResponse({ status: 'ok' });
   return true;
  }
 

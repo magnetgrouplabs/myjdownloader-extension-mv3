@@ -168,6 +168,23 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
       expect(global.chrome.tabs.create).toHaveBeenCalledTimes(2);
     });
 
+    it('does nothing while the Enhance CAPTCHA dialog setting is off', async () => {
+      await chrome.storage.local.set({ ENHANCE_CAPTCHA_DIALOG: false });
+      const response = await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
+
+      expect(response).toEqual({ status: 'ok', result: { disabled: true } });
+      expect(offscreenCalls).toHaveLength(0);
+      expect(global.chrome.tabs.create).not.toHaveBeenCalled();
+    });
+
+    it('closes the blank tab it opened when the tab cannot be prepared', async () => {
+      global.chrome.tabs.update.mockImplementationOnce(() => Promise.reject(new Error('no such url')));
+      await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
+
+      expect(global.chrome.tabs.remove).toHaveBeenCalledWith(500);
+      expect(global.chrome.tabs.remove).not.toHaveBeenCalledWith(501);
+    });
+
     it('opens a challenge once when the site\'s own tab and the icon race', async () => {
       const siteTab = { id: 60, url: 'https://datavaults.co/abc#rc2jdt?k=rc-key&c=77' };
       await Promise.all([
