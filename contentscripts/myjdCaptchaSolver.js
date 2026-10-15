@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // --- Interval handles for cleanup ---
 var pollingHandle = null;
 var countdownHandle = null;
+var canCloseHandle = null;
 
 // --- Ask the service worker for the job parked for this tab ---
 chrome.runtime.sendMessage({ action: 'myjd-get-captcha-job' }, function(response) {
@@ -217,6 +218,36 @@ function renderCaptchaWidget(job) {
 
     // --- Token polling ---
     pollingHandle = startTokenPolling(job);
+
+    // --- JDownloader's canClose / useractive protocol (its own browser solver only) ---
+    if (job.callbackUrl && job.callbackUrl !== 'MYJD') {
+        canCloseHandle = startCanClosePolling();
+    }
+}
+
+/**
+ * JDownloader's browser solver expects the page it served to poll canClose
+ * and report user activity. That page handed the challenge over to this one,
+ * so the polling continues here, through the service worker (this page cannot
+ * reach JDownloader's loopback port). The worker closes the tab when
+ * JDownloader is done with the challenge.
+ */
+function startCanClosePolling() {
+    var userActive = false;
+    document.addEventListener('mousemove', function() { userActive = true; });
+    var handle = setInterval(function() {
+        var active = userActive;
+        userActive = false;
+        chrome.runtime.sendMessage({ action: 'captcha-can-close-poll', data: { userActive: active } }, function(response) {
+            void chrome.runtime.lastError;
+            if (response && response.canClose) {
+                clearInterval(handle);
+                if (pollingHandle) clearInterval(pollingHandle);
+                if (countdownHandle) clearInterval(countdownHandle);
+            }
+        });
+    }, 1000);
+    return handle;
 }
 
 /**
@@ -397,6 +428,7 @@ function startCountdown(job) {
 window.addEventListener('beforeunload', function() {
     if (pollingHandle) clearInterval(pollingHandle);
     if (countdownHandle) clearInterval(countdownHandle);
+    if (canCloseHandle) clearInterval(canCloseHandle);
 });
 
 })();

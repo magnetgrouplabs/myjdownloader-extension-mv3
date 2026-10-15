@@ -168,6 +168,37 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
       expect(global.chrome.tabs.create).toHaveBeenCalledTimes(2);
     });
 
+    it('opens a challenge once when the site\'s own tab and the icon race', async () => {
+      const siteTab = { id: 60, url: 'https://datavaults.co/abc#rc2jdt?k=rc-key&c=77' };
+      await Promise.all([
+        send({ action: 'myjd-webui-captcha-click' }, { id: 1 }),
+        send({ action: 'myjd-get-captcha-job' }, siteTab)
+      ]);
+
+      const store = global.__getSessionStore();
+      const tabsFor77 = Object.keys(store).filter(k => k.startsWith('myjd_captcha_job_') && store[k].captchaId === 77);
+      expect(tabsFor77).toHaveLength(1);
+    });
+
+    it('still knows the open tabs after the worker restarts', async () => {
+      await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
+
+      // A suspended worker comes back with fresh module state but the same session storage
+      global.chrome.runtime.onMessage._listeners.length = 0;
+      global.chrome.tabs.onRemoved._listeners.length = 0;
+      jest.resetModules();
+      require('../../background.js');
+
+      const response = await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
+      expect(response.result).toEqual({ opened: 0, focused: 2 });
+      expect(global.chrome.tabs.create).toHaveBeenCalledTimes(2);
+
+      // ...and skips the challenge when its tab is closed
+      global.chrome.tabs.onRemoved._listeners.forEach(listener => listener(500));
+      await flush();
+      expect(skips()).toEqual([expect.objectContaining({ deviceId: 'nas', captchaId: 77 })]);
+    });
+
     it('takes the v3 action name out of the API\'s JSON', async () => {
       RECAPTCHA_CHALLENGE.v3Action = '{"action":"download"}';
       try {
