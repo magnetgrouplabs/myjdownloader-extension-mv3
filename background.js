@@ -792,6 +792,7 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
   await chrome.storage.session.set({ [captchaJobKey(tabId)]: job });
   await addCspStrippingRule(tabId);
   await chrome.tabs.update(tabId, { url: url });
+  await captchaTabsReady;
   activeCaptchaTabs[tabId] = {
    callbackUrl: callbackUrl,
    captchaId: jobDetails.captchaId,
@@ -799,6 +800,7 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
    hoster: jobDetails.hoster,
    detectedAt: Date.now()
   };
+  persistCaptchaTabs();
   console.log('Background: ' + flowName + ' CAPTCHA tab prepared:', tabId, jobDetails.hoster, url);
   return { status: 'ok', tabId: tabId };
  } catch (err) {
@@ -879,6 +881,18 @@ async function skipMyjdCaptcha(job, captchaId, skipType) {
  });
 }
 
+// Finding a challenge's tab and preparing one for it is one step: the site's
+// own tab and the CAPTCHA icon could otherwise both miss a tab still being
+// prepared and open the challenge twice.
+// ponytail: one lock for every remote CAPTCHA lookup; per-challenge locks if a slow device ever stalls the site's tab
+let captchaTabLock = Promise.resolve();
+function withCaptchaTabLock(fn) {
+ const run = captchaTabLock.then(function() { return captchaTabsReady; }).then(fn);
+ captchaTabLock = run.catch(function() {});
+ return run;
+}
+
+// Only valid under withCaptchaTabLock (it waits for the restored tabs)
 function findCaptchaTab(captchaId) {
  for (const [tabId, info] of Object.entries(activeCaptchaTabs)) {
   if (info && info.captchaId != null && String(info.captchaId) === String(captchaId)) return Number(tabId);
@@ -914,7 +928,7 @@ let remoteCaptchaOpenInFlight = null;
 // Overlapping clicks share one run so a challenge is not opened twice.
 function openPendingRemoteCaptchas() {
  if (!remoteCaptchaOpenInFlight) {
-  remoteCaptchaOpenInFlight = (async function() {
+  remoteCaptchaOpenInFlight = withCaptchaTabLock(async function() {
    let opened = 0, focused = 0;
    const devices = await listRemoteDevices();
    for (const device of devices) {
@@ -938,7 +952,7 @@ function openPendingRemoteCaptchas() {
     }
    }
    return { opened: opened, focused: focused };
-  })().finally(function() {
+  }).finally(function() {
    remoteCaptchaOpenInFlight = null;
   });
  }
@@ -1639,7 +1653,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   chrome.storage.session.get(key).then(function(result) {
    const job = result && result[key];
    if (job) return { job: job };
-   return serveWebUiCaptchaTab(sender.tab);
+   return withCaptchaTabLock(function() { return serveWebUiCaptchaTab(sender.tab); });
   }).then(sendResponse).catch(function(err) {
    console.error('Background: CAPTCHA job lookup failed:', err);
    sendResponse({ job: null });
@@ -1729,6 +1743,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
+ // The hoster page's heartbeat for a challenge from JDownloader's own browser
+ // solver, which expects the page it served to poll canClose: true once the
+ // challenge was solved or cancelled elsewhere, and useractive keeps a
+ // challenge the user is working on from timing out. The hoster page cannot
+ // reach the loopback port itself, and the callback comes from the job parked
+ // for the sender tab, never from the message.
+ if (action === "captcha-can-close-poll") {
+  if (!sender.tab) {
+   sendResponse({ canClose: false });
+   return true;
+  }
+  const tabId = sender.tab.id;
+  const key = captchaJobKey(tabId);
+  chrome.storage.session.get(key).then(async function(result) {
+   const job = result[key];
+   if (!job || !job.callbackUrl || job.callbackUrl === 'MYJD') return false;
+   const active = request.data && request.data.userActive ? '&useractive=true&ts=' + Date.now() : '';
+   const response = await fetch(job.callbackUrl + '&do=canClose' + active, {
+    headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
+    signal: AbortSignal.timeout(5000)
+   });
+   return response.ok && (await response.text()).trim() === 'true';
+  }).catch(function() {
+   return false;
+  }).then(async function(canClose) {
+   if (canClose) {
+    // Done elsewhere: close without the skip a tab close would send
+    await captchaTabsReady;
+    delete activeCaptchaTabs[tabId];
+    persistCaptchaTabs();
+    console.log('Background: JDownloader closed its CAPTCHA, closing tab', tabId);
+    chrome.tabs.remove(tabId, function() {
+     if (chrome.runtime.lastError) { /* ignore */ }
+    });
+   }
+   sendResponse({ canClose: canClose });
+  });
+  return true;
+ }
+
  // captcha-can-close: close sender tab (fallback for window.close())
  if (action === "captcha-can-close") {
   if (sender.tab) {
@@ -1742,13 +1796,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  if (action === "captcha-tab-detected") {
   if (sender.tab) {
-   activeCaptchaTabs[sender.tab.id] = {
-    callbackUrl: request.data.callbackUrl,
-    captchaType: request.data.captchaType,
-    hoster: request.data.hoster,
-    captchaId: request.data.captchaId,
-    detectedAt: Date.now()
-   };
+   captchaTabsReady.then(function() {
+    activeCaptchaTabs[sender.tab.id] = {
+     callbackUrl: request.data.callbackUrl,
+     captchaType: request.data.captchaType,
+     hoster: request.data.hoster,
+     captchaId: request.data.captchaId,
+     detectedAt: Date.now()
+    };
+    persistCaptchaTabs();
+   });
    console.log('Background: CAPTCHA tab detected:', sender.tab.id, request.data.captchaType,
     'url:', sender.tab.url, 'callback:', request.data.callbackUrl);
   }
@@ -1758,7 +1815,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  if (action === "captcha-solved") {
   if (sender.tab) {
-   delete activeCaptchaTabs[sender.tab.id];
+   captchaTabsReady.then(function() {
+    delete activeCaptchaTabs[sender.tab.id];
+    persistCaptchaTabs();
+   });
   }
   if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
    // MYJD flow: solve through the MyJD API when the tab's own job names the
@@ -1840,7 +1900,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  if (action === "captcha-skip") {
   if (sender.tab) {
-   delete activeCaptchaTabs[sender.tab.id];
+   captchaTabsReady.then(function() {
+    delete activeCaptchaTabs[sender.tab.id];
+    persistCaptchaTabs();
+   });
   }
   if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
    // MYJD flow: only the job parked for this sender tab is trusted for the device
@@ -1950,9 +2013,31 @@ async function handleCnlCaptured(cnlData, tab) {
 }
 
 // ============================================================
-// CAPTCHA tab tracking (in-memory, NOT persisted)
+// CAPTCHA tab tracking, mirrored to session storage: the worker is suspended
+// while a CAPTCHA tab sits open, and the tab still has to be found (no second
+// tab for the same challenge) and skipped on close afterwards. Every read and
+// write waits for captchaTabsReady, so a restore cannot bring back an entry
+// deleted meanwhile.
 // ============================================================
+const CAPTCHA_TABS_STORAGE_KEY = 'myjd_active_captcha_tabs';
 let activeCaptchaTabs = {};
+
+async function restoreCaptchaTabs() {
+ try {
+  const result = await chrome.storage.session.get(CAPTCHA_TABS_STORAGE_KEY);
+  if (result[CAPTCHA_TABS_STORAGE_KEY]) activeCaptchaTabs = result[CAPTCHA_TABS_STORAGE_KEY];
+ } catch (e) {
+  console.error('Background: Failed to restore CAPTCHA tabs:', e);
+ }
+}
+
+function persistCaptchaTabs() {
+ chrome.storage.session.set({ [CAPTCHA_TABS_STORAGE_KEY]: activeCaptchaTabs }).catch(err => {
+  console.error('Background: Failed to persist CAPTCHA tabs:', err);
+ });
+}
+
+const captchaTabsReady = restoreCaptchaTabs();
 
 // ============================================================
 // Clean up request queue and CAPTCHA tabs when tabs are closed
@@ -1975,30 +2060,33 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  });
 
  // CAPTCHA: send skip on tab close (CAP-07)
- if (activeCaptchaTabs[tabId]) {
-  var info = activeCaptchaTabs[tabId];
-  delete activeCaptchaTabs[tabId];
-  if (info.callbackUrl === 'MYJD') {
-   // The parked job was read above, before its removal
-   jobRead.then(function(job) {
-    return skipMyjdCaptcha(job, info.captchaId, 'single');
-   }).catch(function(err) {
-    console.error('Background: MYJD CAPTCHA tab-close skip failed:', err);
-   });
-   console.log('Background: MYJD CAPTCHA tab closed, skipping', info.hoster);
-  } else if (info.callbackUrl) {
-   // MV3 service workers have no XMLHttpRequest -> use fetch() (fire-and-forget).
-   fetch(info.callbackUrl + '&do=skip&skiptype=single', {
-    headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
-    signal: AbortSignal.timeout(10000)
-   }).catch(function(e) {
-    console.error('Background: CAPTCHA tab-close skip network error or timeout for', info.hoster, e);
-   });
-   console.log('Background: CAPTCHA tab closed, sent skip(single) for', info.hoster);
-  } else {
-   console.log('Background: CAPTCHA tab closed (no JDownloader callback) for', info.hoster);
+ captchaTabsReady.then(function() {
+  if (activeCaptchaTabs[tabId]) {
+   var info = activeCaptchaTabs[tabId];
+   delete activeCaptchaTabs[tabId];
+   persistCaptchaTabs();
+   if (info.callbackUrl === 'MYJD') {
+    // The parked job was read above, before its removal
+    jobRead.then(function(job) {
+     return skipMyjdCaptcha(job, info.captchaId, 'single');
+    }).catch(function(err) {
+     console.error('Background: MYJD CAPTCHA tab-close skip failed:', err);
+    });
+    console.log('Background: MYJD CAPTCHA tab closed, skipping', info.hoster);
+   } else if (info.callbackUrl) {
+    // MV3 service workers have no XMLHttpRequest -> use fetch() (fire-and-forget).
+    fetch(info.callbackUrl + '&do=skip&skiptype=single', {
+     headers: { 'X-Myjd-Appkey': 'webextension-' + chrome.runtime.getManifest().version },
+     signal: AbortSignal.timeout(10000)
+    }).catch(function(e) {
+     console.error('Background: CAPTCHA tab-close skip network error or timeout for', info.hoster, e);
+    });
+    console.log('Background: CAPTCHA tab closed, sent skip(single) for', info.hoster);
+   } else {
+    console.log('Background: CAPTCHA tab closed (no JDownloader callback) for', info.hoster);
+   }
   }
- }
+ });
 });
 
 // ============================================================

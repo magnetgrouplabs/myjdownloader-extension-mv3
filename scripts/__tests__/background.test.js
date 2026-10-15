@@ -931,6 +931,44 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
     );
   });
 
+  describe('canClose heartbeat from the hoster page', () => {
+    const answer = text => jest.fn(() => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(text) }));
+
+    it('polls JDownloader with the parked callback and reports user activity', async () => {
+      await handOffJob(31);
+      global.fetch = answer('false');
+
+      await expect(send({ action: 'captcha-can-close-poll', data: { userActive: true } }, 31))
+        .resolves.toEqual({ canClose: false });
+      expect(global.fetch.mock.calls[0][0]).toMatch(
+        new RegExp('^' + JD_CALLBACK.replace(/[.?]/g, '\\$&') + '&do=canClose&useractive=true&ts=\\d+$'));
+      expect(global.chrome.tabs.remove).not.toHaveBeenCalled();
+    });
+
+    it('closes the tab without a skip once JDownloader is done with the challenge', async () => {
+      await handOffJob(31);
+      global.fetch = answer('true');
+
+      await expect(send({ action: 'captcha-can-close-poll', data: {} }, 31)).resolves.toEqual({ canClose: true });
+      expect(global.fetch).toHaveBeenCalledWith(JD_CALLBACK + '&do=canClose', expect.anything());
+      expect(global.chrome.tabs.remove).toHaveBeenCalledWith(31, expect.any(Function));
+
+      global.fetch.mockClear();
+      global.chrome.tabs.onRemoved._listeners.forEach(listener => listener(31));
+      await new Promise(resolve => setTimeout(resolve, 20));
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('never polls for a tab without a JDownloader-local job', async () => {
+      await send({ action: 'myjd-prepare-captcha-tab', data: { tabId: 55, jobDetails: JOB_DETAILS } }, 55);
+      global.fetch = answer('true');
+
+      await expect(send({ action: 'captcha-can-close-poll', data: {} }, 55)).resolves.toEqual({ canClose: false });
+      await expect(send({ action: 'captcha-can-close-poll', data: {} }, 99)).resolves.toEqual({ canClose: false });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   it('rejects a hand-off without a sender tab', async () => {
     const listeners = global.chrome.runtime.onMessage._listeners;
     const handler = listeners[listeners.length - 1];
