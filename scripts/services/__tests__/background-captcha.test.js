@@ -339,19 +339,19 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
       expect(skipSection[0]).toMatch(/callbackUrl\s*===\s*['"]MYJD['"]/);
     });
 
-    it('should send tab-closed to my.jdownloader.org tabs on MYJD skip', () => {
+    it('should skip through skipMyjdCaptcha on MYJD skip', () => {
       const skipSection = bgSource.match(/action\s*===\s*["']captcha-skip["'][\s\S]*?return\s+true;\s*\n\s*\}/);
       expect(skipSection).not.toBeNull();
-      expect(skipSection[0]).toMatch(/name:\s*['"]tab-closed['"]/);
+      expect(skipSection[0]).toMatch(/skipMyjdCaptcha\(/);
     });
   });
 
   describe('Tab close MYJD flow', () => {
-    it('should handle MYJD tab close by sending tab-closed message', () => {
+    it('should handle MYJD tab close by skipping the challenge', () => {
       const onRemovedSection = bgSource.match(/onRemoved\.addListener[\s\S]*?console\.log\("Background: Keepalive/);
       expect(onRemovedSection).not.toBeNull();
       expect(onRemovedSection[0]).toMatch(/info\.callbackUrl\s*===\s*['"]MYJD['"]/);
-      expect(onRemovedSection[0]).toMatch(/tab-closed/);
+      expect(onRemovedSection[0]).toMatch(/skipMyjdCaptcha\(/);
     });
 
     it('should clean up CSP rules on tab removal', () => {
