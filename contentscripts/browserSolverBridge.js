@@ -46,24 +46,13 @@ if (!siteKey || !siteUrl || !/^https?:\/\//i.test(siteUrl)) {
     return;
 }
 
-// JDownloader writes the v3 action as a JSON map, {"action":"login"}; the
-// solver passes it to grecaptcha.execute() as { action: v3action }.
-function v3ActionName(raw) {
-    if (!raw) return '';
-    try {
-        var parsed = JSON.parse(raw);
-        return (parsed && typeof parsed.action === 'string') ? parsed.action : '';
-    } catch (e) {
-        return raw;
-    }
-}
-
 var pathParts = window.location.pathname.split('/');
 var jobDetails = {
     captchaType: typeMatch[1],
     siteKey: siteKey,
     siteKeyType: meta('sitekeyType') || '',
-    v3action: v3ActionName(meta('v3action')),
+    // A JSON map like {"action":"login"}; background.js keeps the name
+    v3action: meta('v3action') || '',
     hoster: meta('siteDomain') || decodeURIComponent(pathParts[3] || 'Unknown'),
     targetUrl: siteUrl,
     captchaId: meta('challengeId') || new URLSearchParams(window.location.search).get('id')

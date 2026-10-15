@@ -834,7 +834,7 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
   }
 
   it('parks the job with JDownloader\'s callback and sends the tab to the hoster', async () => {
-    await expect(handOffJob(31)).resolves.toEqual({ status: 'ok' });
+    await expect(handOffJob(31)).resolves.toEqual({ status: 'ok', tabId: 31 });
 
     expect(global.__getSessionStore()['myjd_captcha_job_31']).toEqual(
       Object.assign({}, JOB_DETAILS, { callbackUrl: JD_CALLBACK })

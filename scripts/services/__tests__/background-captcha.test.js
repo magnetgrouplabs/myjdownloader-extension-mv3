@@ -168,7 +168,8 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
 
     it('should navigate tab with #rc2jdt hash', () => {
-      expect(bgSource).toMatch(/chrome\.tabs\.update.*#rc2jdt/);
+      expect(bgSource).toMatch(/url\.hash = 'rc2jdt'/);
+      expect(bgSource).toMatch(/chrome\.tabs\.update\(tabId, \{ url: url \}\)/);
     });
 
     it('should track tab in activeCaptchaTabs with MYJD callbackUrl', () => {

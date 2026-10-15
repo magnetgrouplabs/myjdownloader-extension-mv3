@@ -169,6 +169,56 @@ require(['jdapi'], function(API) {
     }
 });
 
+// Device-scoped call through jdapi's normal path (Direct Connection when
+// available, otherwise the api.jdownloader.org relay). On a direct-path failure,
+// clear localURL once and retry via the relay so a flaky LAN host does not stall
+// the captcha calls.
+function sendCaptchaDeviceCall(deviceId, action, params) {
+    var deferred = $.Deferred();
+    if (!api) {
+        deferred.reject('API not initialized');
+        return deferred;
+    }
+    if (!api.jdAPICore || !api.jdAPICore.options.sessiontoken) {
+        deferred.reject('Not logged in');
+        return deferred;
+    }
+    api.setActiveDevice(deviceId);
+    function attempt(isRetry) {
+        api.send(action, params).done(function(result) {
+            deferred.resolve(result);
+        }).fail(function(err) {
+            if (isRetry || !api.apiDeviceController || typeof api.apiDeviceController.getDeviceAPIForId !== 'function') {
+                deferred.reject(err);
+                return;
+            }
+            api.apiDeviceController.getDeviceAPIForId(deviceId).done(function(deviceApi) {
+                if (deviceApi && deviceApi.localURL) {
+                    console.warn('[Offscreen] Direct captcha call failed for', action, '- retrying via cloud relay');
+                    deviceApi.setLocalURL(null);
+                    api.setActiveDevice(deviceId);
+                    attempt(true);
+                } else {
+                    deferred.reject(err);
+                }
+            }).fail(function() {
+                deferred.reject(err);
+            });
+        });
+    }
+    attempt(false);
+    return deferred;
+}
+
+// jdapi returns results either bare or wrapped in {data: ...}
+function unwrapData(result) {
+    return result && result.data !== undefined ? result.data : result;
+}
+
+function errorText(err) {
+    return (err && err.message) || String(err);
+}
+
 // Handle messages from service worker ONLY — ignore messages not targeted at offscreen
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     // Only handle messages explicitly targeted at the offscreen document.
@@ -302,6 +352,62 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     sendResponse({ success: false, error: (err && err.message) || String(err) });
                 });
             }, 120);
+            return true;
+
+        case 'offscreen-captcha-list':
+            if (!request.deviceId) {
+                sendResponse({ success: false, error: 'deviceId required' });
+                return true;
+            }
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/list', []).done(function(result) {
+                var jobs = unwrapData(result);
+                sendResponse({ success: true, jobs: Array.isArray(jobs) ? jobs : [] });
+            }).fail(function(err) {
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-get':
+            if (!request.deviceId || request.captchaId == null) {
+                sendResponse({ success: false, error: 'deviceId and captchaId required' });
+                return true;
+            }
+            // Same calls as the MV2 Rc2Service: getCaptchaJob, then get(id, "rawtoken")
+            // for siteKey / siteUrl / type / v3Action.
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/getCaptchaJob', [request.captchaId]).done(function(jobResult) {
+                var job = unwrapData(jobResult);
+                if (!job || job.id == null) {
+                    sendResponse({ success: false, error: 'Captcha job not available' });
+                    return;
+                }
+                sendCaptchaDeviceCall(request.deviceId, '/captcha/get', [JSON.stringify(job.id), 'rawtoken']).done(function(challengeResult) {
+                    sendResponse({ success: true, job: job, challenge: unwrapData(challengeResult) });
+                }).fail(function(err) {
+                    sendResponse({ success: false, error: errorText(err) });
+                });
+            }).fail(function(err) {
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-solve':
+            if (!request.deviceId || request.captchaId == null || request.token == null) {
+                sendResponse({ success: false, error: 'deviceId, captchaId and token required' });
+                return true;
+            }
+            // The challenge was fetched as rawtoken, so JD expects the 3-param
+            // solve(id, result, resultFormat). Id is JSON-stringified like get.
+            var solveId = /^\d+$/.test(String(request.captchaId)) ? String(request.captchaId) : JSON.stringify(request.captchaId);
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/solve', [solveId, request.token, 'rawtoken']).done(function(result) {
+                if (unwrapData(result) === false) {
+                    sendResponse({ success: false, error: 'JD rejected captcha solution' });
+                } else {
+                    sendResponse({ success: true });
+                }
+            }).fail(function(err) {
+                console.warn('[Offscreen] captcha/solve failed', err);
+                sendResponse({ success: false, error: errorText(err) });
+            });
             return true;
 
         case 'offscreen-ping':

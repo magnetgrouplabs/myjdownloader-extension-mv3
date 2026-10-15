@@ -115,7 +115,7 @@ describe('browserSolverBridge — JD browser solver hand-off (issue #5)', () => 
         });
     });
 
-    it('unwraps the v3 action JDownloader writes as JSON', () => {
+    it('passes the v3 action JDownloader writes as JSON through', () => {
         const [message] = run({
             url: 'http://127.0.0.1:9666/captcha/recaptchav3/example.org?id=8',
             metas: Object.assign({}, HCAPTCHA_METAS, {
@@ -128,7 +128,7 @@ describe('browserSolverBridge — JD browser solver hand-off (issue #5)', () => 
         expect(message.data.jobDetails).toMatchObject({
             captchaType: 'recaptchav3',
             siteKeyType: 'INVISIBLE',
-            v3action: 'login'
+            v3action: '{"action":"login"}'
         });
     });
 

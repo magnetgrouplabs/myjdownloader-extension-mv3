@@ -96,7 +96,7 @@ let queueReady = restoreRequestQueue();
 // ============================================================
 function addCspStrippingRule(tabId) {
  let ruleId = 10000 + tabId;
- chrome.declarativeNetRequest.updateSessionRules({
+ return chrome.declarativeNetRequest.updateSessionRules({
   addRules: [{
    id: ruleId,
    priority: 1,
@@ -740,22 +740,54 @@ function captchaJobKey(tabId) {
  return 'myjd_captcha_job_' + tabId;
 }
 
+// JDownloader writes the v3 action as a JSON map, {"action":"login"}, both on its
+// browser-solver page and in the MyJD API's v3Action. The solver passes it to
+// grecaptcha.execute() as { action: v3action }, so only the name is kept.
+function v3ActionName(raw) {
+ if (!raw) return '';
+ try {
+  const parsed = JSON.parse(raw);
+  return (parsed && typeof parsed.action === 'string') ? parsed.action : '';
+ } catch (e) {
+  return String(raw);
+ }
+}
+
+// The hoster URL the solver renders on. The solver gates on the hash starting
+// with #rc2jdt, so any fragment is replaced; the MyJD API sometimes returns a
+// bare host.
+function captchaTabUrl(targetUrl) {
+ let raw = String(targetUrl || '').trim();
+ if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw.replace(/^\/\//, '');
+ const url = new URL(raw);
+ url.hash = 'rc2jdt';
+ return url.toString();
+}
+
 // Park a CAPTCHA job for myjdCaptchaSolver.js and send the tab to the hoster's
 // own domain with #rc2jdt, where the widget can legally render. Shared by the
 // MyJDownloader web interface flow and JDownloader's own browser solver; they
-// only differ in where the solved token has to be delivered.
-async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName, sendResponse) {
+// only differ in where the solved token has to be delivered. With no tabId
+// (a remote JDownloader has no tab of its own) a new tab is opened.
+async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName) {
  try {
   // The solver reports the token with the job's callbackUrl, which decides
   // whether the solution is routed to my.jdownloader.org or to JDownloader's
   // own callback URL, so it has to travel inside the job.
-  const job = Object.assign({}, jobDetails, { callbackUrl: callbackUrl });
+  const job = Object.assign({}, jobDetails, {
+   callbackUrl: callbackUrl,
+   v3action: v3ActionName(jobDetails.v3action)
+  });
+  const url = captchaTabUrl(jobDetails.targetUrl);
+  if (tabId == null) {
+   // Open blank first so the CSP rule exists before the hoster's response arrives
+   tabId = (await chrome.tabs.create({ url: 'about:blank', active: true })).id;
+  }
   // One slot per tab: JDownloader opens a tab per challenge, and a shared slot
   // would let a second challenge overwrite the first before its tab reads it.
   await chrome.storage.session.set({ [captchaJobKey(tabId)]: job });
-  addCspStrippingRule(tabId);
-  // The solver gates on the hash starting with #rc2jdt, so drop any fragment the site URL has
-  chrome.tabs.update(tabId, { url: jobDetails.targetUrl.split('#')[0] + '#rc2jdt' });
+  await addCspStrippingRule(tabId);
+  await chrome.tabs.update(tabId, { url: url });
   activeCaptchaTabs[tabId] = {
    callbackUrl: callbackUrl,
    captchaId: jobDetails.captchaId,
@@ -763,12 +795,123 @@ async function prepareCaptchaTab(tabId, jobDetails, callbackUrl, flowName, sendR
    hoster: jobDetails.hoster,
    detectedAt: Date.now()
   };
-  console.log('Background: ' + flowName + ' CAPTCHA tab prepared:', tabId, jobDetails.hoster);
-  sendResponse({ status: 'ok' });
+  console.log('Background: ' + flowName + ' CAPTCHA tab prepared:', tabId, jobDetails.hoster, url);
+  return { status: 'ok', tabId: tabId };
  } catch (err) {
   console.error('Background: Failed to prepare ' + flowName + ' CAPTCHA tab:', err);
-  sendResponse({ status: 'error', error: err.message });
+  return { status: 'error', error: err.message };
  }
+}
+
+// ============================================================
+// Remote JDownloader (NAS, Docker) CAPTCHAs via my.jdownloader.org
+// ============================================================
+// A remote JDownloader cannot open a tab in this browser. Its challenges are
+// read through the MyJD API (offscreen.js) and solved on the hoster's page.
+// Two triggers, both from my.jdownloader.org:
+// - the site's own "Solve" opens <siteUrl>#rc2jdt?k=<siteKey>&c=<captchaId>
+//   (reCAPTCHA v2 only, and only once the extension answered its ping);
+//   serveWebUiCaptchaTab() looks the job up and prepares that tab.
+// - a click on the site's CAPTCHA icon; openPendingRemoteCaptchas() lists every
+//   device's challenges and opens a tab for each. The site has no hCaptcha
+//   support at all, so this is the only way for hCaptcha.
+
+function mapRemoteCaptcha(job, challenge, deviceId) {
+ return {
+  captchaId: job.id,
+  captchaType: job.challengeType || job.type || (challenge && challenge.type) || '',
+  hoster: job.hoster || '',
+  siteKey: challenge && challenge.siteKey,
+  siteKeyType: challenge && challenge.type,
+  v3action: challenge && challenge.v3Action,
+  targetUrl: challenge && (challenge.siteUrl || challenge.contextUrl),
+  deviceId: deviceId
+ };
+}
+
+async function listRemoteDevices() {
+ const result = await sendToOffscreen('offscreen-get-devices');
+ let devices = result && result.success ? result.devices : null;
+ if (devices && Array.isArray(devices.list)) devices = devices.list;
+ return Array.isArray(devices) ? devices.filter(d => d && d.id) : [];
+}
+
+// The browser-solvable challenge with this id, from whichever device has it
+async function findRemoteCaptcha(captchaId, devices) {
+ for (const device of devices) {
+  const result = await sendToOffscreen('offscreen-captcha-get', { deviceId: device.id, captchaId: captchaId });
+  if (!result || !result.success) continue;
+  const details = mapRemoteCaptcha(result.job, result.challenge, device.id);
+  // Image captchas have no site key; those stay with JDownloader's own dialog
+  return (details.siteKey && details.targetUrl) ? details : null;
+ }
+ return null;
+}
+
+function findCaptchaTab(captchaId) {
+ for (const [tabId, info] of Object.entries(activeCaptchaTabs)) {
+  if (info && info.captchaId != null && String(info.captchaId) === String(captchaId)) return Number(tabId);
+ }
+ return null;
+}
+
+// Tab opened by the site's own "Solve": job c is looked up, parked for the tab,
+// and the tab reloaded so the hoster's CSP is stripped for the solver.
+async function serveWebUiCaptchaTab(tab) {
+ const match = /[?&]c=([^&#]+)/.exec(new URL(tab.url).hash);
+ if (!match) return { job: null };
+ const captchaId = decodeURIComponent(match[1]);
+ const existing = findCaptchaTab(captchaId);
+ if (existing != null && existing !== tab.id) {
+  // Already open, e.g. from the CAPTCHA icon: keep that tab
+  await chrome.tabs.update(existing, { active: true }).catch(function() {});
+  chrome.tabs.remove(tab.id).catch(function() {});
+  return { job: null, pending: true };
+ }
+ const details = await findRemoteCaptcha(captchaId, await listRemoteDevices());
+ if (!details) return { job: null };
+ const prepared = await prepareCaptchaTab(tab.id, details, 'MYJD', 'MyJD web interface');
+ if (prepared.status !== 'ok') return { job: null };
+ // Same document with a new hash would not reload; the solver runs on the reload
+ await chrome.tabs.reload(tab.id);
+ return { job: null, pending: true };
+}
+
+let remoteCaptchaOpenInFlight = null;
+
+// CAPTCHA icon click: open (or focus) a tab for every pending browser challenge.
+// Overlapping clicks share one run so a challenge is not opened twice.
+function openPendingRemoteCaptchas() {
+ if (!remoteCaptchaOpenInFlight) {
+  remoteCaptchaOpenInFlight = (async function() {
+   let opened = 0, focused = 0;
+   const devices = await listRemoteDevices();
+   for (const device of devices) {
+    const list = await sendToOffscreen('offscreen-captcha-list', { deviceId: device.id });
+    if (!list || !list.success) {
+     console.warn('Background: captcha list failed for', device.id, list && list.error);
+     continue;
+    }
+    for (const job of list.jobs) {
+     if (!job || job.id == null) continue;
+     const existing = findCaptchaTab(job.id);
+     if (existing != null) {
+      await chrome.tabs.update(existing, { active: true }).catch(function() {});
+      focused++;
+      continue;
+     }
+     const details = await findRemoteCaptcha(job.id, [device]);
+     if (!details) continue;
+     const prepared = await prepareCaptchaTab(null, details, 'MYJD', 'MyJD CAPTCHA icon');
+     if (prepared.status === 'ok') opened++;
+    }
+   }
+   return { opened: opened, focused: focused };
+  })().finally(function() {
+   remoteCaptchaOpenInFlight = null;
+  });
+ }
+ return remoteCaptchaOpenInFlight;
 }
 
 // ============================================================
@@ -1413,7 +1556,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  // MYJD CAPTCHA: prepare tab (write session storage, add CSP rule, navigate)
  if (action === "myjd-prepare-captcha-tab") {
-  prepareCaptchaTab(request.data.tabId, request.data.jobDetails, 'MYJD', 'MYJD', sendResponse);
+  prepareCaptchaTab(request.data.tabId, request.data.jobDetails, 'MYJD', 'MYJD').then(sendResponse);
+  return true;
+ }
+
+ // webinterfaceEnhancer.js asks whether to answer my.jdownloader.org's ping.
+ // The pong is what makes the site offer the extension its reCAPTCHA jobs
+ // (serveWebUiCaptchaTab handles the tab it then opens).
+ if (action === "settings" && request.name === "webinterface-enhancer") {
+  chrome.storage.local.get('ENHANCE_CAPTCHA_DIALOG').then(function(result) {
+   sendResponse({ active: result.ENHANCE_CAPTCHA_DIALOG !== false });
+  }).catch(function() {
+   sendResponse({ active: true });
+  });
+  return true;
+ }
+
+ // CAPTCHA icon on my.jdownloader.org (webinterfaceEnhancer.js), or the
+ // legacy myjdrc2/captcha-new the site may post
+ if (action === "myjd-webui-captcha-click" || (action === "captcha-new" && request.name === "myjdrc2")) {
+  openPendingRemoteCaptchas().then(function(result) {
+   console.log('Background: remote CAPTCHAs opened', result);
+   sendResponse({ status: 'ok', result: result });
+  }).catch(function(err) {
+   console.error('Background: opening remote CAPTCHAs failed:', err);
+   sendResponse({ status: 'error', error: err && err.message });
+  });
   return true;
  }
 
@@ -1425,11 +1593,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
    sendResponse({ status: 'error', error: 'no sender tab' });
    return true;
   }
-  prepareCaptchaTab(sender.tab.id, request.data.jobDetails, request.data.callbackUrl, 'JD browser solver', sendResponse);
+  prepareCaptchaTab(sender.tab.id, request.data.jobDetails, request.data.callbackUrl, 'JD browser solver').then(sendResponse);
   return true;
  }
 
- // myjdCaptchaSolver.js asks for the job parked for its own tab
+ // myjdCaptchaSolver.js asks for the job parked for its own tab. A tab
+ // my.jdownloader.org opened itself has none yet and is served from the API.
  if (action === "myjd-get-captcha-job") {
   if (!sender.tab) {
    sendResponse({ job: null });
@@ -1437,8 +1606,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   const key = captchaJobKey(sender.tab.id);
   chrome.storage.session.get(key).then(function(result) {
-   sendResponse({ job: (result && result[key]) || null });
-  }).catch(function() {
+   const job = result && result[key];
+   if (job) return { job: job };
+   return serveWebUiCaptchaTab(sender.tab);
+  }).then(sendResponse).catch(function(err) {
+   console.error('Background: CAPTCHA job lookup failed:', err);
    sendResponse({ job: null });
   });
   return true;
@@ -1558,11 +1730,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
    delete activeCaptchaTabs[sender.tab.id];
   }
   if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
-   // MYJD flow: route solution through my.jdownloader.org tabs
-   chrome.tabs.query({
-    url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
-   }, function(tabs) {
-    if (tabs && tabs.length > 0) {
+   // MYJD flow: solve through the MyJD API when the tab's own job names the
+   // device (it was looked up there), otherwise hand the token to the
+   // my.jdownloader.org tabs, which submit it themselves. Only the job parked
+   // for this sender tab is trusted for the device and id.
+   (async function() {
+    const key = sender.tab ? captchaJobKey(sender.tab.id) : null;
+    const job = key ? (await chrome.storage.session.get(key))[key] : null;
+    if (job && job.deviceId && job.captchaId != null) {
+     const solved = await sendToOffscreen('offscreen-captcha-solve', {
+      deviceId: job.deviceId, captchaId: job.captchaId, token: request.data.token
+     });
+     if (solved && solved.success) {
+      console.log('Background: CAPTCHA solved via MyJD API for', job.hoster, job.captchaId);
+      return;
+     }
+     console.warn('Background: MyJD API solve failed, handing the token to my.jdownloader.org:', solved && solved.error);
+    }
+    chrome.tabs.query({
+     url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
+    }, function(tabs) {
+     if (!tabs || tabs.length === 0) {
+      console.warn('Background: no my.jdownloader.org tab to hand the CAPTCHA token to');
+      return;
+     }
      for (var i = 0; i < tabs.length; i++) {
       chrome.tabs.sendMessage(tabs[i].id, {
        name: 'response',
@@ -1570,7 +1761,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
        data: { captchaId: request.data.captchaId, token: request.data.token }
       }, function() { /* ignore errors */ });
      }
-    }
+    });
+   })().catch(function(err) {
+    console.error('Background: MYJD CAPTCHA delivery failed:', err);
    });
    // Auto-close sender tab and clean up CSP rule
    if (sender.tab) {
