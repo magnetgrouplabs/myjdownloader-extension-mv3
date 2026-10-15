@@ -131,9 +131,8 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
   // ============================================================
 
   describe('Session storage access level', () => {
-    it('should set access level for content scripts', () => {
-      expect(bgSource).toMatch(/setAccessLevel/);
-      expect(bgSource).toMatch(/TRUSTED_AND_UNTRUSTED_CONTEXTS/);
+    it('keeps session storage closed to content scripts (jobs go through myjd-get-captcha-job)', () => {
+      expect(bgSource).not.toMatch(/TRUSTED_AND_UNTRUSTED_CONTEXTS/);
     });
   });
 

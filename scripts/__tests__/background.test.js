@@ -836,12 +836,52 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
   it('parks the job with JDownloader\'s callback and sends the tab to the hoster', async () => {
     await expect(handOffJob(31)).resolves.toEqual({ status: 'ok' });
 
-    expect(global.__getSessionStore()['myjd_captcha_job']).toEqual(
+    expect(global.__getSessionStore()['myjd_captcha_job_31']).toEqual(
       Object.assign({}, JOB_DETAILS, { callbackUrl: JD_CALLBACK })
     );
     expect(global.chrome.tabs.update).toHaveBeenCalledWith(31, {
       url: 'https://ddownload.com/file/abc#rc2jdt'
     });
+  });
+
+  it('gives each tab its own job, so two open challenges cannot cross', async () => {
+    await handOffJob(31);
+    await send({
+      action: 'jd-browser-solver-job',
+      data: {
+        jobDetails: Object.assign({}, JOB_DETAILS, { captchaId: '43', siteKey: 'other-key' }),
+        callbackUrl: JD_CALLBACK.replace('id=42', 'id=43')
+      }
+    }, 32);
+
+    const first = await send({ action: 'myjd-get-captcha-job' }, 31);
+    const second = await send({ action: 'myjd-get-captcha-job' }, 32);
+    expect(first.job).toMatchObject({ captchaId: '42', callbackUrl: JD_CALLBACK });
+    expect(second.job).toMatchObject({ captchaId: '43', siteKey: 'other-key' });
+    expect((await send({ action: 'myjd-get-captcha-job' }, 99)).job).toBeNull();
+  });
+
+  it('drops a fragment from the site URL so the #rc2jdt gate still matches', async () => {
+    await send({
+      action: 'jd-browser-solver-job',
+      data: {
+        jobDetails: Object.assign({}, JOB_DETAILS, { targetUrl: 'https://ddownload.com/file/abc#download' }),
+        callbackUrl: JD_CALLBACK
+      }
+    }, 31);
+
+    expect(global.chrome.tabs.update).toHaveBeenCalledWith(31, {
+      url: 'https://ddownload.com/file/abc#rc2jdt'
+    });
+  });
+
+  it('forgets the parked job when the tab closes', async () => {
+    await handOffJob(31);
+    const onRemoved = global.chrome.tabs.onRemoved._listeners;
+    onRemoved[onRemoved.length - 1](31);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(global.__getSessionStore()['myjd_captcha_job_31']).toBeUndefined();
   });
 
   it('strips CSP for the tab so the hCaptcha widget can load', async () => {
@@ -912,6 +952,6 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
       data: { tabId: 55, jobDetails: JOB_DETAILS }
     }, 55);
 
-    expect(global.__getSessionStore()['myjd_captcha_job'].callbackUrl).toBe('MYJD');
+    expect(global.__getSessionStore()['myjd_captcha_job_55'].callbackUrl).toBe('MYJD');
   });
 });
