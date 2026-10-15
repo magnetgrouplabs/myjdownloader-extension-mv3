@@ -10,8 +10,15 @@ if (!location.hash.startsWith('#rc2jdt')) return;
 document.open();
 document.close();
 
-// Build placeholder DOM using createElement only (no inline scripts)
-var body = document.createElement('body');
+// Reuse the body document.open/close leaves behind; appending a second <body>
+// left a blank-looking page in some browsers (PR #26, seen on Brave).
+var body = document.body;
+if (!body) {
+    body = document.createElement('body');
+    document.documentElement.appendChild(body);
+} else {
+    while (body.firstChild) body.removeChild(body.firstChild);
+}
 body.id = 'myjd-captcha-body';
 body.style.background = '#3c686f';
 body.style.color = '#fff';
@@ -24,7 +31,6 @@ loadingMsg.style.textAlign = 'center';
 loadingMsg.style.fontSize = '18px';
 loadingMsg.style.marginTop = '40px';
 body.appendChild(loadingMsg);
-document.documentElement.appendChild(body);
 
 // Strategy 2: On readystatechange, clear foreign DOM
 var clearDocument = function() {
@@ -62,6 +68,8 @@ var countdownHandle = null;
 chrome.runtime.sendMessage({ action: 'myjd-get-captcha-job' }, function(response) {
     void chrome.runtime.lastError;
     var job = response && response.job;
+    // A tab my.jdownloader.org opened itself is being prepared and reloads
+    if (!job && response && response.pending) return;
     if (!job) {
         while (body.firstChild) body.removeChild(body.firstChild);
         var errMsg = document.createElement('div');
