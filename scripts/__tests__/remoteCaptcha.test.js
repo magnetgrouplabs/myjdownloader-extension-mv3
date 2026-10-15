@@ -152,6 +152,14 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
       });
     });
 
+    it('hands the listed job along instead of fetching it again', async () => {
+      await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
+
+      const gets = offscreenCalls.filter(m => m.action === 'offscreen-captcha-get');
+      expect(gets.map(m => m.captchaId)).toEqual([77, 78, 79]);
+      gets.forEach(m => expect(m.job).toMatchObject({ id: m.captchaId }));
+    });
+
     it('focuses the open tabs on a second click instead of opening them again', async () => {
       await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });
       const response = await send({ action: 'myjd-webui-captcha-click' }, { id: 1 });

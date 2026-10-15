@@ -846,14 +846,22 @@ async function listRemoteDevices() {
  return Array.isArray(devices) ? devices.filter(d => d && d.id) : [];
 }
 
+// The browser-solvable challenge for this id on one device: its details, null
+// when it is not browser-solvable, undefined when the device does not have it.
+// A job already read from /captcha/list saves the getCaptchaJob round trip.
+async function fetchRemoteCaptcha(deviceId, captchaId, job) {
+ const result = await sendToOffscreen('offscreen-captcha-get', { deviceId: deviceId, captchaId: captchaId, job: job });
+ if (!result || !result.success) return undefined;
+ const details = mapRemoteCaptcha(result.job, result.challenge, deviceId);
+ // Image captchas have no site key; those stay with JDownloader's own dialog
+ return (details.siteKey && details.targetUrl) ? details : null;
+}
+
 // The browser-solvable challenge with this id, from whichever device has it
 async function findRemoteCaptcha(captchaId, devices) {
  for (const device of devices) {
-  const result = await sendToOffscreen('offscreen-captcha-get', { deviceId: device.id, captchaId: captchaId });
-  if (!result || !result.success) continue;
-  const details = mapRemoteCaptcha(result.job, result.challenge, device.id);
-  // Image captchas have no site key; those stay with JDownloader's own dialog
-  return (details.siteKey && details.targetUrl) ? details : null;
+  const details = await fetchRemoteCaptcha(device.id, captchaId);
+  if (details !== undefined) return details;
  }
  return null;
 }
@@ -934,26 +942,30 @@ function openPendingRemoteCaptchas() {
  if (!remoteCaptchaOpenInFlight) {
   remoteCaptchaOpenInFlight = withCaptchaTabLock(async function() {
    let opened = 0, focused = 0;
+   // Devices and their challenges are read in parallel; tabs open in list order
    const devices = await listRemoteDevices();
-   for (const device of devices) {
+   const perDevice = await Promise.all(devices.map(async function(device) {
     const list = await sendToOffscreen('offscreen-captcha-list', { deviceId: device.id });
     if (!list || !list.success) {
      console.warn('Background: captcha list failed for', device.id, list && list.error);
+     return [];
+    }
+    const jobs = list.jobs.filter(function(job) { return job && job.id != null; });
+    return Promise.all(jobs.map(async function(job) {
+     if (findCaptchaTab(job.id) != null) return { id: job.id };
+     return { id: job.id, details: await fetchRemoteCaptcha(device.id, job.id, job) };
+    }));
+   }));
+   for (const entry of perDevice.flat()) {
+    const existing = findCaptchaTab(entry.id);
+    if (existing != null) {
+     await chrome.tabs.update(existing, { active: true }).catch(function() {});
+     focused++;
      continue;
     }
-    for (const job of list.jobs) {
-     if (!job || job.id == null) continue;
-     const existing = findCaptchaTab(job.id);
-     if (existing != null) {
-      await chrome.tabs.update(existing, { active: true }).catch(function() {});
-      focused++;
-      continue;
-     }
-     const details = await findRemoteCaptcha(job.id, [device]);
-     if (!details) continue;
-     const prepared = await prepareCaptchaTab(null, details, 'MYJD', 'MyJD CAPTCHA icon');
-     if (prepared.status === 'ok') opened++;
-    }
+    if (!entry.details) continue;
+    const prepared = await prepareCaptchaTab(null, entry.details, 'MYJD', 'MyJD CAPTCHA icon');
+    if (prepared.status === 'ok') opened++;
    }
    return { opened: opened, focused: focused };
   }).finally(function() {
@@ -1602,12 +1614,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  // ============================================================
  // CAPTCHA tab tracking and message handling
  // ============================================================
-
- // MYJD CAPTCHA: prepare tab (write session storage, add CSP rule, navigate)
- if (action === "myjd-prepare-captcha-tab") {
-  prepareCaptchaTab(request.data.tabId, request.data.jobDetails, 'MYJD', 'MYJD').then(sendResponse);
-  return true;
- }
 
  // webinterfaceEnhancer.js asks whether to answer my.jdownloader.org's ping.
  // The pong is what makes the site offer the extension its reCAPTCHA jobs
