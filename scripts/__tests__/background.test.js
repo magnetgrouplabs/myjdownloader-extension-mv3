@@ -969,6 +969,30 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
     });
   });
 
+  it('tells the solver when the invisible/v3 execute fails on the page', async () => {
+    global.chrome.scripting.executeScript.mockImplementationOnce(() => Promise.resolve([{ result: 'Invalid site key' }]));
+    await expect(send({ action: 'myjd-captcha-execute', data: { siteKey: 'k', v3action: 'login' } }, 31))
+      .resolves.toEqual({ status: 'error', error: 'Invalid site key' });
+
+    global.chrome.scripting.executeScript.mockImplementationOnce(() => Promise.resolve([{ result: null }]));
+    await expect(send({ action: 'myjd-captcha-execute', data: { siteKey: 'k', v3action: 'login' } }, 31))
+      .resolves.toEqual({ status: 'ok' });
+
+    // The injected function itself: a rejected v3 execute and a throwing invisible execute
+    const injected = global.chrome.scripting.executeScript.mock.calls[0][0].func;
+    global.grecaptcha = { ready: fn => fn(), execute: () => Promise.reject(new Error('Invalid action name')) };
+    try {
+      await expect(injected('k', 'login')).resolves.toBe('Invalid action name');
+      global.grecaptcha.execute = () => { throw new Error('No reCAPTCHA clients exist.'); };
+      await expect(injected('k', '')).resolves.toBe('No reCAPTCHA clients exist.');
+      global.grecaptcha.execute = () => Promise.resolve('t'.repeat(40));
+      await expect(injected('k', 'login')).resolves.toBeNull();
+      expect(document.getElementById('g-recaptcha-response-myjd').value).toBe('t'.repeat(40));
+    } finally {
+      delete global.grecaptcha;
+    }
+  });
+
   it('rejects a hand-off without a sender tab', async () => {
     const listeners = global.chrome.runtime.onMessage._listeners;
     const handler = listeners[listeners.length - 1];

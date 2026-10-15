@@ -25,11 +25,6 @@ var WebinterfaceEnhancer = (function () {
             return;
         var data = e.data;
         if (!data) return;
-        // Legacy MV2 trigger; a manual solve request, so not gated on the setting
-        if (data.type === "myjdrc2" && data.name === "captcha-new") {
-            chrome.runtime.sendMessage({ name: "myjdrc2", action: "captcha-new" });
-            return;
-        }
         if (data.name === "ping") {
             if (active === null) {
                 pendingPingOrigin = e.origin;
@@ -60,7 +55,7 @@ var WebinterfaceEnhancer = (function () {
 document.addEventListener('click', function (ev) {
     var target = ev.target;
     if (!target || !target.closest) return;
-    if (!target.closest('#gwtCaptchasWaiting, img[src*="captcha.png"], img[src*="/images/captcha"]')) return;
+    if (!target.closest('#gwtCaptchasWaiting, img[src$="images/captcha.png"]')) return;
     chrome.runtime.sendMessage({ action: 'myjd-webui-captcha-click' }, function () {
         void chrome.runtime.lastError;
     });

@@ -98,10 +98,4 @@ describe('webinterfaceEnhancer', () => {
         page.click(true);
         expect(page.sent.filter(m => m.action === 'myjd-webui-captcha-click')).toHaveLength(1);
     });
-
-    it('forwards the legacy captcha-new from the site', () => {
-        const page = load();
-        page.message({ type: 'myjdrc2', name: 'captcha-new', data: {} });
-        expect(page.sent).toContainEqual({ name: 'myjdrc2', action: 'captcha-new' });
-    });
 });
