@@ -10,8 +10,15 @@ if (!location.hash.startsWith('#rc2jdt')) return;
 document.open();
 document.close();
 
-// Build placeholder DOM using createElement only (no inline scripts)
-var body = document.createElement('body');
+// Reuse the body document.open/close leaves behind; appending a second <body>
+// left a blank-looking page in some browsers (PR #26, seen on Brave).
+var body = document.body;
+if (!body) {
+    body = document.createElement('body');
+    document.documentElement.appendChild(body);
+} else {
+    while (body.firstChild) body.removeChild(body.firstChild);
+}
 body.id = 'myjd-captcha-body';
 body.style.background = '#3c686f';
 body.style.color = '#fff';
@@ -24,7 +31,6 @@ loadingMsg.style.textAlign = 'center';
 loadingMsg.style.fontSize = '18px';
 loadingMsg.style.marginTop = '40px';
 body.appendChild(loadingMsg);
-document.documentElement.appendChild(body);
 
 // Strategy 2: On readystatechange, clear foreign DOM
 var clearDocument = function() {
@@ -57,10 +63,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // --- Interval handles for cleanup ---
 var pollingHandle = null;
 var countdownHandle = null;
+var canCloseHandle = null;
 
-// --- Read job data from chrome.storage.session ---
-chrome.storage.session.get('myjd_captcha_job', function(result) {
-    var job = result && result.myjd_captcha_job;
+// --- Ask the service worker for the job parked for this tab ---
+chrome.runtime.sendMessage({ action: 'myjd-get-captcha-job' }, function(response) {
+    void chrome.runtime.lastError;
+    var job = response && response.job;
+    // A tab my.jdownloader.org opened itself is being prepared and reloads
+    if (!job && response && response.pending) return;
     if (!job) {
         while (body.firstChild) body.removeChild(body.firstChild);
         var errMsg = document.createElement('div');
@@ -120,13 +130,18 @@ function renderCaptchaWidget(job) {
         widgetDiv.className = 'h-captcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
         apiScriptUrl = 'https://hcaptcha.com/1/api.js';
+    } else if (job.v3action) {
+        // reCAPTCHA v3 has no widget: a v3 key in a g-recaptcha div is an
+        // "Invalid key type". The key is loaded with ?render= and run by
+        // myjd-captcha-execute.
+        apiScriptUrl = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(job.siteKey);
     } else {
         widgetDiv.className = 'g-recaptcha';
         widgetDiv.setAttribute('data-sitekey', job.siteKey);
-        if (job.siteKeyType === 'INVISIBLE') {
-            widgetDiv.setAttribute('data-size', 'invisible');
-        }
         apiScriptUrl = 'https://www.google.com/recaptcha/api.js';
+    }
+    if (job.siteKeyType === 'INVISIBLE') {
+        widgetDiv.setAttribute('data-size', 'invisible');
     }
 
     captchaContainer.appendChild(widgetDiv);
@@ -146,10 +161,15 @@ function renderCaptchaWidget(job) {
         clearTimeout(apiTimeoutHandle);
         if (loaded) {
             // For invisible/v3 CAPTCHAs, request MAIN world execution now that the API is ready
-            if (job.siteKeyType === 'INVISIBLE') {
+            if (job.siteKeyType === 'INVISIBLE' || job.v3action) {
                 chrome.runtime.sendMessage({
                     action: 'myjd-captcha-execute',
                     data: { siteKey: job.siteKey, v3action: job.v3action || '' }
+                }, function(response) {
+                    void chrome.runtime.lastError;
+                    if (response && response.status === 'error') {
+                        showApiLoadError('The CAPTCHA could not run on this page (' + response.error + '). Use a skip button below.');
+                    }
                 });
             }
         } else {
@@ -203,6 +223,36 @@ function renderCaptchaWidget(job) {
 
     // --- Token polling ---
     pollingHandle = startTokenPolling(job);
+
+    // --- JDownloader's canClose / useractive protocol (its own browser solver only) ---
+    if (job.callbackUrl && job.callbackUrl !== 'MYJD') {
+        canCloseHandle = startCanClosePolling();
+    }
+}
+
+/**
+ * JDownloader's browser solver expects the page it served to poll canClose
+ * and report user activity. That page handed the challenge over to this one,
+ * so the polling continues here, through the service worker (this page cannot
+ * reach JDownloader's loopback port). The worker closes the tab when
+ * JDownloader is done with the challenge.
+ */
+function startCanClosePolling() {
+    var userActive = false;
+    document.addEventListener('mousemove', function() { userActive = true; });
+    var handle = setInterval(function() {
+        var active = userActive;
+        userActive = false;
+        chrome.runtime.sendMessage({ action: 'captcha-can-close-poll', data: { userActive: active } }, function(response) {
+            void chrome.runtime.lastError;
+            if (response && response.canClose) {
+                clearInterval(handle);
+                if (pollingHandle) clearInterval(pollingHandle);
+                if (countdownHandle) clearInterval(countdownHandle);
+            }
+        });
+    }, 1000);
+    return handle;
 }
 
 /**
@@ -210,11 +260,11 @@ function renderCaptchaWidget(job) {
  * script fails to load, instead of leaving a blank widget until the
  * 5-minute countdown auto-skips. The skip buttons stay usable.
  */
-function showApiLoadError() {
+function showApiLoadError(text) {
     var container = document.getElementById('captchaContainer');
     if (!container) return;
     var errMsg = document.createElement('div');
-    errMsg.textContent = 'Failed to load the CAPTCHA widget. Use a skip button below or try again.';
+    errMsg.textContent = text || 'Failed to load the CAPTCHA widget. Use a skip button below or try again.';
     errMsg.style.color = '#f44336';
     errMsg.style.fontSize = '14px';
     errMsg.style.marginTop = '12px';
@@ -273,7 +323,7 @@ function injectSkipButtons(job) {
             chrome.runtime.sendMessage({
                 action: 'captcha-skip',
                 data: {
-                    callbackUrl: 'MYJD',
+                    callbackUrl: job.callbackUrl || 'MYJD',
                     captchaId: job.captchaId,
                     skipType: skipType
                 }
@@ -301,7 +351,7 @@ function startTokenPolling(job) {
                     action: 'captcha-solved',
                     data: {
                         token: recaptchaTextareas[i].value,
-                        callbackUrl: 'MYJD',
+                        callbackUrl: job.callbackUrl || 'MYJD',
                         captchaId: job.captchaId
                     }
                 });
@@ -319,7 +369,7 @@ function startTokenPolling(job) {
                     action: 'captcha-solved',
                     data: {
                         token: hcaptchaTextareas[i].value,
-                        callbackUrl: 'MYJD',
+                        callbackUrl: job.callbackUrl || 'MYJD',
                         captchaId: job.captchaId
                     }
                 });
@@ -333,7 +383,7 @@ function startTokenPolling(job) {
 
 /**
  * 5-minute countdown timer with visual urgency.
- * Sends skip(single) with MYJD callbackUrl on expiry.
+ * Sends skip(single) with the job's callback on expiry.
  */
 function startCountdown(job) {
     var TIMEOUT_MS = 5 * 60 * 1000; // 300000ms = 5 minutes
@@ -370,7 +420,7 @@ function startCountdown(job) {
             chrome.runtime.sendMessage({
                 action: 'captcha-skip',
                 data: {
-                    callbackUrl: 'MYJD',
+                    callbackUrl: job.callbackUrl || 'MYJD',
                     captchaId: job.captchaId,
                     skipType: 'single'
                 }
@@ -383,6 +433,7 @@ function startCountdown(job) {
 window.addEventListener('beforeunload', function() {
     if (pollingHandle) clearInterval(pollingHandle);
     if (countdownHandle) clearInterval(countdownHandle);
+    if (canCloseHandle) clearInterval(canCloseHandle);
 });
 
 })();

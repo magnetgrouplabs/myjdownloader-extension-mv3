@@ -131,9 +131,8 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
   // ============================================================
 
   describe('Session storage access level', () => {
-    it('should set access level for content scripts', () => {
-      expect(bgSource).toMatch(/setAccessLevel/);
-      expect(bgSource).toMatch(/TRUSTED_AND_UNTRUSTED_CONTEXTS/);
+    it('keeps session storage closed to content scripts (jobs go through myjd-get-captcha-job)', () => {
+      expect(bgSource).not.toMatch(/TRUSTED_AND_UNTRUSTED_CONTEXTS/);
     });
   });
 
@@ -155,9 +154,9 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
   });
 
-  describe('myjd-prepare-captcha-tab handler', () => {
-    it('should handle myjd-prepare-captcha-tab action', () => {
-      expect(bgSource).toMatch(/myjd-prepare-captcha-tab/);
+  describe('prepareCaptchaTab', () => {
+    it('should not take a tab id from a message (no myjd-prepare-captcha-tab)', () => {
+      expect(bgSource).not.toMatch(/myjd-prepare-captcha-tab/);
     });
 
     it('should write myjd_captcha_job to session storage', () => {
@@ -169,15 +168,19 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
     });
 
     it('should navigate tab with #rc2jdt hash', () => {
-      expect(bgSource).toMatch(/chrome\.tabs\.update.*#rc2jdt/);
+      expect(bgSource).toMatch(/url\.hash = 'rc2jdt'/);
+      expect(bgSource).toMatch(/chrome\.tabs\.update\(tabId, \{ url: url \}\)/);
     });
 
-    it('should track tab in activeCaptchaTabs with MYJD callbackUrl', () => {
-      // The handler stores callbackUrl: 'MYJD' in activeCaptchaTabs
-      const section = bgSource.match(/myjd-prepare-captcha-tab[\s\S]*?return\s+true/);
-      expect(section).not.toBeNull();
-      expect(section[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
-      expect(section[0]).toMatch(/callbackUrl:\s*['"]MYJD['"]/);
+    it('should track the tab in activeCaptchaTabs with its callbackUrl', () => {
+      // Shared by the MyJD flows (MYJD marker) and JDownloader's browser solver.
+      // Behavioural coverage lives in scripts/__tests__/background.test.js and
+      // remoteCaptcha.test.js.
+      expect(bgSource).toMatch(/prepareCaptchaTab\([^)]*['"]MYJD['"]/);
+      const prepare = bgSource.match(/async function prepareCaptchaTab[\s\S]*?\n\}/);
+      expect(prepare).not.toBeNull();
+      expect(prepare[0]).toMatch(/activeCaptchaTabs\[tabId\]/);
+      expect(prepare[0]).toMatch(/callbackUrl:\s*callbackUrl/);
     });
   });
 
@@ -334,19 +337,19 @@ describe('Background CAPTCHA Handlers (CAP-03, CAP-04, CAP-07)', () => {
       expect(skipSection[0]).toMatch(/callbackUrl\s*===\s*['"]MYJD['"]/);
     });
 
-    it('should send tab-closed to my.jdownloader.org tabs on MYJD skip', () => {
+    it('should skip through skipMyjdCaptcha on MYJD skip', () => {
       const skipSection = bgSource.match(/action\s*===\s*["']captcha-skip["'][\s\S]*?return\s+true;\s*\n\s*\}/);
       expect(skipSection).not.toBeNull();
-      expect(skipSection[0]).toMatch(/name:\s*['"]tab-closed['"]/);
+      expect(skipSection[0]).toMatch(/skipMyjdCaptcha\(/);
     });
   });
 
   describe('Tab close MYJD flow', () => {
-    it('should handle MYJD tab close by sending tab-closed message', () => {
+    it('should handle MYJD tab close by skipping the challenge', () => {
       const onRemovedSection = bgSource.match(/onRemoved\.addListener[\s\S]*?console\.log\("Background: Keepalive/);
       expect(onRemovedSection).not.toBeNull();
       expect(onRemovedSection[0]).toMatch(/info\.callbackUrl\s*===\s*['"]MYJD['"]/);
-      expect(onRemovedSection[0]).toMatch(/tab-closed/);
+      expect(onRemovedSection[0]).toMatch(/skipMyjdCaptcha\(/);
     });
 
     it('should clean up CSP rules on tab removal', () => {

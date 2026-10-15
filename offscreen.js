@@ -169,6 +169,62 @@ require(['jdapi'], function(API) {
     }
 });
 
+// jdapi's own error types for a request that never got an answer
+var NETWORK_ERROR_TYPES = ['CONNECTION_REFUSED', 'TIMEOUT', 'UNKNOWN_ERROR'];
+
+// Device-scoped call through jdapi's normal path (Direct Connection when
+// available, otherwise the api.jdownloader.org relay). When the direct path is
+// unreachable, drop the device's localURL once and retry via the relay so a
+// flaky LAN host does not stall the captcha calls. API errors from JD itself
+// (e.g. a job that is already solved) are not retried.
+function sendCaptchaDeviceCall(deviceId, action, params) {
+    var deferred = $.Deferred();
+    if (!api) {
+        deferred.reject('API not initialized');
+        return deferred;
+    }
+    if (!api.jdAPICore || !api.jdAPICore.options.sessiontoken) {
+        deferred.reject('Not logged in');
+        return deferred;
+    }
+    function attempt(isRetry) {
+        api.setActiveDevice(deviceId);
+        api.send(action, params).done(function(result) {
+            deferred.resolve(result);
+        }).fail(function(err) {
+            var controller = api.apiDeviceController;
+            var device = controller && controller.devices && controller.devices[deviceId];
+            var isNetworkError = err && NETWORK_ERROR_TYPES.indexOf(err.type) !== -1;
+            if (isRetry || !isNetworkError || !device || !device.isInLocalMode()) {
+                deferred.reject(err);
+                return;
+            }
+            console.warn('[Offscreen] Direct captcha call failed for', action, '- retrying via cloud relay');
+            device.setLocalURL(null);
+            attempt(true);
+        });
+    }
+    attempt(false);
+    return deferred;
+}
+
+// Ids go over the API as bare digits, anything else JSON-stringified
+function captchaIdParam(captchaId) {
+    return /^\d+$/.test(String(captchaId)) ? String(captchaId) : JSON.stringify(captchaId);
+}
+
+// The solver's skip types (JD's &skiptype=) as MyJD API SkipRequest values
+var SKIP_REQUESTS = { single: 'SINGLE', hoster: 'BLOCK_HOSTER', package: 'BLOCK_PACKAGE', all: 'BLOCK_ALL_CAPTCHAS' };
+
+// jdapi returns results either bare or wrapped in {data: ...}
+function unwrapData(result) {
+    return result && result.data !== undefined ? result.data : result;
+}
+
+function errorText(err) {
+    return (err && err.message) || String(err);
+}
+
 // Handle messages from service worker ONLY — ignore messages not targeted at offscreen
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     // Only handle messages explicitly targeted at the offscreen document.
@@ -302,6 +358,84 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     sendResponse({ success: false, error: (err && err.message) || String(err) });
                 });
             }, 120);
+            return true;
+
+        case 'offscreen-captcha-list':
+            if (!request.deviceId) {
+                sendResponse({ success: false, error: 'deviceId required' });
+                return true;
+            }
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/list', []).done(function(result) {
+                var jobs = unwrapData(result);
+                sendResponse({ success: true, jobs: Array.isArray(jobs) ? jobs : [] });
+            }).fail(function(err) {
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-get':
+            if (!request.deviceId || request.captchaId == null) {
+                sendResponse({ success: false, error: 'deviceId and captchaId required' });
+                return true;
+            }
+            // getCaptchaJob, then get(id, "rawtoken") for siteKey / siteUrl /
+            // type / v3Action. A job already read from /captcha/list skips the
+            // first call.
+            var getChallenge = function(job) {
+                if (!job || job.id == null) {
+                    sendResponse({ success: false, error: 'Captcha job not available' });
+                    return;
+                }
+                sendCaptchaDeviceCall(request.deviceId, '/captcha/get', [JSON.stringify(job.id), 'rawtoken']).done(function(challengeResult) {
+                    sendResponse({ success: true, job: job, challenge: unwrapData(challengeResult) });
+                }).fail(function(err) {
+                    sendResponse({ success: false, error: errorText(err) });
+                });
+            };
+            if (request.job) {
+                getChallenge(request.job);
+                return true;
+            }
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/getCaptchaJob', [request.captchaId]).done(function(jobResult) {
+                getChallenge(unwrapData(jobResult));
+            }).fail(function(err) {
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-solve':
+            if (!request.deviceId || request.captchaId == null || request.token == null) {
+                sendResponse({ success: false, error: 'deviceId, captchaId and token required' });
+                return true;
+            }
+            // The challenge was fetched as rawtoken, so JD expects the 3-param
+            // solve(id, result, resultFormat). Id is JSON-stringified like get.
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/solve', [captchaIdParam(request.captchaId), request.token, 'rawtoken']).done(function(result) {
+                if (unwrapData(result) === false) {
+                    sendResponse({ success: false, error: 'JD rejected captcha solution' });
+                } else {
+                    sendResponse({ success: true });
+                }
+            }).fail(function(err) {
+                console.warn('[Offscreen] captcha/solve failed', err);
+                sendResponse({ success: false, error: errorText(err) });
+            });
+            return true;
+
+        case 'offscreen-captcha-skip':
+            if (!request.deviceId || request.captchaId == null) {
+                sendResponse({ success: false, error: 'deviceId and captchaId required' });
+                return true;
+            }
+            // CaptchaAPI.skip(id, SkipRequest), the API side of the browser
+            // solver's &do=skip&skiptype=...
+            var skipRequest = SKIP_REQUESTS[request.skipType] || 'SINGLE';
+            sendCaptchaDeviceCall(request.deviceId, '/captcha/skip', [captchaIdParam(request.captchaId), skipRequest]).done(function() {
+                sendResponse({ success: true });
+            }).fail(function(err) {
+                console.warn('[Offscreen] captcha/skip failed', err);
+                sendResponse({ success: false, error: errorText(err) });
+            });
             return true;
 
         case 'offscreen-ping':

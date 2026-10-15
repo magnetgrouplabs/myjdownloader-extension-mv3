@@ -1,13 +1,12 @@
 'use strict';
 
 angular.module('myjdWebextensionApp')
-  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'myjdClientFactory', 'myjdDeviceClientFactory', 'StorageService',
-    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, myjdClientFactory, myjdDeviceClientFactory, StorageService) {
+  .service('Rc2Service', ['BrowserService', 'ExtensionMessagingService', 'PopupCandidatesService', 'StorageService',
+    function (BrowserService, ExtensionMessagingService, PopupCandidatesService, StorageService) {
       const buildVersion = chrome.runtime.getManifest().version;
       let isForcedPrivateMode = false;
       let isAllowedIncognito = false;
 
-      let rc2TabUpdateCallbacks = {};
       let rc2CanCloseIntervalHandles = {};
 
       StorageService.get(StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key, result => {
@@ -45,30 +44,6 @@ angular.module('myjdWebextensionApp')
           // skip buttons, countdown timer, and tab lifecycle
           console.log('Rc2Service: CAPTCHA tab detected, content script will handle:', request.url);
         }
-      }
-
-      function onLoginNeeded(tab) {
-        chrome.tabs.update(tab, { url: chrome.runtime.getURL("loginNeeded.html") });
-      }
-
-      function onWebInterfaceCaptchaJobFound(tab, captchaData, captchaJob) {
-        let jobDetails = {
-            captchaId: captchaData.id,
-            captchaType: captchaData.challengeType || captchaData.type,
-            hoster: captchaData.hoster,
-            siteKey: captchaJob.siteKey,
-            siteKeyType: captchaJob.type,
-            v3action: captchaJob.v3Action,
-            targetUrl: captchaJob.siteUrl || captchaJob.contextUrl,
-            callbackUrl: 'MYJD'
-        };
-
-        // Send to service worker to prepare the CAPTCHA tab
-        // (writes session storage, adds CSP rule, navigates tab)
-        chrome.runtime.sendMessage({
-            action: 'myjd-prepare-captcha-tab',
-            data: { tabId: tab, jobDetails: jobDetails }
-        });
       }
 
       function sendRc2SolutionToJd(request, sender) {
@@ -223,29 +198,6 @@ angular.module('myjdWebextensionApp')
         onRc2MouseMove(request.callbackUrl, request.timestamp);
       });
 
-      ExtensionMessagingService.addListener("myjdrc2", "captcha-new", function (request, sender, sendResponse) {
-        // request.data.params is a string IPC not working with objects
-        onNewCaptchaAvailable(sender.tab.id, request.data.callbackUrl, JSON.parse(request.data.params));
-
-      });
-
-      function onNewCaptchaAvailable(tabId, callbackUrl, params) {
-        // This function is called from the myjdrc2:captcha-new listener
-        // (webinterfaceEnhancer.js -> captcha-new message).
-        // For localhost CAPTCHA pages, the content script auto-activates via manifest.
-        console.log('Rc2Service: onNewCaptchaAvailable called for', callbackUrl);
-
-        if (callbackUrl === 'MYJD') {
-          // Route through service worker for MYJD flow
-          chrome.runtime.sendMessage({
-            action: 'myjd-prepare-captcha-tab',
-            data: { tabId: tabId, jobDetails: { ...params, callbackUrl: 'MYJD' } }
-          });
-        }
-        // For localhost callback URLs, the content script on the CAPTCHA tab
-        // handles everything -- no action needed here.
-      }
-
       ExtensionMessagingService.addListener("myjdrc2", "tabmode-skip-request", function (request, sender, sendResponse) {
         onSkipRequest(sender, request.data);
       });
@@ -283,68 +235,9 @@ angular.module('myjdWebextensionApp')
         }
       }
 
-      chrome.tabs.onRemoved.addListener((tabId) => {
-        delete rc2TabUpdateCallbacks[tabId];
-      });
-
-      chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-        var tabCaptchaInfo = rc2TabUpdateCallbacks[tabId];
-        let match;
-        if (tabCaptchaInfo != null && changeInfo.status === "complete") {
-          let listener = tabCaptchaInfo.callback;
-          listener(tabId);
-          delete tabCaptchaInfo.callback;
-        } else if (tabInfo.url.indexOf("#rc2jdt") !== -1 && (match = tabInfo.url.match("\\&c=(.*)")) != null) {
-          let captchaId = match[1];
-          if (captchaId != null) {
-            const connected = myjdClientFactory.get().isConnected();
-            if (connected) {
-              myjdClientFactory.get().getDeviceList().then(deviceResponse => {
-                deviceResponse.result.map(device => {
-                  myjdDeviceClientFactory.get(device).sendRequest("/captcha/getCaptchaJob", captchaId)
-                    .then(captchaData => {
-                      if (captchaData != null && captchaData.data != null && captchaData.data.id != null) {
-                        myjdDeviceClientFactory.get(device)
-                          .sendRequest("/captcha/get", JSON.stringify(captchaData.data.id), "rawtoken")
-                          .then(captchaJobResponse => {
-                            if (captchaJobResponse != null && captchaJobResponse.data != null) {
-                              onWebInterfaceCaptchaJobFound(tabId, captchaData.data, captchaJobResponse.data);
-                            }
-                          })
-                          .catch(console.error);
-                      }
-                    }).catch(console.error);
-                });
-              });
-            } else {
-              onLoginNeeded(tabId);
-            }
-          }
-        }
-      });
-
       chrome.storage.onChanged.addListener(function (changes, namespace) {
         if (changes && changes[StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key]) {
           isForcedPrivateMode = changes[StorageService.settingsKeys.CAPTCHA_PRIVACY_MODE.key].newValue;
-        }
-      });
-
-      ExtensionMessagingService.addListener("myjdrc2", "captcha-get", function (request, sender, sendResponse) {
-        var tabCaptchaInfo = rc2TabUpdateCallbacks[sender.tab.id];
-        if (tabCaptchaInfo == null) {
-          console.log("no captcha available:", sender.tab.id);
-        } else {
-          var captchaParams = tabCaptchaInfo.captchaParams;
-          chrome.tabs.sendMessage(sender.tab.id, {
-            name: "myjdrc2", action: "captcha-set", data: {
-              callbackUrl: captchaParams.callbackUrl,
-              params: captchaParams.params
-            }
-          }, (ev) => {
-            console.log("captcha-set", ev);
-          });
-
-          console.log("captcha-get", request, sender, captchaParams);
         }
       });
 
