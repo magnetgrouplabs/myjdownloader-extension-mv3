@@ -115,6 +115,24 @@ describe('fileditch resolver', () => {
     expect(r.url).toBeDefined();
   });
 
+  test('real page whose token percent-encodes the filename resolves', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'fixtures', 'fileditch-filepage-percent-encoded.html'), 'utf8');
+    const r = resolver.extractFromHtml(html, 'https://fileditchvids.st/balpha32/dd86e373528b7c91c377/Mira%204k.mp4');
+    expect(r.error).toBeUndefined();
+    const plain = '1792200898:TESTSIGNATURE_0000000000000000000000000000:701/balpha32/dd86e373528b7c91c377/Mira%204k.mp4';
+    expect(r.url).toBe(link(plain));
+  });
+
+  test('token with a percent-encoded filename matches encoded and literal page urls', () => {
+    const html = '<a href="' + link('1791924206:SIG:701/beta10/0123456789abcdef0123/my%20file%20(1).mp4') + '">';
+    const encoded = resolver.extractFromHtml(html, 'https://fileditchfiles.me/beta10/0123456789abcdef0123/my%20file%20(1).mp4');
+    expect(encoded.error).toBeUndefined();
+    expect(encoded.url).toBeDefined();
+    const literal = resolver.extractFromHtml(html, 'https://fileditchfiles.me/beta10/0123456789abcdef0123/my file (1).mp4');
+    expect(literal.error).toBeUndefined();
+    expect(literal.url).toBeDefined();
+  });
+
   test('JSON-escaped and HTML-escaped tokens are found', () => {
     const u = link('1791924206:SIG:701/beta10/0123456789abcdef0123/sample_video.mp4');
     const jsonEsc = '{"src":"' + u.replace(/\//g, '\\/') + '"}';

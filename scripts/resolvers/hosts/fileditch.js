@@ -4,7 +4,7 @@
  * The file page embeds the direct link as https://<any host>/<token> where token
  * is base64url of "<unix seconds>:<signature>:<server>/.../<id>/<filename>" (the
  * bucket segment between server and id is not assumed; only the last two path
- * segments, <id>/<filename>, are compared). The timestamp is the link expiry.
+ * segments, <id>/<filename>, are compared, both percent-decoded per segment). The timestamp is the link expiry.
  * Works on HTML text only.
  *
  * match() is host only: any http(s) URL on fileditchfiles.me or fileditchvids.st
@@ -56,6 +56,8 @@
       var rest = segs[segs.length - 2] + '/' + segs[segs.length - 1];
       // The filename may be UTF-8 bytes in a binary string.
       try { rest = decodeURIComponent(escape(rest)); } catch (e) { /* keep raw */ }
+      // The site may also percent-encode the filename (Mira%204k.mp4); decode per segment like pagePathKey.
+      rest = rest.split('/').map(safeDecode).join('/');
       return { seconds: parseInt(m[1], 10), key: rest };
     } catch (e) {
       return null;
