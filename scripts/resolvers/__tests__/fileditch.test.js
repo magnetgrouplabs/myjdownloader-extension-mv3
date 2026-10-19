@@ -33,6 +33,20 @@ describe('fileditch resolver', () => {
     expect(resolver.match('https://fileditchvids.st.evil.com/beta10/abc123/a.mp4')).toBe(false);
   });
 
+  test('match accepts all four FileDitch hosts and rejects lookalikes', () => {
+    ['fileditchfiles.me', 'fileditchfiles.st', 'fileditchvids.me', 'fileditchvids.st'].forEach((h) => {
+      expect(resolver.match('https://' + h + '/alpha23/04146d4a05b5af23de5f/just-visiting-episode-1-2160p.mp4')).toBe(true);
+      expect(resolver.match('http://www.' + h.toUpperCase() + ':8080/balpha21/698825f1a5675ef67cfe/a.mp4')).toBe(true);
+      expect(resolver.match('https://' + h + '/')).toBe(true);
+      expect(resolver.match('https://' + h + '.evil.com/a/b/c.mp4')).toBe(false);
+      expect(resolver.match('https://not' + h + '/a/b/c.mp4')).toBe(false);
+    });
+    expect(resolver.match('https://fileditchfiles.com/alpha23/04146d4a05b5af23de5f/a.mp4')).toBe(false);
+    expect(resolver.match('https://notfileditchfiles.st/alpha23/04146d4a05b5af23de5f/a.mp4')).toBe(false);
+    expect(resolver.match('https://fileditchfiles.stx/alpha23/04146d4a05b5af23de5f/a.mp4')).toBe(false);
+    expect(resolver.match('https://fileditchvids.xx/alpha23/04146d4a05b5af23de5f/a.mp4')).toBe(false);
+  });
+
   test('extraction works for a vids.st page url on the existing fixture', () => {
     const u = 'https://fileditchvids.st/beta10/0123456789abcdef0123/sample_video.mp4';
     expect(resolver.extractFromHtml(page, u).url).toMatch(/^https:\/\/blehpooffileditchvidsstuff\.org\//);
