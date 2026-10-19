@@ -55,7 +55,7 @@ registers itself with `MyjdHostResolvers.register({...})`.
 ```js
 MyjdHostResolvers.register({
   id: 'fileditch',                              // short, lowercase, same as the file name without .js
-  label: 'FileDitch (fileditchfiles.me, fileditchvids.st)', // shown to users
+  label: 'FileDitch (fileditchfiles.me, fileditchfiles.st, fileditchvids.me, fileditchvids.st)', // shown to users
   match: function (url) { /* ... */ },          // true only for file pages of that host
   extractFromHtml: function (html, pageUrl) {   // gets the page HTML as text
     return { url: 'https://...', expiresAt: 1791924206000 };  // expiresAt is optional, ms since epoch

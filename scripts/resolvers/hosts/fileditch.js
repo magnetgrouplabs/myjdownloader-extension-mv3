@@ -93,7 +93,7 @@
 
   registry.register({
     id: 'fileditch',
-    label: 'FileDitch (fileditchfiles.me, fileditchvids.st)',
+    label: 'FileDitch (fileditchfiles.me, fileditchfiles.st, fileditchvids.me, fileditchvids.st)',
     match: function (url) {
       return typeof url === 'string' && HOST_RE.test(url);
     },

@@ -17,7 +17,7 @@ body:
     attributes:
       label: Host name and site
       description: The name of the file host and its main domain.
-      placeholder: e.g., FileDitch (fileditchfiles.me, fileditchvids.st)
+      placeholder: e.g., FileDitch (fileditchfiles.me, fileditchfiles.st, fileditchvids.me, fileditchvids.st)
     validations:
       required: true
 
