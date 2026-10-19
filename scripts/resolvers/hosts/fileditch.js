@@ -1,5 +1,5 @@
 /*
- * FileDitch resolver (fileditchfiles.me and fileditchvids.st, same page template).
+ * FileDitch resolver (fileditchfiles.me, fileditchfiles.st, fileditchvids.me and fileditchvids.st, same page template).
  *
  * The file page embeds the direct link as https://<any host>/<token> where token
  * is base64url of "<unix seconds>:<signature>:<server>/.../<id>/<filename>" (the
@@ -7,8 +7,8 @@
  * segments, <id>/<filename>, are compared, both percent-decoded per segment). The timestamp is the link expiry.
  * Works on HTML text only.
  *
- * match() is host only: any http(s) URL on fileditchfiles.me or fileditchvids.st
- * (exact host, optional www). A page that is not a file page (the host root, say)
+ * match() is host only: any http(s) URL on fileditchfiles.me, fileditchfiles.st,
+ * fileditchvids.me or fileditchvids.st (exact host, optional www and port). A page that is not a file page (the host root, say)
  * matches but extracts to {error:'not-found'}, because it has no <id>/<filename>.
  *
  * The direct host is not hard-coded. Every URL whose whole path is one long
@@ -26,7 +26,7 @@
     (typeof require === 'function' ? require('../hostResolvers') : null);
   if (!registry) return;
 
-  var HOST_RE = /^https?:\/\/(www\.)?(fileditchfiles\.me|fileditchvids\.st)(?::\d+)?(?:[\/?#]|$)/i;
+  var HOST_RE = /^https?:\/\/(www\.)?(fileditchfiles|fileditchvids)\.(me|st)(?::\d+)?(?:[\/?#]|$)/i;
   var CANDIDATE_RE = /https?:\/\/[a-z0-9.-]+\/([A-Za-z0-9_-]{32,}={0,2})(?![A-Za-z0-9_\/.%=-])/gi;
 
   function safeDecode(s) {
