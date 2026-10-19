@@ -30,7 +30,7 @@ describe('MyjdHostResolvers registry', () => {
   });
 
   test('list returns id and label', () => {
-    expect(reg.list()).toContainEqual({ id: 'fileditch', label: 'FileDitch (fileditchfiles.me, fileditchvids.st)' });
+    expect(reg.list()).toContainEqual({ id: 'fileditch', label: 'FileDitch (fileditchfiles.me, fileditchfiles.st, fileditchvids.me, fileditchvids.st)' });
   });
 
   test('findResolver never throws and returns null for junk', () => {

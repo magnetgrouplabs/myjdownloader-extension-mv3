@@ -14,7 +14,7 @@ to master promotion, then the tag). Suite on the branch: 22 suites, 388 tests. N
 
 What it does: for a file host with a shipped resolver, the add-links panel asks `background.js`
 (`resolve-links`) to turn the file page into the direct download link before the send. The first
-resolver is FileDitch (fileditchfiles.me and fileditchvids.st, host-only match). Background tries a
+resolver is FileDitch (fileditchfiles.me, fileditchfiles.st, fileditchvids.me and fileditchvids.st, host-only match). Background tries a
 credentialed fetch first, then an inactive tab (`chrome.tabs.create` with `active:false`, and
 `scripting.executeScript` reads the DOM). The tab path polls every 500 ms because the host injects
 the `<source src>` after load. Limit is 25 s, or 150 s once a Cloudflare challenge is shown and the
