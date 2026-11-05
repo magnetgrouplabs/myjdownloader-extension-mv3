@@ -91,11 +91,10 @@ describe('browserSolverBridge — JD browser solver hand-off (issue #5)', () => 
         });
     });
 
-    it('passes JDownloader\'s own URL as the callback so the token goes back there', () => {
-        const url = 'http://127.0.0.1:9666/captcha/hcaptcha/ddownload.com?id=42';
-        const [message] = run({ url, metas: Object.assign({}, HCAPTCHA_METAS, { challengeId: '42' }) });
+    it('sends no callback: the service worker takes the sender\'s own URL', () => {
+        const [message] = run();
 
-        expect(message.data.callbackUrl).toBe(url);
+        expect(Object.keys(message.data)).toEqual(['jobDetails']);
     });
 
     it('hands reCAPTCHA v2 over too — its JDownloader page has no widget either (#22)', () => {

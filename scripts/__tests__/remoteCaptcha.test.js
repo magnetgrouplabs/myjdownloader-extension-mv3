@@ -86,13 +86,19 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
   const skips = () => offscreenCalls.filter(m => m.action === 'offscreen-captcha-skip');
 
   describe('answering the site\'s extension ping', () => {
-    it('is on by default', async () => {
+    it('is on by default while logged in', async () => {
+      await chrome.storage.local.set({ myjd_session: { email: 'a@b.c' } });
       const response = await send({ name: 'webinterface-enhancer', action: 'settings' }, { id: 1 });
       expect(response).toEqual({ active: true });
     });
 
+    it('stays off while logged out, so the site keeps its own flow', async () => {
+      const response = await send({ name: 'webinterface-enhancer', action: 'settings' }, { id: 1 });
+      expect(response).toEqual({ active: false });
+    });
+
     it('follows the Enhance CAPTCHA dialog setting', async () => {
-      await chrome.storage.local.set({ ENHANCE_CAPTCHA_DIALOG: false });
+      await chrome.storage.local.set({ myjd_session: { email: 'a@b.c' }, ENHANCE_CAPTCHA_DIALOG: false });
       const response = await send({ name: 'webinterface-enhancer', action: 'settings' }, { id: 1 });
       expect(response).toEqual({ active: false });
     });
@@ -129,6 +135,40 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
       expect(response).toEqual({ job: null, pending: true });
       expect(global.chrome.tabs.update).toHaveBeenCalledWith(500, { active: true });
       expect(global.chrome.tabs.remove).toHaveBeenCalledWith(60);
+    });
+
+    it('serves no job to a tab on another site or with another site key', async () => {
+      for (const url of ['https://evil.example/#rc2jdt?k=rc-key&c=77', 'https://datavaults.co/abc#rc2jdt?k=other&c=77',
+        'https://datavaults.co/abc#rc2jdt?c=77']) {
+        await expect(send({ action: 'myjd-get-captcha-job' }, { id: 62, url })).resolves.toEqual({ job: null });
+      }
+      expect(global.__getSessionStore()['myjd_captcha_job_62']).toBeUndefined();
+      expect(global.chrome.tabs.reload).not.toHaveBeenCalled();
+    });
+
+    it('accepts the hoster with or without www.', async () => {
+      const response = await send({ action: 'myjd-get-captcha-job' },
+        { id: 63, url: 'https://www.datavaults.co/abc#rc2jdt?k=rc-key&c=77' });
+      expect(response).toEqual({ job: null, pending: true });
+    });
+
+    it('releases the lookup after a hung offscreen call', async () => {
+      jest.useFakeTimers();
+      try {
+        const answer = global.chrome.runtime.sendMessage.getMockImplementation();
+        // The offscreen document never answers
+        global.chrome.runtime.sendMessage.mockImplementation(() => Promise.resolve());
+        const hung = send({ action: 'myjd-get-captcha-job' }, SITE_TAB);
+        for (let i = 0; i < 50; i++) await Promise.resolve();
+        jest.advanceTimersByTime(30000);
+        await expect(hung).resolves.toEqual({ job: null });
+
+        // The next lookup is not stuck behind it
+        global.chrome.runtime.sendMessage.mockImplementation(answer);
+        await expect(send({ action: 'myjd-get-captcha-job' }, SITE_TAB)).resolves.toEqual({ job: null, pending: true });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('reports no job for an #rc2jdt tab without a challenge id', async () => {
@@ -280,6 +320,19 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
       await flush();
 
       expect(solves()).toHaveLength(0);
+      // ...nor hands its id to my.jdownloader.org
+      expect(global.chrome.tabs.query).not.toHaveBeenCalled();
+    });
+
+    it('hands my.jdownloader.org the parked job\'s id, not the one the tab reports', async () => {
+      solveResult = { success: false, error: 'offline' };
+      global.chrome.tabs.query.mockImplementation((query, callback) => callback([{ id: 9 }]));
+      const tab = await openedTab();
+      await send({ action: 'captcha-solved', data: { token: 't'.repeat(40), callbackUrl: 'MYJD', captchaId: 1 } }, tab);
+      await flush();
+
+      expect(global.chrome.tabs.sendMessage).toHaveBeenCalledWith(9,
+        expect.objectContaining({ name: 'response', data: { captchaId: 77, token: 't'.repeat(40) } }), expect.any(Function));
     });
   });
 
@@ -305,6 +358,15 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
 
       expect(skips()).toEqual([expect.objectContaining({ deviceId: 'nas', captchaId: 77, skipType: 'single' })]);
       expect(global.__getSessionStore()['myjd_captcha_job_500']).toBeUndefined();
+    });
+
+    it('skips nothing for a tab it did not prepare', async () => {
+      await send({ action: 'captcha-skip', data: { callbackUrl: 'MYJD', captchaId: 77, skipType: 'all' } },
+        { id: 777, url: 'https://evil.example/' });
+      await flush();
+
+      expect(skips()).toHaveLength(0);
+      expect(global.chrome.tabs.query).not.toHaveBeenCalled();
     });
 
     it('tells my.jdownloader.org when the API skip fails', async () => {

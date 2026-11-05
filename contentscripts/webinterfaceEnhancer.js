@@ -67,8 +67,8 @@ chrome.runtime.sendMessage({
     },
     function (response) {
         void chrome.runtime.lastError;
-        // No usable answer: fall back to the setting's default (on)
-        WebinterfaceEnhancer.setActive(!(response && response.active === false));
+        // No usable answer: stay off, so the site keeps its own CAPTCHA flow
+        WebinterfaceEnhancer.setActive(!!(response && response.active));
     });
 
 chrome.runtime.onMessage.addListener(function (msg) {

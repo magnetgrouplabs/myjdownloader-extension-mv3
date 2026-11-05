@@ -818,11 +818,12 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
     require('../../background.js');
   });
 
-  function send(message, tabId) {
+  // The sender is JDownloader's challenge page in the tab's top frame
+  function send(message, tabId, url = JD_CALLBACK, frameId = 0) {
     const listeners = global.chrome.runtime.onMessage._listeners;
     const handler = listeners[listeners.length - 1];
     return new Promise(resolve => {
-      handler(message, { id: chrome.runtime.id, tab: { id: tabId } }, resolve);
+      handler(message, { id: chrome.runtime.id, tab: { id: tabId }, url, frameId }, resolve);
     });
   }
 
@@ -852,7 +853,7 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
         jobDetails: Object.assign({}, JOB_DETAILS, { captchaId: '43', siteKey: 'other-key' }),
         callbackUrl: JD_CALLBACK.replace('id=42', 'id=43')
       }
-    }, 32);
+    }, 32, JD_CALLBACK.replace('id=42', 'id=43'));
 
     const first = await send({ action: 'myjd-get-captcha-job' }, 31);
     const second = await send({ action: 'myjd-get-captcha-job' }, 32);
@@ -999,12 +1000,37 @@ describe('Background.js JD browser solver hand-off (issue #5)', () => {
     const response = await new Promise(resolve => {
       handler(
         { action: 'jd-browser-solver-job', data: { jobDetails: JOB_DETAILS, callbackUrl: JD_CALLBACK } },
-        { id: chrome.runtime.id },
+        { id: chrome.runtime.id, url: JD_CALLBACK, frameId: 0 },
         resolve
       );
     });
 
-    expect(response).toEqual({ status: 'error', error: 'no sender tab' });
+    expect(response).toEqual({ status: 'error', error: 'not a JDownloader challenge page' });
     expect(global.chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a hand-off only from the top frame of a JDownloader challenge page', async () => {
+    const rejected = { status: 'error', error: 'not a JDownloader challenge page' };
+    const job = { action: 'jd-browser-solver-job', data: { jobDetails: JOB_DETAILS, callbackUrl: JD_CALLBACK } };
+
+    await expect(send(job, 31, 'https://evil.example/captcha/hcaptcha/x?id=1')).resolves.toEqual(rejected);
+    await expect(send(job, 31, 'http://127.0.0.1:9666/app/captcha/hcaptcha/x')).resolves.toEqual(rejected);
+    await expect(send(job, 31, JD_CALLBACK, 2)).resolves.toEqual(rejected);
+    await expect(send({
+      action: 'jd-browser-solver-job',
+      data: { jobDetails: Object.assign({}, JOB_DETAILS, { targetUrl: 'javascript:alert(1)' }) }
+    }, 31)).resolves.toEqual(rejected);
+
+    expect(global.chrome.tabs.update).not.toHaveBeenCalled();
+    expect(global.__getSessionStore()['myjd_captcha_job_31']).toBeUndefined();
+  });
+
+  it('takes the callback from the sender, not from the message', async () => {
+    await send({
+      action: 'jd-browser-solver-job',
+      data: { jobDetails: JOB_DETAILS, callbackUrl: 'https://evil.example/collect?' }
+    }, 31);
+
+    expect(global.__getSessionStore()['myjd_captcha_job_31'].callbackUrl).toBe(JD_CALLBACK);
   });
 });

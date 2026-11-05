@@ -229,7 +229,7 @@ function errorText(err) {
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     // Only handle messages explicitly targeted at the offscreen document.
     // Without this guard, we intercept toolbar/popup messages and break their flow.
-    if (!request || request.target !== 'offscreen') {
+    if (!request || request.target !== 'offscreen' || sender.tab) {
         return false;
     }
 
