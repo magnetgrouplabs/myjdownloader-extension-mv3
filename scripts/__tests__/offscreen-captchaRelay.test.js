@@ -78,3 +78,11 @@ describe('offscreen captcha calls: Direct Connection -> relay fallback', () => {
     expect(modes).toEqual(['local', 'relay']);
   });
 });
+
+describe('offscreen message listener', () => {
+  // Content scripts reach every extension context; only the service worker
+  // (no sender.tab) may drive the offscreen-* API calls
+  it('ignores messages sent from a tab', () => {
+    expect(offscreen).toMatch(/if \(!request \|\| request\.target !== 'offscreen' \|\| sender\.tab\) \{\s*return false;/);
+  });
+});

@@ -77,11 +77,12 @@ describe('webinterfaceEnhancer', () => {
         expect(pongs(page)).toHaveLength(0);
     });
 
-    it('falls back to the default (on) when the service worker gives no answer', () => {
+    it('stays silent when the service worker gives no answer', () => {
         const page = load();
         page.message({ name: 'ping' });
         page.settings(undefined);
-        expect(pongs(page)).toHaveLength(1);
+        page.message({ name: 'ping' });
+        expect(pongs(page)).toHaveLength(0);
     });
 
     it('ignores other origins and messages without data', () => {

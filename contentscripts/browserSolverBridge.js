@@ -60,14 +60,11 @@ var jobDetails = {
 
 console.log('[JD Browser Solver Bridge] Handing', jobDetails.captchaType, 'for', jobDetails.hoster, 'to the service worker');
 
+// JDownloader expects the token on the very URL that served this page; the
+// service worker takes it from the message sender
 chrome.runtime.sendMessage({
     action: 'jd-browser-solver-job',
-    data: {
-        jobDetails: jobDetails,
-        // JDownloader expects the token on the very URL that served this page:
-        // <callbackUrl>&do=solve&response=<token>
-        callbackUrl: window.location.href
-    }
+    data: { jobDetails: jobDetails }
 }, function(response) {
     void chrome.runtime.lastError;
     if (!response || response.status !== 'ok') {

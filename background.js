@@ -757,6 +757,17 @@ function v3ActionName(raw) {
  return (parsed && typeof parsed.action === 'string') ? parsed.action : '';
 }
 
+// A challenge page of JDownloader's own browser solver (browserSolverBridge.js)
+function isJdSolverPage(url) {
+ try {
+  const u = new URL(url);
+  return /^https?:$/.test(u.protocol) && /^(127\.0\.0\.1|localhost)$/.test(u.hostname)
+   && /^\/captcha\/(recaptchav2|recaptchav3|hcaptcha)\//.test(u.pathname);
+ } catch (e) {
+  return false;
+ }
+}
+
 // The hoster URL the solver renders on. The solver gates on the hash starting
 // with #rc2jdt, so any fragment is replaced; the MyJD API sometimes returns a
 // bare host.
@@ -866,20 +877,27 @@ async function findRemoteCaptcha(captchaId, devices) {
  return null;
 }
 
-// Skip a MYJD-flow challenge: through the MyJD API when the tab's parked job
-// names the device (a remote JD whose challenge the site never started),
-// otherwise tell the my.jdownloader.org tabs, which started it.
-async function skipMyjdCaptcha(job, captchaId, skipType) {
- if (job && job.deviceId && job.captchaId != null) {
-  const skipped = await sendToOffscreen('offscreen-captcha-skip', {
-   deviceId: job.deviceId, captchaId: job.captchaId, skipType: skipType
-  });
-  if (skipped && skipped.success) {
-   console.log('Background: CAPTCHA skipped via MyJD API for', job.hoster, job.captchaId, skipType);
-   return;
-  }
-  console.warn('Background: MyJD API skip failed, telling my.jdownloader.org:', skipped && skipped.error);
+// A MYJD job parked for a tab. Only this job is trusted for the device and
+// challenge id, never ids a content script reports.
+function isMyjdJob(job) {
+ return !!(job && job.deviceId && job.captchaId != null);
+}
+
+// Skip a MYJD-flow challenge through the MyJD API, or tell the
+// my.jdownloader.org tabs when the API call fails.
+async function skipMyjdCaptcha(job, skipType) {
+ if (!isMyjdJob(job)) {
+  console.warn('Background: no MyJD CAPTCHA job parked for this tab, nothing to skip');
+  return;
  }
+ const skipped = await sendToOffscreen('offscreen-captcha-skip', {
+  deviceId: job.deviceId, captchaId: job.captchaId, skipType: skipType
+ });
+ if (skipped && skipped.success) {
+  console.log('Background: CAPTCHA skipped via MyJD API for', job.hoster, job.captchaId, skipType);
+  return;
+ }
+ console.warn('Background: MyJD API skip failed, telling my.jdownloader.org:', skipped && skipped.error);
  chrome.tabs.query({
   url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
  }, function(tabs) {
@@ -887,7 +905,7 @@ async function skipMyjdCaptcha(job, captchaId, skipType) {
    chrome.tabs.sendMessage(tab.id, {
     name: 'tab-closed',
     type: 'myjdrc2',
-    data: { captchaId: captchaId }
+    data: { captchaId: job.captchaId }
    }, function() { /* ignore errors */ });
   }
  });
@@ -897,9 +915,16 @@ async function skipMyjdCaptcha(job, captchaId, skipType) {
 // own tab and the CAPTCHA icon could otherwise both miss a tab still being
 // prepared and open the challenge twice.
 // ponytail: one lock for every remote CAPTCHA lookup; per-challenge locks if a slow device ever stalls the site's tab
+// A hung offscreen call must not hold the lock, and with it every later lookup
+const CAPTCHA_LOCK_TIMEOUT_MS = 30000;
 let captchaTabLock = Promise.resolve();
 function withCaptchaTabLock(fn) {
- const run = captchaTabLock.then(function() { return captchaTabsReady; }).then(fn);
+ const run = captchaTabLock.then(function() { return captchaTabsReady; }).then(function() {
+  let timer;
+  return Promise.race([fn(), new Promise(function(resolve, reject) {
+   timer = setTimeout(function() { reject(new Error('CAPTCHA lookup timed out')); }, CAPTCHA_LOCK_TIMEOUT_MS);
+  })]).finally(function() { clearTimeout(timer); });
+ });
  captchaTabLock = run.catch(function() {});
  return run;
 }
@@ -912,12 +937,18 @@ function findCaptchaTab(captchaId) {
  return null;
 }
 
+// shortcut: a leading www. is the only host difference tolerated; a hoster that
+// redirects to another domain loses the site's "Solve" tab (the CAPTCHA icon still works)
+function siteHost(url) {
+ return new URL(url).hostname.replace(/^www\./, '');
+}
+
 // Tab opened by the site's own "Solve": job c is looked up, parked for the tab,
 // and the tab reloaded so the hoster's CSP is stripped for the solver.
 async function serveWebUiCaptchaTab(tab) {
- const match = /[?&]c=([^&#]+)/.exec(new URL(tab.url).hash);
- if (!match) return { job: null };
- const captchaId = decodeURIComponent(match[1]);
+ const params = new URLSearchParams(new URL(tab.url).hash.split('?')[1] || '');
+ const captchaId = params.get('c');
+ if (!captchaId) return { job: null };
  const existing = findCaptchaTab(captchaId);
  if (existing != null && existing !== tab.id) {
   // Already open, e.g. from the CAPTCHA icon: keep that tab
@@ -926,7 +957,10 @@ async function serveWebUiCaptchaTab(tab) {
   return { job: null, pending: true };
  }
  const details = await findRemoteCaptcha(captchaId, await listRemoteDevices());
- if (!details) return { job: null };
+ // Any page can carry #rc2jdt?c=: serve only a tab on the challenge's own site
+ // with its own key, which is what the site opens
+ if (!details || params.get('k') !== details.siteKey
+   || siteHost(tab.url) !== siteHost(captchaTabUrl(details.targetUrl))) return { job: null };
  const prepared = await prepareCaptchaTab(tab.id, details, 'MYJD', 'MyJD web interface');
  if (prepared.status !== 'ok') return { job: null };
  // Same document with a new hash would not reload; the solver runs on the reload
@@ -1617,12 +1651,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  // webinterfaceEnhancer.js asks whether to answer my.jdownloader.org's ping.
  // The pong is what makes the site offer the extension its reCAPTCHA jobs
- // (serveWebUiCaptchaTab handles the tab it then opens).
+ // (serveWebUiCaptchaTab handles the tab it then opens). Logged out, the
+ // extension cannot look the job up, so the site keeps its own flow.
  if (action === "settings" && request.name === "webinterface-enhancer") {
-  chrome.storage.local.get('ENHANCE_CAPTCHA_DIALOG').then(function(result) {
-   sendResponse({ active: result.ENHANCE_CAPTCHA_DIALOG !== false });
+  chrome.storage.local.get(['ENHANCE_CAPTCHA_DIALOG', 'myjd_session']).then(function(result) {
+   sendResponse({ active: result.ENHANCE_CAPTCHA_DIALOG !== false && !!result.myjd_session });
   }).catch(function() {
-   sendResponse({ active: true });
+   sendResponse({ active: false });
   });
   return true;
  }
@@ -1645,13 +1680,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
  // JD BROWSER SOLVER: hand-off from JDownloader's own challenge page.
  // The solution goes back to the URL that served that page, so the callback
- // travels with the job instead of the 'MYJD' marker.
+ // travels with the job instead of the 'MYJD' marker. The sender is checked
+ // here as well as in browserSolverBridge.js, and the callback is the sender's
+ // own URL, never one taken from the message.
  if (action === "jd-browser-solver-job") {
-  if (!sender.tab) {
-   sendResponse({ status: 'error', error: 'no sender tab' });
+  const jobDetails = request.data && request.data.jobDetails;
+  if (!sender.tab || sender.frameId !== 0 || !isJdSolverPage(sender.url)
+    || !jobDetails || !/^https?:\/\//i.test(String(jobDetails.targetUrl || ''))) {
+   sendResponse({ status: 'error', error: 'not a JDownloader challenge page' });
    return true;
   }
-  prepareCaptchaTab(sender.tab.id, request.data.jobDetails, request.data.callbackUrl, 'JD browser solver').then(sendResponse);
+  prepareCaptchaTab(sender.tab.id, jobDetails, sender.url, 'JD browser solver').then(sendResponse);
   return true;
  }
 
@@ -1862,24 +1901,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     persistCaptchaTabs();
    });
   }
-  if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
-   // MYJD flow: solve through the MyJD API when the tab's own job names the
-   // device (it was looked up there), otherwise hand the token to the
-   // my.jdownloader.org tabs, which submit it themselves. Only the job parked
-   // for this sender tab is trusted for the device and id.
+  if (request.data.callbackUrl === 'MYJD') {
+   // MYJD flow: solve through the MyJD API, or hand the token to the
+   // my.jdownloader.org tabs when that fails. Only the job parked for this
+   // sender tab is trusted for the device and id.
    (async function() {
     const key = sender.tab ? captchaJobKey(sender.tab.id) : null;
     const job = key ? (await chrome.storage.session.get(key))[key] : null;
-    if (job && job.deviceId && job.captchaId != null) {
-     const solved = await sendToOffscreen('offscreen-captcha-solve', {
-      deviceId: job.deviceId, captchaId: job.captchaId, token: request.data.token
-     });
-     if (solved && solved.success) {
-      console.log('Background: CAPTCHA solved via MyJD API for', job.hoster, job.captchaId);
-      return;
-     }
-     console.warn('Background: MyJD API solve failed, handing the token to my.jdownloader.org:', solved && solved.error);
+    if (!isMyjdJob(job)) {
+     console.warn('Background: no MyJD CAPTCHA job parked for this tab, token dropped');
+     return;
     }
+    const solved = await sendToOffscreen('offscreen-captcha-solve', {
+     deviceId: job.deviceId, captchaId: job.captchaId, token: request.data.token
+    });
+    if (solved && solved.success) {
+     console.log('Background: CAPTCHA solved via MyJD API for', job.hoster, job.captchaId);
+     return;
+    }
+    console.warn('Background: MyJD API solve failed, handing the token to my.jdownloader.org:', solved && solved.error);
     chrome.tabs.query({
      url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*']
     }, function(tabs) {
@@ -1891,7 +1931,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       chrome.tabs.sendMessage(tabs[i].id, {
        name: 'response',
        type: 'myjdrc2',
-       data: { captchaId: request.data.captchaId, token: request.data.token }
+       data: { captchaId: job.captchaId, token: request.data.token }
       }, function() { /* ignore errors */ });
      }
     });
@@ -1947,12 +1987,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     persistCaptchaTabs();
    });
   }
-  if (request.data.callbackUrl === 'MYJD' && request.data.captchaId) {
-   // MYJD flow: only the job parked for this sender tab is trusted for the device
+  if (request.data.callbackUrl === 'MYJD') {
+   // MYJD flow: only the job parked for this sender tab is trusted
    (async function() {
     const key = sender.tab ? captchaJobKey(sender.tab.id) : null;
     const job = key ? (await chrome.storage.session.get(key))[key] : null;
-    await skipMyjdCaptcha(job, request.data.captchaId, request.data.skipType);
+    await skipMyjdCaptcha(job, request.data.skipType);
    })().catch(function(err) {
     console.error('Background: MYJD CAPTCHA skip failed:', err);
    });
@@ -2110,7 +2150,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
    if (info.callbackUrl === 'MYJD') {
     // The parked job was read above, before its removal
     jobRead.then(function(job) {
-     return skipMyjdCaptcha(job, info.captchaId, 'single');
+     return skipMyjdCaptcha(job, 'single');
     }).catch(function(err) {
      console.error('Background: MYJD CAPTCHA tab-close skip failed:', err);
     });
