@@ -41,6 +41,7 @@ _metadata/
 .claude/
 .planning/
 CLAUDE.md
+HANDOFF.md
 
 # Abandoned native helper
 captcha-helper/
