@@ -107,6 +107,10 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
   describe('the tab the site\'s "Solve" opens', () => {
     const SITE_TAB = { id: 60, url: 'https://datavaults.co/abc#rc2jdt?k=rc-key&c=77' };
 
+    beforeEach(async () => {
+      await chrome.storage.local.set({ myjd_session: { email: 'a@b.c' }, ENHANCE_CAPTCHA_DIALOG: true });
+    });
+
     it('looks the job up, parks it for that tab and reloads it with the CSP stripped', async () => {
       const first = await send({ action: 'myjd-get-captcha-job' }, SITE_TAB);
 
@@ -155,6 +159,11 @@ describe('Background.js remote JDownloader CAPTCHAs via my.jdownloader.org', () 
     it('releases the lookup after a hung offscreen call', async () => {
       jest.useFakeTimers();
       try {
+        // Clear any stale negative cache from previous tests
+        const sessionStore = global.__getSessionStore();
+        Object.keys(sessionStore).forEach(k => { if (k.startsWith('myjd_neg_cache_')) delete sessionStore[k]; });
+        console.log('Cleared sessionStore, remaining keys:', Object.keys(sessionStore));
+        
         const answer = global.chrome.runtime.sendMessage.getMockImplementation();
         // The offscreen document never answers
         global.chrome.runtime.sendMessage.mockImplementation(() => Promise.resolve());

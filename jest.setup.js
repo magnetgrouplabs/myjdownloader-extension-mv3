@@ -100,7 +100,8 @@ global.chrome = {
       if (callback) callback();
       return Promise.resolve();
     }),
-    onRemoved: createEvent()
+    onRemoved: createEvent(),
+    onUpdated: createEvent()
   },
   webRequest: {
     onBeforeRequest: createEvent()
