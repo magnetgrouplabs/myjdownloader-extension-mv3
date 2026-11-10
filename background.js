@@ -12,7 +12,7 @@ const STORAGE_KEYS = {
 
 // Resolvers live in scripts/resolvers/. A missing file must never kill the worker.
 try {
- importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js');
+ importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js', 'scripts/resolvers/hosts/filecrypt.js');
 } catch (e) {
  console.error('Background: host resolver scripts failed to load:', e);
 }

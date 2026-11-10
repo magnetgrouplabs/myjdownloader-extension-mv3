@@ -139,7 +139,8 @@ describe('background.js resolve-links', () => {
   it('loads the resolver scripts with importScripts', () => {
     expect(global.importScripts).toHaveBeenCalledWith(
       'scripts/resolvers/hostResolvers.js',
-      'scripts/resolvers/hosts/fileditch.js'
+      'scripts/resolvers/hosts/fileditch.js',
+      'scripts/resolvers/hosts/filecrypt.js'
     );
   });
 

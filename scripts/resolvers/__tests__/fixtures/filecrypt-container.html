@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>FileCrypt Container - Test File</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Container: Test Container</h1>
+        
+        <!-- DLC Download Link -->
+        <div class="dlc-download">
+            <a href="/Container/abcdef123456.dlc" class="btn btn-primary">DLC Container herunterladen</a>
+        </div>
+        
+        <!-- File list after POW captcha solved -->
+        <div class="file-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Datei</th>
+                        <th>Größe</th>
+                        <th>Hoster</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>test_file.part1.rar</td>
+                        <td>100 MB</td>
+                        <td><a href="https://example.com/file1">Rapidgator</a></td>
+                    </tr>
+                    <tr>
+                        <td>test_file.part2.rar</td>
+                        <td>100 MB</td>
+                        <td><a href="https://example.com/file2">Rapidgator</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Click'n'Load form -->
+        <form id="cnlForm" action="http://127.0.0.1:9666/flash/add" method="POST" target="cnlFrame">
+            <input type="hidden" name="urls" value="https://example.com/file1">
+            <input type="hidden" name="source" value="https://filecrypt.cc/Container/abcdef123456.html">
+            <input type="hidden" name="passwords" value="">
+        </form>
+        <iframe name="cnlFrame" style="display:none"></iframe>
+    </div>
+</body>
+</html>
