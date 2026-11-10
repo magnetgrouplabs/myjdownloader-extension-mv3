@@ -1694,8 +1694,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- // myjdCaptchaSolver.js asks for the job parked for its own tab. A tab
- // my.jdownloader.org opened itself has none yet and is served from the API.
+  // myjdCaptchaSolver.js asks for the job parked for its own tab. A tab
+  // my.jdownloader.org opened itself has none yet and is served from the API.
+  // FIX #29 Blocker 1: Only run the API lookup when the user is logged in,
+  // Enhance CAPTCHA is enabled, and a my.jdownloader.org tab is open (or it's a Solve tab).
+  if (action === "myjd-get-captcha-job") {
+   if (!sender.tab) {
+    sendResponse({ job: null });
+    return true;
+   }
+   const key = captchaJobKey(sender.tab.id);
+   chrome.storage.session.get(key).then(function(result) {
+    const job = result && result[key];
+    if (job) return { job: job };
+
+    // Check if we should even attempt the remote lookup
+    return chrome.storage.local.get(['ENHANCE_CAPTCHA_DIALOG', 'myjd_session']).then(function(settings) {
+     const enhanceOn = settings.ENHANCE_CAPTCHA_DIALOG !== false;
+     const hasSession = !!settings.myjd_session;
+     if (!enhanceOn || !hasSession) {
+      console.log('Background: myjd-get-captcha-job skipped (enhance=', enhanceOn, ', session=', hasSession, ')');
+      return { job: null };
+     }
+
+     // Allow lookup for site's Solve tabs (#rc2jdt in URL) or if my.jdownloader.org tab is open
+     const senderUrl = sender.tab.url || '';
+     const isSolveTab = senderUrl.includes('#rc2jdt');
+     return chrome.tabs.query({ url: ['http://my.jdownloader.org/*', 'https://my.jdownloader.org/*'] }).then(function(myjdTabs) {
+      const senderIsMyJD = senderUrl.startsWith('https://my.jdownloader.org/');
+      if (!isSolveTab && myjdTabs.length === 0 && !senderIsMyJD) {
+       console.log('Background: myjd-get-captcha-job skipped (no my.jdownloader.org tab open and not a Solve tab)');
+       return { job: null };
+      }
+      return withCaptchaTabLock(function() { return serveWebUiCaptchaTab(sender.tab); });
+     });
+    });
+   }).then(sendResponse).catch(function(err) {
+    console.error('Background: CAPTCHA job lookup failed:', err);
+    sendResponse({ job: null });
+   });
+   return true;
+  }
  if (action === "myjd-get-captcha-job") {
   if (!sender.tab) {
    sendResponse({ job: null });
@@ -1875,24 +1914,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
  }
 
- if (action === "captcha-tab-detected") {
-  if (sender.tab) {
-   captchaTabsReady.then(function() {
-    activeCaptchaTabs[sender.tab.id] = {
-     callbackUrl: request.data.callbackUrl,
-     captchaType: request.data.captchaType,
-     hoster: request.data.hoster,
-     captchaId: request.data.captchaId,
-     detectedAt: Date.now()
-    };
-    persistCaptchaTabs();
-   });
-   console.log('Background: CAPTCHA tab detected:', sender.tab.id, request.data.captchaType,
-    'url:', sender.tab.url, 'callback:', request.data.callbackUrl);
+  if (action === "captcha-tab-detected") {
+   if (sender.tab) {
+    captchaTabsReady.then(function() {
+     var host = "";
+     try { host = new URL(sender.tab.url).hostname.replace(/^www\./, ""); } catch (e) {}
+     activeCaptchaTabs[sender.tab.id] = {
+      callbackUrl: request.data.callbackUrl,
+      captchaType: request.data.captchaType,
+      hoster: request.data.hoster,
+      host: host,
+      captchaId: request.data.captchaId,
+      detectedAt: Date.now()
+     };
+     persistCaptchaTabs();
+    });
+    console.log("Background: CAPTCHA tab detected:", sender.tab.id, request.data.captchaType,
+     "url:", sender.tab.url, "callback:", request.data.callbackUrl);
+   }
+   sendResponse({ status: "ok" });
+   return true;
   }
-  sendResponse({ status: 'ok' });
-  return true;
- }
 
  if (action === "captcha-solved") {
   if (sender.tab) {
@@ -2169,6 +2211,28 @@ chrome.tabs.onRemoved.addListener((tabId) => {
    }
   }
  });
+});
+
+// ============================================================
+// CAPTCHA: Clean up job + CSP rule when tab navigates away from the challenge host
+// ============================================================
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+  if (!changeInfo || changeInfo.url === undefined) return;
+  captchaTabsReady.then(function() {
+    var info = activeCaptchaTabs[tabId];
+    if (!info || !info.host) return;
+    try {
+      var newHost = new URL(changeInfo.url).hostname.replace(/^www\./, "");
+      if (newHost !== info.host) {
+        console.log("Background: CAPTCHA tab", tabId, "navigated away from", info.host, "->", newHost, ", cleaning up");
+        removeCspStrippingRule(tabId);
+        var jobKey = captchaJobKey(tabId);
+        chrome.storage.session.remove(jobKey).catch(function() {});
+        delete activeCaptchaTabs[tabId];
+        persistCaptchaTabs();
+      }
+    } catch (e) { /* invalid URL, ignore */ }
+  });
 });
 
 // ============================================================
