@@ -12,7 +12,7 @@ const STORAGE_KEYS = {
 
 // Resolvers live in scripts/resolvers/. A missing file must never kill the worker.
 try {
- importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js');
+ importScripts('scripts/resolvers/hostResolvers.js', 'scripts/resolvers/hosts/fileditch.js', 'scripts/resolvers/hosts/filecrypt.js');
 } catch (e) {
  console.error('Background: host resolver scripts failed to load:', e);
 }
@@ -627,33 +627,33 @@ function addCnlInterceptor() {
  const rules = [
   {
    id: 1, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/javascript', CNL_JD_CHECK_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/jdcheck.js' } },
    condition: { urlFilter: '*://localhost:9666/jdcheck.js*', resourceTypes: CNL_RESOURCE_TYPES }
   },
   {
    id: 2, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/javascript', CNL_JD_CHECK_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/jdcheck.js' } },
    condition: { urlFilter: '*://127.0.0.1:9666/jdcheck.js*', resourceTypes: CNL_RESOURCE_TYPES }
   },
   {
    id: 3, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/xml', CNL_CROSSDOMAIN_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/crossdomain.xml' } },
    condition: { urlFilter: '*://localhost:9666/crossdomain.xml*', resourceTypes: CNL_RESOURCE_TYPES }
   },
   {
    id: 4, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/xml', CNL_CROSSDOMAIN_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/crossdomain.xml' } },
    condition: { urlFilter: '*://127.0.0.1:9666/crossdomain.xml*', resourceTypes: CNL_RESOURCE_TYPES }
   },
   {
    // covers both /flash/add and /flash/addcrypted2
    id: 5, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/plain', CNL_OK_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/ok.txt' } },
    condition: { urlFilter: '*://localhost:9666/flash/add*', resourceTypes: CNL_RESOURCE_TYPES }
   },
   {
    id: 6, priority: 1,
-   action: { type: 'redirect', redirect: { url: dataUrl('text/plain', CNL_OK_RESPONSE) } },
+   action: { type: 'redirect', redirect: { extensionPath: '/cnl/ok.txt' } },
    condition: { urlFilter: '*://127.0.0.1:9666/flash/add*', resourceTypes: CNL_RESOURCE_TYPES }
   }
  ];

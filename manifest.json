@@ -83,7 +83,7 @@
  "update_url": "https://clients2.google.com/service/update2/crx",
  "version": "2026.7.13.1",
 "web_accessible_resources": [ {
-  "resources": [ "toolbar.html", "autograbber-indicator.html" ],
+  "resources": [ "toolbar.html", "autograbber-indicator.html", "cnl/jdcheck.js", "cnl/crossdomain.xml", "cnl/ok.txt" ],
   "matches": [ "*://*/*" ]
 } ]
 }
