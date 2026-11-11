@@ -38,6 +38,12 @@
         ADD: '/flash/add'
     };
 
+    // FileCrypt/Keeplinks inject a <script src="/jdcheck.js"> element.
+    // CSP blocks the load, so we intercept script element creation and
+    // set window.jdownloader = true directly instead of letting the
+    // browser try to fetch it.
+    const JD_CHECK_SCRIPT_PATTERN = /jdcheck\.js(?:\?|$)/;
+
     const BRIDGE_MARKER = '__myjd_cnl_bridge__';
 
     const CROSSDOMAIN_XML = `<?xml version="1.0"?>
@@ -307,6 +313,80 @@
                 console.warn('[CNL Interceptor/MAIN] form submit check failed:', err && err.message);
             }
         }, true);
+    });
+
+    // ---- script element injection (FileCrypt/Keeplinks jdcheck.js) ----
+    // Some hosters (FileCrypt, Keeplinks) inject a <script src="/jdcheck.js">
+    // element to detect JDownloader. Their CSP blocks the load from localhost,
+    // so the script never executes. Intercept script element creation and src
+    // assignment to set window.jdownloader = true directly.
+    installHook('script element jdcheck', function() {
+        const originalCreateElement = document.createElement.bind(document);
+
+        override(document, 'createElement', function(original) {
+            return function(tagName, options) {
+                const element = original(tagName, options);
+
+                if (tagName && tagName.toLowerCase() === 'script') {
+                    // Intercept src assignment on script elements
+                    const originalSetSrc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+                    if (originalSetSrc && originalSetSrc.set) {
+                        // src already has a setter (normal case)
+                        const originalSetter = originalSetSrc.set;
+                        Object.defineProperty(element, 'src', {
+                            set: function(value) {
+                                if (typeof value === 'string' && JD_CHECK_SCRIPT_PATTERN.test(value)) {
+                                    console.log('[CNL Interceptor/MAIN] Intercepted jdcheck.js script injection:', value);
+                                    window.jdownloader = true;
+                                    // Don't call original setter - prevents the load attempt
+                                    return;
+                                }
+                                originalSetter.call(this, value);
+                            },
+                            get: originalSetSrc.get,
+                            configurable: true,
+                            enumerable: true
+                        });
+                    } else {
+                        // Fallback: define our own src property with interception
+                        let srcValue = '';
+                        Object.defineProperty(element, 'src', {
+                            set: function(value) {
+                                srcValue = value;
+                                if (typeof value === 'string' && JD_CHECK_SCRIPT_PATTERN.test(value)) {
+                                    console.log('[CNL Interceptor/MAIN] Intercepted jdcheck.js script injection:', value);
+                                    window.jdownloader = true;
+                                    return;
+                                }
+                            },
+                            get: function() {
+                                return srcValue;
+                            },
+                            configurable: true,
+                            enumerable: true
+                        });
+                    }
+                }
+
+                return element;
+            };
+        });
+
+        // Also intercept appendChild/insertBefore to catch scripts added with src already set
+        ['appendChild', 'insertBefore'].forEach(function(method) {
+            const originalMethod = Node.prototype[method];
+            override(Node.prototype, method, function(original) {
+                return function(node, refNode) {
+                    if (node && node.tagName === 'SCRIPT' && node.src && JD_CHECK_SCRIPT_PATTERN.test(node.src)) {
+                        console.log('[CNL Interceptor/MAIN] Intercepted jdcheck.js script injection via ' + method + ':', node.src);
+                        window.jdownloader = true;
+                        // Prevent the script from being added to DOM (which would trigger load)
+                        return node;
+                    }
+                    return original.apply(this, arguments);
+                };
+            });
+        });
     });
 
     console.log('[CNL Interceptor/MAIN] Ready');

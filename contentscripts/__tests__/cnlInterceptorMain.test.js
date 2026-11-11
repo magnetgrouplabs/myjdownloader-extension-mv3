@@ -230,3 +230,135 @@ describe('cnlInterceptorMain — CNL payload capture (formData parsing)', () => 
         expect(messages[0].formData.rawData).toBe('not-a-form-body');
     });
 });
+
+/**
+ * Regression coverage for script element jdcheck.js injection (issue #31).
+ *
+ * FileCrypt and Keeplinks inject <script src="/jdcheck.js"> elements to
+ * detect JDownloader. Their CSP blocks the script load from localhost.
+ * We intercept script element creation and src assignment to set
+ * window.jdownloader = true directly, bypassing the blocked network request.
+ */
+describe('cnlInterceptorMain — script element jdcheck.js injection (issue #31)', () => {
+    function runInterceptor(win) {
+        const fn = new Function(
+            'window', 'HTMLFormElement', 'Response', 'Event', 'setTimeout', 'console',
+            'document', 'Node', 'HTMLScriptElement',
+            source
+        );
+        fn(win, win.HTMLFormElement, win.Response, win.Event, setTimeout, console,
+           win.document, win.Node, win.HTMLScriptElement);
+    }
+
+    function makeWindow() {
+        const messages = [];
+        const scripts = [];
+
+        // Minimal DOM simulation
+        const doc = {
+            createElement: function(tagName) {
+                if (tagName.toLowerCase() === 'script') {
+                    const script = {
+                        tagName: 'SCRIPT',
+                        src: '',
+                        setAttribute: function() {},
+                        getAttribute: function() {}
+                    };
+                    scripts.push(script);
+                    return script;
+                }
+                return { tagName: tagName.toUpperCase(), setAttribute: function() {}, getAttribute: function() {} };
+            },
+            head: { appendChild: function() {} },
+            body: { appendChild: function() {} }
+        };
+
+        // Node.prototype methods
+        const NodeProto = {
+            appendChild: function(node) { return node; },
+            insertBefore: function(node) { return node; }
+        };
+
+        // HTMLScriptElement.prototype with src property descriptor
+        let scriptSrcValue = '';
+        const HTMLScriptElementProto = {
+            get src() { return scriptSrcValue; },
+            set src(v) { scriptSrcValue = v; }
+        };
+        Object.defineProperty(HTMLScriptElementProto, 'src', {
+            get: function() { return scriptSrcValue; },
+            set: function(v) { scriptSrcValue = v; },
+            configurable: true,
+            enumerable: true
+        });
+
+        const win = {
+            XMLHttpRequest: class { open() {} send() {} dispatchEvent() {} },
+            HTMLFormElement: class { submit() {} },
+            fetch: function nativeFetch() {},
+            Response: function Response() {},
+            Event: function Event() {},
+            document: doc,
+            Node: function Node() {},
+            Node: Object.assign(function Node() {}, { prototype: NodeProto }),
+            HTMLScriptElement: Object.assign(function HTMLScriptElement() {}, { prototype: HTMLScriptElementProto }),
+            location: { origin: 'https://filecrypt.cc', href: 'https://filecrypt.cc/container/123' },
+            addEventListener: () => {},
+            postMessage: (msg) => { messages.push(msg); },
+            jdownloader: false
+        };
+
+        return { win, messages, scripts };
+    }
+
+    it('sets window.jdownloader = true when script element with jdcheck.js src is created', () => {
+        const { win } = makeWindow();
+        runInterceptor(win);
+
+        const script = win.document.createElement('script');
+        script.src = 'http://127.0.0.1:9666/jdcheck.js';
+
+        expect(win.jdownloader).toBe(true);
+    });
+
+    it('sets window.jdownloader = true for FileCrypt-style jdcheck.js URL', () => {
+        const { win } = makeWindow();
+        runInterceptor(win);
+
+        const script = win.document.createElement('script');
+        script.src = 'https://filecrypt.cc/container/123/http://127.0.0.1:9666/jdcheck.js';
+
+        expect(win.jdownloader).toBe(true);
+    });
+
+    it('sets window.jdownloader = true when script with jdcheck.js src is appended to DOM', () => {
+        const { win } = makeWindow();
+        runInterceptor(win);
+
+        const script = win.document.createElement('script');
+        script.src = 'http://localhost:9666/jdcheck.js';
+        win.document.body.appendChild(script);
+
+        expect(win.jdownloader).toBe(true);
+    });
+
+    it('does not interfere with non-jdcheck script elements', () => {
+        const { win } = makeWindow();
+        runInterceptor(win);
+
+        const script = win.document.createElement('script');
+        script.src = 'https://example.com/analytics.js';
+
+        expect(win.jdownloader).toBe(false);
+    });
+
+    it('intercepts src setter on HTMLScriptElement.prototype', () => {
+        const { win } = makeWindow();
+        runInterceptor(win);
+
+        const script = win.document.createElement('script');
+        script.src = 'http://127.0.0.1:9666/jdcheck.js';
+
+        expect(win.jdownloader).toBe(true);
+    });
+});
