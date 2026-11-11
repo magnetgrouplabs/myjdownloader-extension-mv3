@@ -205,6 +205,49 @@ describe('fileditch resolver', () => {
     });
   });
 
+  describe('file.php?f= pages', () => {
+    const FP = 'https://fileditchfiles.me/file.php?f=/b76/hlfQIdPSuTGQyjNppknu.mov';
+    const sigPath = (p) => '1791924206:SIG:' + p;
+
+    test('two-segment f resolves bucket and filename-only tokens', () => {
+      const a = link(sigPath('701/b76/hlfQIdPSuTGQyjNppknu.mov'));
+      const b = link(sigPath('701/hlfQIdPSuTGQyjNppknu.mov'));
+      expect(resolver.extractFromHtml(a, FP).url).toBe(a);
+      expect(resolver.extractFromHtml(b, FP).url).toBe(b);
+    });
+
+    test('percent-encoded f resolves', () => {
+      const u = link(sigPath('701/b76/hlfQIdPSuTGQyjNppknu.mov'));
+      const url = 'https://fileditchfiles.me/file.php?f=%2Fb76%2FhlfQIdPSuTGQyjNppknu.mov';
+      expect(resolver.extractFromHtml(u, url).url).toBe(u);
+    });
+
+    test('three-segment f uses the id/filename rule', () => {
+      const url = 'https://fileditchfiles.me/file.php?f=/beta10/0123456789abcdef0123/sample_video.mp4';
+      const ok = link(sigPath('701/beta10/0123456789abcdef0123/sample_video.mp4'));
+      const bad = link(sigPath('701/beta10/ffffffffffffffffffff/sample_video.mp4'));
+      expect(resolver.extractFromHtml(ok, url).url).toBe(ok);
+      expect(resolver.extractFromHtml(bad, url)).toEqual({ error: 'mismatch' });
+    });
+
+    test('token for another filename is a mismatch', () => {
+      const u = link(sigPath('701/b76/zzzzzzzzzzzzzzzzzzzz.mov'));
+      expect(resolver.extractFromHtml(u, FP)).toEqual({ error: 'mismatch' });
+    });
+
+    test('no f or empty f is not-found', () => {
+      const u = link(sigPath('701/b76/hlfQIdPSuTGQyjNppknu.mov'));
+      expect(resolver.extractFromHtml(u, 'https://fileditchfiles.me/file.php')).toEqual({ error: 'not-found' });
+      expect(resolver.extractFromHtml(u, 'https://fileditchfiles.me/file.php?f=')).toEqual({ error: 'not-found' });
+    });
+
+    test('extra params and a fragment are ignored', () => {
+      const u = link(sigPath('701/b76/hlfQIdPSuTGQyjNppknu.mov'));
+      expect(resolver.extractFromHtml(u, FP + '&x=1').url).toBe(u);
+      expect(resolver.extractFromHtml(u, 'https://fileditchfiles.me/file.php?x=1&f=/b76/hlfQIdPSuTGQyjNppknu.mov#top').url).toBe(u);
+    });
+  });
+
   test('three-segment page is not satisfied by a token matching only the filename', () => {
     const P3 = 'https://fileditchfiles.me/b76/aaaaaaaaaaaaaaaaaaaa/hlfQIdPSuTGQyjNppknu.mov';
     const otherId = link('1791924206:SIG:701/b76/bbbbbbbbbbbbbbbbbbbb/hlfQIdPSuTGQyjNppknu.mov');

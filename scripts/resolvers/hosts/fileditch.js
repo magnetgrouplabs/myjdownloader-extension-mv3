@@ -13,6 +13,8 @@
  *    path must have at least 2 segments and its last segment (<filename>) must
  *    equal the page's. The token's bucket may differ from the page's or be absent.
  * A page with fewer than two segments is 'not-found'.
+ * A file.php?f=/<bucket>/... page carries the path in the `f` query parameter
+ * (percent-decoded once); when present and a path, its segments replace the URL path's.
  *
  * match() is host only: any http(s) URL on fileditchfiles.me, fileditchfiles.st,
  * fileditchvids.me or fileditchvids.st (exact host, optional www and port). A page that is not a file page (the host root, say)
@@ -40,13 +42,27 @@
     try { return decodeURIComponent(s); } catch (e) { return s; }
   }
 
+  // Value of query parameter `name`, percent-decoded once ('+' kept literal), or ''.
+  function queryParam(query, name) {
+    if (!query) return '';
+    var parts = query.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var eq = parts[i].indexOf('=');
+      if (eq === -1) continue;
+      if (safeDecode(parts[i].slice(0, eq)) === name) return safeDecode(parts[i].slice(eq + 1));
+    }
+    return '';
+  }
+
   // Comparison key for a page URL, percent-decoded per segment: {need, key}.
   // Three or more segments: need 3, key "<id>/<filename>" (last two).
   // Two segments: need 2, key "<filename>" (last one). Fewer: null.
   function pagePathKey(pageUrl) {
-    var m = /^https?:\/\/[^\/?#]+([^?#]*)/i.exec(String(pageUrl || ''));
+    var m = /^https?:\/\/[^\/?#]+([^?#]*)(?:\?([^#]*))?/i.exec(String(pageUrl || ''));
     if (!m) return null;
     var segs = m[1].split('/').filter(Boolean);
+    var fVal = queryParam(m[2], 'f');
+    if (fVal && fVal.indexOf('/') !== -1) segs = fVal.split('/').filter(Boolean);
     if (segs.length < 2) return null;
     if (segs.length === 2) return { need: 2, key: safeDecode(segs[1]) };
     return { need: 3, key: safeDecode(segs[segs.length - 2]) + '/' + safeDecode(segs[segs.length - 1]) };
