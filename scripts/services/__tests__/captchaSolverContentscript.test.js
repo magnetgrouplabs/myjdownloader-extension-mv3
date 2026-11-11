@@ -382,4 +382,35 @@ describe('CAPTCHA Solver Content Script', function() {
       expect(loginSource).not.toMatch(/<script/);
     });
   });
+
+  describe('tabs owned by myjdCaptchaSolver.js', function() {
+    // A hoster page with an hCaptcha widget, as the solver renders it
+    function run(hash) {
+      jest.useFakeTimers();
+      document.body.innerHTML = '<div class="h-captcha"></div>';
+      var sent = [];
+      var win = {
+        location: new URL('https://ddownload.com/file/abc' + hash),
+        addEventListener: function() {}
+      };
+      var chromeMock = { runtime: { sendMessage: function(msg) { sent.push(msg); } } };
+      try {
+        new Function('window', 'chrome', csSource)(win, chromeMock);
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+        document.body.innerHTML = '';
+      }
+      return sent;
+    }
+
+    it('leaves a #rc2jdt tab alone', function() {
+      expect(run('#rc2jdt')).toEqual([]);
+      expect(run('#rc2jdt?k=key&c=77')).toEqual([]);
+    });
+
+    it('still handles the same page without #rc2jdt', function() {
+      expect(run('').map(function(m) { return m.action; })).toEqual(['captcha-tab-detected']);
+    });
+  });
 });

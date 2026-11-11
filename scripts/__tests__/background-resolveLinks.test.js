@@ -81,6 +81,7 @@ describe('background.js resolve-links', () => {
     c.runtime.onInstalled._listeners.length = 0;
     c.runtime.onStartup._listeners.length = 0;
     c.tabs.onRemoved._listeners.length = 0;
+    c.tabs.onUpdated._listeners.length = 0;
     c.contextMenus.onClicked._listeners.length = 0;
     c.alarms.onAlarm._listeners.length = 0;
     c.storage.onChanged._listeners.length = 0;
@@ -225,7 +226,7 @@ describe('background.js resolve-links', () => {
     const res = await p;
     expect(res.results[LANDING]).toEqual({ url: FILE_URL, resolver: 'fileditch' });
     expect(chrome.tabs.remove).toHaveBeenCalledWith(id, expect.any(Function));
-    expect(chrome.tabs.onUpdated._listeners).toHaveLength(0);
+    expect(chrome.tabs.onUpdated._listeners).toHaveLength(1);
     const cached = global.__getSessionStore()[CACHE_KEY][LANDING];
     expect(cached.url).toBe(FILE_URL);
     expect(cached.expiresAt).toBeGreaterThan(Date.now() + 2 * HOUR);
@@ -268,7 +269,7 @@ describe('background.js resolve-links', () => {
     const res = await p;
     expect(res.results[LANDING]).toEqual({ error: 'tab-closed', resolver: 'fileditch' });
     expect(chrome.tabs.remove).not.toHaveBeenCalled();
-    expect(chrome.tabs.onUpdated._listeners).toHaveLength(0);
+    expect(chrome.tabs.onUpdated._listeners).toHaveLength(1);
   });
 
   it('yields timeout after 25 s and removes the tab', async () => {
@@ -283,7 +284,7 @@ describe('background.js resolve-links', () => {
     const res = await p;
     expect(res.results[LANDING]).toEqual({ error: 'timeout', resolver: 'fileditch' });
     expect(chrome.tabs.remove).toHaveBeenCalledWith(100, expect.any(Function));
-    expect(chrome.tabs.onUpdated._listeners).toHaveLength(0);
+    expect(chrome.tabs.onUpdated._listeners).toHaveLength(1);
   });
 
   it('extends to 150 s once a challenge is shown, then yields challenge-timeout', async () => {

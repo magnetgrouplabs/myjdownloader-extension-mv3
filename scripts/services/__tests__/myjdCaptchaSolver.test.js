@@ -48,10 +48,11 @@ describe('MYJD CAPTCHA Solver Content Script', function() {
     });
   });
 
-  describe('Session storage', function() {
-    it('should read myjd_captcha_job from chrome.storage.session', function() {
-      expect(csSource).toMatch(/chrome\.storage\.session\.get/);
-      expect(csSource).toMatch(/myjd_captcha_job/);
+  describe('Job lookup', function() {
+    it('should ask the service worker for the job parked for its own tab', function() {
+      expect(csSource).toMatch(/myjd-get-captcha-job/);
+      // Content scripts no longer read session storage directly
+      expect(csSource).not.toMatch(/chrome\.storage\.session/);
     });
   });
 
